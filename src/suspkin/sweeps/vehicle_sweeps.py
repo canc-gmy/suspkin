@@ -130,7 +130,8 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
                 }
             )
         )
-    return pd.concat(parts, axis=1)
+    # copy() consolidates the column blocks (avoids pandas fragmentation warnings downstream)
+    return pd.concat(parts, axis=1).copy()
 
 
 def _on_ground(s: VehicleState, cid: CornerId) -> CornerState:
