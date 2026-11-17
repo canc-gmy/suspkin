@@ -1,0 +1,28 @@
+schema: 1
+vehicle: ../minimal_vehicle.yaml
+
+variables:
+  - point: front.uca_front
+    domain:
+      hexahedron:
+        units: mm
+        vertices:
+          - [95, 275, 295]
+          - [105, 275, 295]
+          - [105, 285, 295]
+          - [95, 285, 295]
+          - [97, 275, 305]
+          - [107, 275, 305]
+          - [107, 285, 305]
+          - [97, 285, 305]
+  - point: front.tie_inner
+    domain: {box: {min: [70, 140, 130], max: [90, 160, 150], units: mm}}
+  - point: rear.pushrod_outer
+    domain: {offset: {x: [-5 mm, 5 mm], z: [-5 mm, 5 mm]}}
+  - point: front.lca_rear
+    asymmetric: true
+    side: right
+    domain: {box: {min: [-160, -230, 110], max: [-140, -210, 130], units: mm}}
+  - point: rear.lca_front
+    asymmetric: true
+    domain: {box: {min: [-1460, 210, 110], max: [-1440, 230, 130], units: mm}}
