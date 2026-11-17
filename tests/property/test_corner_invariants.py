@@ -6,9 +6,9 @@ from hypothesis import strategies as st
 
 from suspkin.geometry.corners import CornerId
 from suspkin.kinematics import solve_corner
-from tests.unit.helpers import good_corners, max_invariant_error
+from tests.unit.helpers import fixture_corners, max_invariant_error
 
-CORNERS = good_corners()
+CORNERS = fixture_corners()
 
 
 @settings(max_examples=80, deadline=None, suppress_health_check=[HealthCheck.too_slow])

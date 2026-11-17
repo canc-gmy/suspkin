@@ -33,6 +33,8 @@ from suspkin.kinematics.rocker import KinematicsError, side_sign, solve_rocker
 
 _RESIDUAL_TOL = 1e-9
 _MAX_HALVINGS = 6
+_COLD_LIMIT = 0.005
+_STAGE_STEP = 0.005
 
 Vec = NDArray[np.float64]
 
@@ -128,7 +130,9 @@ def solve_corner(
     travel, rack : float
         Wheel-centre vertical travel and rack displacement along ``rack_axis``.
     guess : CornerState, optional
-        Neighbouring solution used as the starting point (continuation).
+        Neighbouring solution used as the starting point (continuation). Without a
+        guess, large ``travel``/``rack`` (> 5 mm) are reached by internal continuation
+        from the static pose, so a cold solve lands on the same branch as a sweep.
 
     Raises
     ------
@@ -137,6 +141,14 @@ def solve_corner(
     KinematicsError
         If the mechanism cannot be assembled or the solver does not converge.
     """
+    if guess is None and (abs(travel) > _COLD_LIMIT or abs(rack) > _COLD_LIMIT):
+        return _staged(corner, travel, rack)
+    return _solve_raw(corner, travel, rack, guess)
+
+
+def _solve_raw(
+    corner: Corner, travel: float, rack: float, guess: CornerState | None
+) -> CornerState:
     c = _Ctx(corner)
     if c.rack_axis is None:
         if rack != 0.0:
@@ -151,6 +163,9 @@ def solve_corner(
     else:
         x0 = np.array([guess.theta_uca, guess.theta_lca, guess.psi])
         phi0 = guess.rocker_angle
+        if float(np.linalg.norm(x0)) < 1e-4:
+            # hybr bounds its first step by |x0|; a tiny non-zero x0 would stall it.
+            x0 = np.zeros(3)
     try:
         sol = root(
             lambda x: _residuals(c, x, travel, tie_inner),
@@ -244,8 +259,8 @@ class _Advance:
 
     def solve(self, value: float, guess: CornerState | None) -> CornerState:
         if self.over == "travel":
-            return solve_corner(self.corner, value, self.rack, guess=guess)
-        return solve_corner(self.corner, self.travel, value, guess=guess)
+            return _solve_raw(self.corner, value, self.rack, guess)
+        return _solve_raw(self.corner, self.travel, value, guess)
 
     def value(self, state: CornerState) -> float:
         return state.travel if self.over == "travel" else state.rack
@@ -262,18 +277,47 @@ def _reach(adv: _Advance, state: CornerState, target: float, depth: int = 0) -> 
     return _reach(adv, _reach(adv, state, mid, depth + 1), target, depth + 1)
 
 
-def _continuation(adv: _Advance, values: ArrayLike) -> list[CornerState]:
+def _walk(adv: _Advance, state: CornerState, target: float) -> CornerState:
+    """Step from ``state`` to ``target`` in increments of at most ``_STAGE_STEP``."""
+    start = adv.value(state)
+    n = max(1, int(np.ceil(abs(target - start) / _STAGE_STEP)))
+    for k in range(1, n + 1):
+        state = _reach(adv, state, start + (target - start) * k / n)
+    return state
+
+
+def _staged(corner: Corner, travel: float, rack: float) -> CornerState:
+    """Reach (travel, rack) from the static pose: travel first at rack 0, then rack."""
+    state = _solve_raw(corner, 0.0, 0.0, None)
+    state = _walk(_Advance(corner, 0.0, 0.0, "travel"), state, travel)
+    return _walk(_Advance(corner, 0.0, travel, "rack"), state, rack)
+
+
+def _cold(adv: _Advance, value: float) -> CornerState:
+    if adv.over == "travel":
+        return solve_corner(adv.corner, value, adv.rack)
+    return solve_corner(adv.corner, adv.travel, value)
+
+
+def _continuation(
+    adv: _Advance, values: ArrayLike, first_guess: CornerState | None = None
+) -> list[CornerState]:
     vals = np.atleast_1d(np.asarray(values, dtype=np.float64))
     if vals.size == 0:
         return []
     start = int(np.argmin(np.abs(vals)))
     out: dict[int, CornerState] = {}
     try:
-        out[start] = adv.solve(float(vals[start]), None)
+        out[start] = (
+            _reach(adv, first_guess, float(vals[start]))
+            if first_guess is not None
+            else _cold(adv, float(vals[start]))
+        )
     except KinematicsError:
         if abs(vals[start]) < 1e-12:
             raise
-        out[start] = _reach(adv, adv.solve(0.0, None), float(vals[start]))
+        base = first_guess if first_guess is not None else _solve_raw(adv.corner, 0.0, 0.0, None)
+        out[start] = _reach(adv, base, float(vals[start]))
     for direction in (1, -1):
         prev = out[start]
         i = start + direction
@@ -294,5 +338,14 @@ def sweep_corner(corner: Corner, travels: ArrayLike, rack: float = 0.0) -> list[
 
 
 def sweep_rack(corner: Corner, racks: ArrayLike, travel: float = 0.0) -> list[CornerState]:
-    """Solve a rack sweep at fixed travel by continuation (see ``sweep_corner``)."""
-    return _continuation(_Advance(corner, 0.0, travel, "rack"), racks)
+    """Solve a rack sweep at fixed travel by continuation (see ``sweep_corner``).
+
+    A non-zero ``travel`` is first reached at rack 0 from the static pose.
+    """
+    adv = _Advance(corner, 0.0, travel, "rack")
+    first = None
+    if abs(travel) > 0.0:
+        first = _walk(
+            _Advance(corner, 0.0, 0.0, "travel"), _solve_raw(corner, 0.0, 0.0, None), travel
+        )
+    return _continuation(adv, racks, first)

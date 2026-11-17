@@ -104,24 +104,25 @@ rear:
 Each corner is a closed-loop mechanism. It has 1 DOF (wheel travel) at
 the rear and 2 DOF (wheel travel + rack displacement) at the front.
 
-Unknowns:
+Implemented (v0.2) as a **reduced 3-unknown formulation**:
 
 | Symbol | Meaning |
 |---|---|
-| θ_U | UCA rotation about its chassis axis |
-| θ_L | LCA rotation about its chassis axis |
-| R, t | Upright pose (6 parameters; rotation as a rotation vector) |
-| φ_R | Rocker rotation about its axis |
+| θ_U | UCA rotation about its chassis axis → UBJ position |
+| θ_L | LCA rotation about its chassis axis → LBJ position |
+| ψ | Upright spin about the LBJ→UBJ (kingpin) axis |
 
-Constraint equations:
+The upright pose = minimal rotation aligning the static LBJ→UBJ vector to
+the current one, then rotation ψ about that axis, anchored at the LBJ.
 
-1. `uca_outer` on the upright = UCA outer point rotated by θ_U (3 eq).
-2. `lca_outer` on the upright = LCA outer point rotated by θ_L (3 eq).
-3. |`tie_outer` − `tie_inner`(rack)| = tie rod length (1 eq).
-4. Driver: wheel-centre z (or contact-patch z) = prescribed value (1 eq).
+Constraint equations (3 in 3 unknowns):
 
-That gives 8 equations in 8 unknowns. The pushrod is mounted on the
-upright, so `pushrod_outer` moves with the upright pose (R, t). The rocker is then a decoupled
+1. |UBJ − LBJ| = static ball-joint distance.
+2. |`tie_outer` − `tie_inner`(rack)| = tie rod length.
+3. Driver: wheel-centre z − static z = travel.
+
+`pushrod_outer` moves with the upright, the LCA or the UCA depending on
+`pushrod_mount` (reference car: UCA). The rocker is then a decoupled
 1-unknown problem: |`pushrod_outer` − `pushrod_inner`(φ_R)| = pushrod
 length. Spring length and ARB drop-link motion follow explicitly.
 
@@ -144,7 +145,7 @@ Notes from the v0.1.0 review:
   analytic Jacobian where practical.
 - Sweeps use **continuation**: each step starts from the previous
   solution. Step refinement kicks in on non-convergence.
-- Convergence tolerance: 1e-10 m on constraint residuals.
+- Convergence tolerance: 1e-9 m on constraint residuals.
 - Health checks after each step:
   - link-length invariance
   - rocker past toggle (pushrod/rocker angle near 0° or 180°)

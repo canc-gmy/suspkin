@@ -1,4 +1,4 @@
-"""Shared test helpers: vehicle fixtures with a well-conditioned rocker."""
+"""Shared test helpers."""
 
 from __future__ import annotations
 
@@ -10,55 +10,31 @@ from suspkin.geometry import Vehicle, build_corners, load_vehicle
 from suspkin.geometry.corners import Corner, CornerId
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
-SPRING_SIGN = -1.0
+
+_NEAR_TOGGLE = {
+    "rocker_pivot": (0.0, 0.18, 0.45),
+    "rocker_spring": (0.05, 0.18, 0.52),
+    "rocker_arb": (-0.04, 0.17, 0.48),
+    "spring_chassis": (0.10, 0.12, 0.30),
+}
 
 
-def _fix_rocker(axle: object, spring_sign: float) -> object:
-    """Re-place the rocker points so the pushrod is ~perpendicular to the rocker lever.
-
-    The stock minimal fixture sits a few mm from a toggle point; this variant
-    keeps the pushrod, wishbones and upright untouched.
-    """
-    hp = axle.hardpoints  # type: ignore[attr-defined]
-    inner = np.array(hp.pushrod_inner)
-    outer = np.array(hp.pushrod_outer)
-    u = (outer - inner)[1:]
-    u = u / np.linalg.norm(u)
-    n = np.array([-u[1], u[0]])
-    if n[1] < 0:
-        n = -n
-    r = 0.05
-    pivot = inner.copy()
-    pivot[1:] -= r * n
-    n2 = spring_sign * np.array([-n[1], n[0]])
-    spring = pivot + np.array([0.05, 0.05 * n2[0], 0.05 * n2[1]])
-    arb = pivot + np.array([-0.04, 0.04 * n2[0], 0.04 * n2[1]])
-    chassis = spring + 0.2 * np.array([-0.3, 0.0, 1.0]) / np.hypot(0.3, 1.0)
-    new_hp = hp.model_copy(
-        update={
-            "spring_chassis": tuple(chassis),
-            "rocker_pivot": tuple(pivot),
-            "rocker_spring": tuple(spring),
-            "rocker_arb": tuple(arb),
-        }
-    )
-    return axle.model_copy(update={"hardpoints": new_hp})  # type: ignore[attr-defined]
+def fixture_vehicle() -> Vehicle:
+    """The minimal fixture vehicle."""
+    return load_vehicle(FIXTURE)
 
 
-def good_vehicle(spring_sign: float = SPRING_SIGN) -> Vehicle:
-    """Minimal vehicle with the rocker re-placed away from toggle."""
+def fixture_corners() -> dict[CornerId, Corner]:
+    """The four corners of the minimal fixture."""
+    return build_corners(load_vehicle(FIXTURE))
+
+
+def near_toggle_corners() -> dict[CornerId, Corner]:
+    """Front axle with the pushrod nearly in line with the rocker lever (in-memory)."""
     v = load_vehicle(FIXTURE)
-    new = v.model_copy(
-        update={
-            "front": _fix_rocker(v.front, spring_sign),
-            "rear": _fix_rocker(v.rear, spring_sign),
-        }
-    )
-    return Vehicle.model_validate(new.model_dump())
-
-
-def good_corners(spring_sign: float = SPRING_SIGN) -> dict[CornerId, Corner]:
-    return build_corners(good_vehicle(spring_sign))
+    hp = v.front.hardpoints.model_copy(update=_NEAR_TOGGLE)
+    v2 = v.model_copy(update={"front": v.front.model_copy(update={"hardpoints": hp})})
+    return build_corners(v2)
 
 
 def max_invariant_error(corner: Corner, state: object) -> float:

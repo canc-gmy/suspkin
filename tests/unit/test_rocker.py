@@ -7,9 +7,9 @@ from suspkin.geom_math import mirror_y
 from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geometry.corners import CornerId
 from suspkin.kinematics import KinematicsError, solve_rocker
-from tests.unit.helpers import good_corners
+from tests.unit.helpers import fixture_corners
 
-CORNERS = good_corners()
+CORNERS = fixture_corners()
 ALL: tuple[CornerId, ...] = ("FL", "FR", "RL", "RR")
 
 

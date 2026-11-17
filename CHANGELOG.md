@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-17
+
+### Added
+
+- Corner kinematic solver (`suspkin.kinematics`): reduced 3-unknown formulation
+  (UCA/LCA rotation + upright spin about the kingpin axis), closed-form rocker,
+  toggle margin and coilover range checks.
+- Pushrod mount options `upright`, `lca` and `uca`.
+- Continuation sweeps over wheel travel and rack (`sweep_corner`, `sweep_rack`);
+  cold solves step from the static pose to stay on the same branch.
+- Tidy result tables (`states_to_frame`) and `suspkin sweep` CLI command (CSV export).
+- Rotation helpers in `suspkin.geom_math`.
+- Regression sweeps on the reference car.
+
+### Changed
+
+- Reference car: pushrod now mounted on the upper wishbone on both axles,
+  rocker above the UCA, transverse coilover.
+- Test fixture rocker re-placed away from toggle.
+
 ## [0.1.0] - 2026-11-17
 
 ### Added

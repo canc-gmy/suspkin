@@ -87,15 +87,15 @@ def _lca_axis_degenerate(d: dict[str, Any]) -> None:
 
 
 def _pushrod_on_rocker_axis(d: dict[str, Any]) -> None:
-    d["front"]["hardpoints"]["pushrod_inner"] = [0.0, 0.18, 0.45]
+    d["front"]["hardpoints"]["pushrod_inner"] = [0.0, 0.1998, 0.3743]
 
 
 def _spring_on_rocker_axis(d: dict[str, Any]) -> None:
-    d["front"]["hardpoints"]["rocker_axis"] = [0.05, 0.0, 0.07]
+    d["front"]["hardpoints"]["rocker_axis"] = [0.05, 0.0458, -0.0202]
 
 
 def _arb_on_rocker_axis(d: dict[str, Any]) -> None:
-    d["front"]["hardpoints"]["rocker_arb"] = [0.0, 0.18, 0.45]
+    d["front"]["hardpoints"]["rocker_arb"] = [0.0, 0.1998, 0.3743]
 
 
 def _zero_rack_axis(d: dict[str, Any]) -> None:
@@ -103,7 +103,7 @@ def _zero_rack_axis(d: dict[str, Any]) -> None:
 
 
 def _coilover_too_long(d: dict[str, Any]) -> None:
-    d["front"]["coilover"]["length_max"] = 0.20
+    d["front"]["coilover"]["length_max"] = 0.19
 
 
 def _coilover_too_short(d: dict[str, Any]) -> None:
