@@ -89,8 +89,7 @@ def run_standard_studies(
     else:
         lo, hi = steer.rack_travel if rack is None else (-rack, rack)
         rack_df = vehicle_frame(sweep_vehicle(vehicle, rack=np.linspace(lo, hi, steps)), vehicle)
-        rack_df["wheelbase"] = vehicle.wheelbase
-        rack_df["steer_c_factor"] = steer.c_factor
+        rack_df = rack_df.assign(wheelbase=vehicle.wheelbase, steer_c_factor=steer.c_factor)
 
     r = math.radians(roll_deg)
     p = math.radians(pitch_deg)
