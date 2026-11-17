@@ -31,6 +31,7 @@ HARDPOINT_NAMES: tuple[str, ...] = (
 
 _Y_NONNEG = ("tie_inner", "rocker_pivot", "rocker_spring", "spring_chassis", "pushrod_inner")
 _MIN_LINK = 0.01
+_OUTER_POINTS = ("uca_outer", "lca_outer", "tie_outer", "pushrod_outer", "wheel_center")
 
 
 def _norm(v: Vec3) -> float:
@@ -101,6 +102,30 @@ class CornerHardpoints(_Frozen):
                 raise ValueError(f"link {name} shorter than {_MIN_LINK} m")
         if self.uca_outer[2] <= self.lca_outer[2]:
             raise ValueError("uca_outer z must be above lca_outer z")
+        if _dist(self.uca_front, self.uca_rear) <= _MIN_LINK:
+            raise ValueError(f"uca_front and uca_rear closer than {_MIN_LINK} m (degenerate axis)")
+        if _dist(self.lca_front, self.lca_rear) <= _MIN_LINK:
+            raise ValueError(f"lca_front and lca_rear closer than {_MIN_LINK} m (degenerate axis)")
+        rocker_points: dict[str, Vec3 | None] = {
+            "pushrod_inner": self.pushrod_inner,
+            "rocker_spring": self.rocker_spring,
+            "rocker_arb": self.rocker_arb,
+        }
+        for name, p in rocker_points.items():
+            if p is None:
+                continue
+            v = (
+                p[0] - self.rocker_pivot[0],
+                p[1] - self.rocker_pivot[1],
+                p[2] - self.rocker_pivot[2],
+            )
+            a = self.rocker_axis
+            along = v[0] * a[0] + v[1] * a[1] + v[2] * a[2]
+            perp = _norm((v[0] - along * a[0], v[1] - along * a[1], v[2] - along * a[2]))
+            if perp <= _MIN_LINK:
+                raise ValueError(
+                    f"{name} lies within {_MIN_LINK} m of the rocker axis (degenerate rocker arm)"
+                )
         return self
 
 
@@ -173,10 +198,22 @@ class FlexuralARB(_Frozen):
 
 
 class Steering(_Frozen):
-    """Rack-and-pinion steering."""
+    """Rack-and-pinion steering.
+
+    Positive rack travel moves both ``tie_inner`` points along ``+rack_axis``
+    (toward +y, left). For front-steer (tie rods ahead of the axle) that steers
+    left, i.e. positive steer (plan section 2). The right corner uses the same
+    global ``rack_axis`` (not mirrored), since the rack is one rigid part.
+    """
 
     c_factor: float = Field(gt=0)
     rack_travel: tuple[float, float]
+    rack_axis: Vec3 = (0.0, 1.0, 0.0)
+
+    @field_validator("rack_axis")
+    @classmethod
+    def _normalize_axis(cls, v: Vec3) -> Vec3:
+        return _normalized(v, "rack_axis")
 
     @model_validator(mode="after")
     def _check(self) -> Steering:
@@ -208,9 +245,25 @@ class Axle(_Frozen):
                 raise ValueError(f"right_overrides key {key!r} is not a hardpoint name")
             if val[1] > 0:
                 raise ValueError(f"right_overrides[{key!r}] must have y <= 0 (right side)")
+            if key in _OUTER_POINTS and val[1] >= 0:
+                raise ValueError(f"right_overrides[{key!r}] must have y < 0 (right side)")
             if key == "rocker_arb" and self.hardpoints.rocker_arb is None:
                 raise ValueError(
                     "right_overrides has rocker_arb but hardpoints.rocker_arb is unset"
+                )
+        h = self.hardpoints
+        length = _dist(h.rocker_spring, h.spring_chassis)
+        if not self.coilover.length_min <= length <= self.coilover.length_max:
+            raise ValueError(
+                f"static coilover length {length:.4f} m outside "
+                f"[{self.coilover.length_min}, {self.coilover.length_max}]"
+            )
+        if isinstance(self.arb, TorsionalARB):
+            span = abs(2.0 * self.arb.bar_pivot[1] - self.arb.bar_length)
+            if span >= _MIN_LINK:
+                raise ValueError(
+                    "torsional ARB: |2 * bar_pivot.y - bar_length| must be < 0.01 m "
+                    f"(bar runs between the mirrored pivots), got {span:.4f}"
                 )
         return self
 
@@ -226,7 +279,12 @@ class VehicleParams(_Frozen):
 
 
 class Vehicle(_Frozen):
-    """Complete vehicle description."""
+    """Complete vehicle description.
+
+    Hardpoints define the static ride-height pose. ``wheel_center`` z is the
+    loaded radius, which may be a little below the unloaded ``tyre_radius``
+    (checked within 0.02 m).
+    """
 
     vehicle: VehicleParams
     front: Axle
@@ -246,10 +304,10 @@ class Vehicle(_Frozen):
             raise ValueError("front wheel_center x must be 0 (origin at mid front axle)")
         for label, axle in (("front", self.front), ("rear", self.rear)):
             z = axle.hardpoints.wheel_center[2]
-            if abs(z - axle.wheel.tyre_radius) >= 0.005:
+            if abs(z - axle.wheel.tyre_radius) >= 0.02:
                 raise ValueError(
                     f"{label} wheel_center z ({z}) must match tyre_radius "
-                    f"({axle.wheel.tyre_radius}) within 5 mm"
+                    f"({axle.wheel.tyre_radius}) within 20 mm"
                 )
         return self
 

@@ -36,11 +36,11 @@ front:
     free_length: 0.200
     preload: 0.0
     length_min: 0.150
-    length_max: 0.230
+    length_max: 0.250
   arb:
     type: torsional
     arm_end: [-0.04, 0.12, 0.40]
-    bar_pivot: [-0.04, 0.0, 0.40]
+    bar_pivot: [-0.04, 0.20, 0.40]
     bar_axis: [0.0, 1.0, 0.0]
     bar_length: 0.40
     outer_diameter: 0.016
@@ -81,7 +81,7 @@ rear:
     free_length: 0.200
     preload: 0.0
     length_min: 0.150
-    length_max: 0.230
+    length_max: 0.250
   arb:
     type: flexural
     arm_end: [-1.64, 0.12, 0.40]

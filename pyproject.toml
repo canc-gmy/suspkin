@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "suspkin"
-version = "0.0.1"
+version = "0.1.0"
 description = "Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars"
 readme = "README.md"
 requires-python = ">=3.11"

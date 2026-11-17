@@ -125,6 +125,19 @@ upright, so `pushrod_outer` moves with the upright pose (R, t). The rocker is th
 1-unknown problem: |`pushrod_outer` − `pushrod_inner`(φ_R)| = pushrod
 length. Spring length and ARB drop-link motion follow explicitly.
 
+Notes from the v0.1.0 review:
+
+- YAML hardpoints are the **static ride-height pose**. The wheel spin axis
+  in the upright frame = `wheel_spin_axis(side, static_camber, static_toe)`
+  at that pose, carried rigidly with the upright.
+- `pushrod_mount: lca` → `pushrod_outer` moves with the LCA rotation instead
+  of the upright pose.
+- Right corners are reflections: the right rocker angle φ has the opposite
+  sign under the right-hand rule about the mirrored axis. Solver and metrics
+  use a per-side sign so left/right outputs match.
+- The rack is one rigid part: both `tie_inner` points translate along the
+  global `Steering.rack_axis` (not mirrored).
+
 ### 4.2 Numerical method
 
 - `scipy.optimize.root` (hybrid Powell / Levenberg–Marquardt) with an

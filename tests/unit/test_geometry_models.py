@@ -78,9 +78,65 @@ def _front_behind_rear(d: dict[str, Any]) -> None:
     d["rear"]["hardpoints"]["wheel_center"][0] = 0.5
 
 
+def _uca_axis_degenerate(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["uca_rear"] = [0.10, 0.28, 0.305]
+
+
+def _lca_axis_degenerate(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["lca_rear"] = [0.15, 0.22, 0.125]
+
+
+def _pushrod_on_rocker_axis(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["pushrod_inner"] = [0.0, 0.18, 0.45]
+
+
+def _spring_on_rocker_axis(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["rocker_axis"] = [0.05, 0.0, 0.07]
+
+
+def _arb_on_rocker_axis(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["rocker_arb"] = [0.0, 0.18, 0.45]
+
+
+def _zero_rack_axis(d: dict[str, Any]) -> None:
+    d["front"]["steering"]["rack_axis"] = [0.0, 0.0, 0.0]
+
+
+def _coilover_too_long(d: dict[str, Any]) -> None:
+    d["front"]["coilover"]["length_max"] = 0.20
+
+
+def _coilover_too_short(d: dict[str, Any]) -> None:
+    d["front"]["coilover"]["length_min"] = 0.24
+    d["front"]["coilover"]["length_max"] = 0.30
+
+
+def _override_outer_y_zero(d: dict[str, Any]) -> None:
+    d["front"]["right_overrides"] = {"uca_outer": [0.0, 0.0, 0.3]}
+
+
+def _torsional_bar_length(d: dict[str, Any]) -> None:
+    d["front"]["arb"]["bar_length"] = 0.45
+
+
+def _wc_z_wide(d: dict[str, Any]) -> None:
+    d["front"]["hardpoints"]["wheel_center"][2] = 0.2032 + 0.025
+
+
 @pytest.mark.parametrize(
     "mutate",
     [
+        _uca_axis_degenerate,
+        _lca_axis_degenerate,
+        _pushrod_on_rocker_axis,
+        _spring_on_rocker_axis,
+        _arb_on_rocker_axis,
+        _zero_rack_axis,
+        _coilover_too_long,
+        _coilover_too_short,
+        _override_outer_y_zero,
+        _torsional_bar_length,
+        _wc_z_wide,
         _neg_y,
         _zero_axis,
         _rear_steer,

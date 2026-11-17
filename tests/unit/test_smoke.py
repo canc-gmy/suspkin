@@ -10,7 +10,7 @@ from suspkin.cli import app
 
 
 def test_version() -> None:
-    assert suspkin.__version__ == "0.0.1"
+    assert suspkin.__version__ == "0.1.0"
 
 
 def test_mm_m_roundtrip_scalar() -> None:
@@ -34,4 +34,4 @@ def test_deg_rad_roundtrip_array() -> None:
 def test_cli_version() -> None:
     result = CliRunner().invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "0.0.1" in result.output
+    assert suspkin.__version__ in result.output

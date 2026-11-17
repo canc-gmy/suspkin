@@ -1,0 +1,124 @@
+# Reference Formula Student vehicle (fictional but internally consistent).
+# ISO 8855 (x forward, y left, z up), SI units (m, rad, N, N/m, kg).
+# Origin: ground plane, mid-point between the front contact patches at static ride height.
+# Hardpoints are LEFT side only (y > 0); the right side is mirrored by the loader.
+#
+# Targets at static ride height:
+#   wheelbase 1.550 m, front track 1.220 m, rear track 1.180 m (wheel-centre track)
+#   10" wheels, 18x6-10 tyres (R = 0.228 m), outboard brakes, RWD
+#   pushrod on the upright (both axles), rocker near the upper chassis rail
+#   ARB: torsional bar at the front, flexural blade at the rear
+
+vehicle:
+  name: fs_reference
+  mass: 290.0              # kg, including driver
+  cg_height: 0.28          # m
+  front_mass_ratio: 0.47   # static front weight fraction
+  drive: rwd
+
+front:
+  brakes: outboard
+  pushrod_mount: upright
+  unsprung_mass: 10.0      # kg per corner (wheel, tyre, upright, brake, share of links)
+
+  # Front design intent:
+  #  - Wheel centre at x = 0 (origin on the front axle), y = 0.610 (track 1.220 m).
+  #  - Ball joints sit ~0.11 m above/below the wheel centre and ~0.11-0.12 m radially
+  #    from it, i.e. inside the 10" rim (R_rim = 0.127 m).
+  #  - Steering axis: caster ~5 deg, KPI ~5 deg, positive scrub ~18 mm, mechanical trail ~20 mm.
+  #  - UCA shorter than LCA (inner-to-outer lateral length ~0.27 m vs ~0.37 m) for camber gain in bump.
+  #  - Front-view instant centre on the far (right) side of the car; roll centre ~34 mm.
+  #  - Tie rod is FRONT-STEER (rack ahead of the axle) and, in front view, lies on the line from the
+  #    outer ball joint to the LCA/UCA instant centre to keep bump steer low.
+  #  - Pushrod goes from the upright just above the lower ball joint up and inboard to the rocker
+  #    (~47 deg from horizontal in front view); it passes between the two UCA legs.
+  hardpoints:
+    uca_front: [0.130, 0.300, 0.325]    # chassis upper rail
+    uca_rear: [-0.130, 0.300, 0.325]
+    uca_outer: [-0.009, 0.567, 0.338]   # upper ball joint
+    lca_front: [0.150, 0.220, 0.125]    # chassis lower rail
+    lca_rear: [-0.150, 0.220, 0.125]
+    lca_outer: [0.010, 0.586, 0.118]    # lower ball joint
+    tie_inner: [0.085, 0.150, 0.154]    # rack end, ahead of the axle
+    tie_outer: [0.085, 0.585, 0.150]    # steering arm on the upright
+    pushrod_outer: [0.000, 0.575, 0.165]
+    pushrod_inner: [0.000, 0.280, 0.470]
+    rocker_pivot: [0.000, 0.200, 0.480]
+    rocker_spring: [0.000, 0.200, 0.580]
+    spring_chassis: [0.140, 0.060, 0.600]
+    wheel_center: [0.000, 0.610, 0.228]
+    rocker_arb: [-0.040, 0.260, 0.480]  # drop-link pickup on the rocker
+    rocker_axis: [1.0, 0.0, 0.0]        # rocker rotates about a longitudinal axis
+  wheel:
+    tyre_radius: 0.228
+    rim_width: 0.178
+    static_camber: -0.017453            # -1.0 deg
+    static_toe: 0.0
+    tyre_vertical_stiffness: 100000.0
+  coilover:
+    spring_rate: 35000.0
+    free_length: 0.216       # static length 0.1996 m -> 35000 * 0.0164 = ~574 N static spring force
+    preload: 0.0
+    length_min: 0.160
+    length_max: 0.240
+  arb:
+    type: torsional
+    arm_end: [-0.040, 0.260, 0.400]    # arm tip, linked to rocker_arb by a vertical drop link
+    bar_pivot: [-0.100, 0.260, 0.400]  # bar axis point where the arm is clamped (arm length 0.06 m)
+    bar_axis: [0.0, 1.0, 0.0]
+    bar_length: 0.52                   # = 2 * bar_pivot.y (bar spans the mirrored pivots)
+    outer_diameter: 0.016
+    inner_diameter: 0.012
+    shear_modulus: 7.93e10
+  steering:
+    c_factor: 0.090          # m of rack travel per pinion revolution
+    rack_travel: [-0.030, 0.030]
+
+rear:
+  brakes: outboard
+  pushrod_mount: upright
+  unsprung_mass: 10.0
+
+  # Rear design intent:
+  #  - Wheel centre at x = -1.550, y = 0.590 (track 1.180 m).
+  #  - Caster ~1 deg, KPI ~4.5 deg, same ball-joint spacing as the front.
+  #  - Toe link sits BEHIND the axle and is aligned with the instant centre, fixed toe (no steering).
+  #  - Roll centre ~40 mm; UCA shorter than LCA.
+  hardpoints:
+    uca_front: [-1.420, 0.300, 0.320]
+    uca_rear: [-1.680, 0.300, 0.320]
+    uca_outer: [-1.554, 0.557, 0.338]
+    lca_front: [-1.400, 0.220, 0.125]
+    lca_rear: [-1.700, 0.220, 0.125]
+    lca_outer: [-1.550, 0.575, 0.118]
+    tie_inner: [-1.640, 0.150, 0.153]
+    tie_outer: [-1.640, 0.565, 0.150]
+    pushrod_outer: [-1.550, 0.565, 0.165]
+    pushrod_inner: [-1.550, 0.280, 0.470]
+    rocker_pivot: [-1.550, 0.200, 0.480]
+    rocker_spring: [-1.550, 0.200, 0.580]
+    spring_chassis: [-1.410, 0.060, 0.600]
+    wheel_center: [-1.550, 0.590, 0.228]
+    rocker_arb: [-1.590, 0.260, 0.480]
+    rocker_axis: [1.0, 0.0, 0.0]
+  wheel:
+    tyre_radius: 0.228
+    rim_width: 0.178
+    static_camber: -0.026180            # -1.5 deg
+    static_toe: 0.001745                # +0.1 deg toe-in
+    tyre_vertical_stiffness: 100000.0
+  coilover:
+    spring_rate: 40000.0
+    free_length: 0.217       # static length 0.1996 m -> 40000 * 0.0174 = ~696 N static spring force
+    preload: 0.0
+    length_min: 0.160
+    length_max: 0.240
+  arb:
+    type: flexural
+    arm_end: [-1.590, 0.260, 0.400]     # blade tip, linked to rocker_arb by a vertical drop link
+    blade_root: [-1.590, 0.150, 0.400]  # blade clamp on the chassis
+    blade_pivot_axis: [1.0, 0.0, 0.0]   # blade bends vertically about a longitudinal axis
+    blade_length: 0.110
+    blade_width: 0.025
+    blade_thickness: 0.003
+    youngs_modulus: 2.0e11

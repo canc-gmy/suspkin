@@ -26,3 +26,7 @@ uv run pre-commit install
 ```
 
 Design plan: [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md)
+
+![Reference FS vehicle](docs/images/fs_reference.png)
+
+Render it yourself: `uv run suspkin show configs/vehicles/fs_reference.yaml`
