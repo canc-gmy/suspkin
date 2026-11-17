@@ -22,6 +22,7 @@ from suspkin.plotting.geometry3d import (
     wheel_spin_axis,
 )
 from suspkin.plotting.interactive import interactive_view
+from suspkin.plotting.regions import plot_study_3d
 from suspkin.plotting.style import (
     PALETTE,
     design_color,
@@ -48,6 +49,7 @@ __all__ = [
     "fig_summary_table",
     "figure_size",
     "interactive_view",
+    "plot_study_3d",
     "plot_vehicle_3d",
     "save_figure",
     "side_linestyle",

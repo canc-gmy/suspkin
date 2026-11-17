@@ -1,7 +1,7 @@
 """Command-line interface for suspkin."""
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -504,3 +504,86 @@ def report(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo(str(html_path))
+
+
+def _cell(v: float, fmt: str = "{:.3f}") -> str:
+    """Format a table number; ``nan`` (no limit, disabled) becomes ``-``."""
+    from suspkin.plotting.figures import format_value
+
+    return "-" if v != v else format_value(fmt, float(v)).strip()
+
+
+@app.command()
+def check(
+    study_yaml: Annotated[Path, typer.Argument(help="Study YAML file.")],
+    csv: Annotated[
+        Path | None, typer.Option("--csv", help="Write the constraint table (SI) as CSV.")
+    ] = None,
+    plot: Annotated[
+        Path | None, typer.Option("--plot", help="Write the 3D study view as an image.")
+    ] = None,
+    strict: Annotated[
+        bool, typer.Option("--strict", help="Exit with code 1 if the baseline is not feasible.")
+    ] = False,
+) -> None:
+    """Evaluate the baseline vehicle against all constraints of a study.
+
+    Prints one row per constraint (display units); status is PASS, FAIL, UNSOLVED,
+    INFEASIBLE or OFF (disabled). Exit code 2 on a study file error, 1 with --strict
+    if the baseline is not feasible.
+    """
+    from suspkin.optimize import DesignSpace, evaluate
+    from suspkin.optimize.spec import StudyConfigError, load_study
+
+    try:
+        study, vehicle = load_study(study_yaml)
+        space = DesignSpace(study, vehicle)
+    except (StudyConfigError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    ev = evaluate(space)
+    df = ev.display_frame()
+    status = [("OFF" if s == "disabled" else s.upper()) for s in df["status"]]
+    records: list[Any] = list(df.itertuples(index=False))
+    rows = [
+        (
+            str(r.name),
+            str(r.type),
+            _cell(float(r.value)),
+            _cell(float(r.min)),
+            _cell(float(r.max)),
+            str(r.unit) or "-",
+            _cell(float(r.g), "{:.3f}"),
+            st,
+        )
+        for r, st in zip(records, status, strict=True)
+    ]
+    head = ("name", "type", "value", "min", "max", "unit", "g", "status")
+    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(head)]
+    num = {2, 3, 4, 6}  # right-aligned columns
+
+    def line(cells: tuple[str, ...]) -> str:
+        return "  ".join(
+            c.rjust(widths[i]) if i in num else c.ljust(widths[i]) for i, c in enumerate(cells)
+        ).rstrip()
+
+    typer.echo(line(head))
+    for row in rows:
+        typer.echo(line(row))
+    enabled = [s for s in status if s != "OFF"]
+    n_pass = sum(s == "PASS" for s in enabled)
+    typer.echo(
+        f"{n_pass}/{len(enabled)} constraints pass, feasible: {'yes' if ev.feasible else 'no'}"
+    )
+    if csv is not None:
+        csv.parent.mkdir(parents=True, exist_ok=True)
+        ev.frame().to_csv(csv, index=False)
+        typer.echo(str(csv))
+    if plot is not None:
+        from suspkin.plotting import plot_study_3d
+
+        plot.parent.mkdir(parents=True, exist_ok=True)
+        plot_study_3d(space).savefig(plot, dpi=200)
+        typer.echo(str(plot))
+    if strict and not ev.feasible:
+        raise typer.Exit(code=1)
