@@ -77,17 +77,18 @@ def build_corners(vehicle: Vehicle) -> dict[CornerId, Corner]:
 def arb_points(corner: Corner) -> dict[str, NDArray[np.float64]]:
     """ARB points of a corner, mirrored for right-side corners.
 
-    Returns ``arm_end`` and ``bar_pivot`` (torsional) or ``blade_root`` (flexural);
-    an empty dict if the axle has no ARB.
+    Returns ``arm_end`` plus ``bar_pivot`` (torsional, blade) or ``beam_center``
+    (beam; on the centreline, so identical on both sides); an empty dict if the
+    axle has no ARB.
     """
     arb = corner.axle_cfg.arb
     if arb is None:
         return {}
     raw: dict[str, tuple[float, float, float]] = {"arm_end": arb.arm_end}
-    if arb.type == "torsional":
-        raw["bar_pivot"] = arb.bar_pivot
+    if arb.type == "beam":
+        raw["beam_center"] = arb.beam_center
     else:
-        raw["blade_root"] = arb.blade_root
+        raw["bar_pivot"] = arb.bar_pivot
     out: dict[str, NDArray[np.float64]] = {}
     for k, v in raw.items():
         a = np.array(v, dtype=np.float64)

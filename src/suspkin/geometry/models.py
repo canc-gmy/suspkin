@@ -6,7 +6,7 @@ Hardpoints are given for the LEFT side (y > 0); the right side is mirrored.
 from __future__ import annotations
 
 import math
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -155,10 +155,16 @@ class Coilover(_Frozen):
         return self
 
 
-class TorsionalARB(_Frozen):
-    """Torsion-bar anti-roll bar."""
+def _arm_length(arm_end: Vec3, pivot: Vec3, axis: Vec3) -> float:
+    """Distance of ``arm_end`` from the bar axis line through ``pivot``."""
+    d = (arm_end[0] - pivot[0], arm_end[1] - pivot[1], arm_end[2] - pivot[2])
+    along = d[0] * axis[0] + d[1] * axis[1] + d[2] * axis[2]
+    return _norm((d[0] - along * axis[0], d[1] - along * axis[1], d[2] - along * axis[2]))
 
-    type: Literal["torsional"]
+
+class _TubeARB(_Frozen):
+    """Common fields of the bar types that twist a torsion tube (left-side points)."""
+
     arm_end: Vec3
     bar_pivot: Vec3
     bar_axis: Vec3 = (0.0, 1.0, 0.0)
@@ -173,28 +179,81 @@ class TorsionalARB(_Frozen):
         return _normalized(v, "bar_axis")
 
     @model_validator(mode="after")
-    def _check(self) -> TorsionalARB:
+    def _check_tube(self) -> Self:
         if self.inner_diameter >= self.outer_diameter:
             raise ValueError("inner_diameter must be smaller than outer_diameter")
+        if _arm_length(self.arm_end, self.bar_pivot, self.bar_axis) <= _MIN_LINK:
+            raise ValueError(f"ARB arm shorter than {_MIN_LINK} m (arm_end on the bar axis)")
         return self
 
 
-class FlexuralARB(_Frozen):
-    """Blade-type (flexural) anti-roll bar."""
+class TorsionalARB(_TubeARB):
+    """Torsion-bar anti-roll bar with round solid arms.
 
-    type: Literal["flexural"]
-    arm_end: Vec3
-    blade_root: Vec3
-    blade_pivot_axis: Vec3
-    blade_length: float = Field(gt=0)
+    ``arm_diameter`` is the diameter of the (round, solid) arms; ``None`` means
+    rigid arms. Otherwise the arms bend as cantilevers (``arm_youngs_modulus``).
+    """
+
+    type: Literal["torsional"]
+    arm_diameter: float | None = Field(default=None, gt=0)
+    arm_youngs_modulus: float = Field(default=200e9, gt=0)
+
+
+class BladeARB(_TubeARB):
+    """Torsion tube with flat blade arms from ``bar_pivot`` to ``arm_end``.
+
+    ``blade_angle`` [rad] orients the blade section: 0 = flat (bends about the
+    thin direction, soft), pi/2 = edge-on (stiff).
+    """
+
+    type: Literal["blade"]
     blade_width: float = Field(gt=0)
     blade_thickness: float = Field(gt=0)
-    youngs_modulus: float = Field(gt=0)
+    blade_youngs_modulus: float = Field(gt=0)
+    blade_angle: float = 0.0
 
-    @field_validator("blade_pivot_axis")
+
+class BeamARB(_Frozen):
+    """Transverse bending bar (left-side points).
+
+    The central support is a vertical slider (heave free) that clamps the beam
+    rotation; roll bends each half as a cantilever of length ``a`` = projection
+    of ``arm_end - beam_center`` on ``beam_axis``. ``beam_angle`` as for
+    ``BladeARB``.
+    """
+
+    type: Literal["beam"]
+    beam_center: Vec3
+    beam_axis: Vec3 = (0.0, 1.0, 0.0)
+    arm_end: Vec3
+    beam_width: float = Field(gt=0)
+    beam_thickness: float = Field(gt=0)
+    beam_youngs_modulus: float = Field(gt=0)
+    beam_angle: float = 0.0
+
+    @field_validator("beam_axis")
     @classmethod
     def _normalize_axis(cls, v: Vec3) -> Vec3:
-        return _normalized(v, "blade_pivot_axis")
+        return _normalized(v, "beam_axis")
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if abs(self.beam_center[1]) >= _MIN_LINK / 10.0:
+            raise ValueError("beam_center must lie on the centreline (|y| < 1 mm)")
+        d = (
+            self.arm_end[0] - self.beam_center[0],
+            self.arm_end[1] - self.beam_center[1],
+            self.arm_end[2] - self.beam_center[2],
+        )
+        a = d[0] * self.beam_axis[0] + d[1] * self.beam_axis[1] + d[2] * self.beam_axis[2]
+        if a <= _MIN_LINK:
+            raise ValueError(
+                f"beam half-length (arm_end along beam_axis) must exceed {_MIN_LINK} m"
+            )
+        return self
+
+
+ARB = TorsionalARB | BladeARB | BeamARB
 
 
 class Steering(_Frozen):
@@ -236,7 +295,7 @@ class Axle(_Frozen):
     hardpoints: CornerHardpoints
     wheel: Wheel
     coilover: Coilover
-    arb: Annotated[TorsionalARB | FlexuralARB | None, Field(discriminator="type")] = None
+    arb: Annotated[TorsionalARB | BladeARB | BeamARB | None, Field(discriminator="type")] = None
     steering: Steering | None = None
     right_overrides: dict[str, Vec3] = Field(default_factory=dict)
 
@@ -263,11 +322,11 @@ class Axle(_Frozen):
                 f"static coilover length {length:.4f} m outside "
                 f"[{self.coilover.length_min}, {self.coilover.length_max}]"
             )
-        if isinstance(self.arb, TorsionalARB):
+        if isinstance(self.arb, TorsionalARB | BladeARB):
             span = abs(2.0 * self.arb.bar_pivot[1] - self.arb.bar_length)
             if span >= _MIN_LINK:
                 raise ValueError(
-                    "torsional ARB: |2 * bar_pivot.y - bar_length| must be < 0.01 m "
+                    f"{self.arb.type} ARB: |2 * bar_pivot.y - bar_length| must be < 0.01 m "
                     f"(bar runs between the mirrored pivots), got {span:.4f}"
                 )
         return self

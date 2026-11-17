@@ -36,6 +36,7 @@ from suspkin.metrics.alignment import (
     wheel_center_recession,
     wheelbase_change_contribution,
 )
+from suspkin.metrics.arb import ArbRates, arb_metrics, arb_rates
 from suspkin.metrics.centres import (
     InstantCentre,
     centre_metrics,
@@ -52,11 +53,14 @@ from suspkin.metrics.centres import (
 from suspkin.metrics.table import add_gradients, metrics_frame, static_summary
 
 __all__ = [
+    "ArbRates",
     "InstantCentre",
     "MotionRatios",
     "actuation_metrics",
     "add_gradients",
     "alignment_metrics",
+    "arb_metrics",
+    "arb_rates",
     "bump_stroke_remaining",
     "camber",
     "caster",

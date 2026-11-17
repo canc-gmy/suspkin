@@ -67,7 +67,7 @@ def test_arb_points_mirrored() -> None:
     c = build_corners(load_vehicle(FIXTURE))
     fl, fr = arb_points(c["FL"]), arb_points(c["FR"])
     assert set(fl) == {"arm_end", "bar_pivot"}
-    assert set(arb_points(c["RL"])) == {"arm_end", "blade_root"}
+    assert set(arb_points(c["RL"])) == {"arm_end", "beam_center"}
     for k in fl:
         np.testing.assert_allclose(fr[k], mirror_y(fl[k]))
 

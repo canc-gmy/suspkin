@@ -39,8 +39,8 @@ front:
     length_max: 0.250
   arb:
     type: torsional
-    arm_end: [-0.04, 0.12, 0.40]
-    bar_pivot: [-0.04, 0.20, 0.40]
+    arm_end: [-0.04, 0.20, 0.40]
+    bar_pivot: [-0.10, 0.20, 0.40]
     bar_axis: [0.0, 1.0, 0.0]
     bar_length: 0.40
     outer_diameter: 0.016
@@ -83,11 +83,11 @@ rear:
     length_min: 0.150
     length_max: 0.250
   arb:
-    type: flexural
-    arm_end: [-1.64, 0.12, 0.40]
-    blade_root: [-1.64, 0.05, 0.40]
-    blade_pivot_axis: [0.0, 1.0, 0.0]
-    blade_length: 0.10
-    blade_width: 0.02
-    blade_thickness: 0.003
-    youngs_modulus: 2.1e11
+    type: beam
+    beam_center: [-1.64, 0.0, 0.40]
+    beam_axis: [0.0, 1.0, 0.0]
+    arm_end: [-1.64, 0.2342, 0.45]
+    beam_width: 0.02
+    beam_thickness: 0.003
+    beam_youngs_modulus: 2.1e11
+    beam_angle: 0.0

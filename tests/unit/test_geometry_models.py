@@ -25,7 +25,7 @@ def test_fixture_loads_and_properties() -> None:
     assert v.front.arb is not None
     assert v.front.arb.type == "torsional"
     assert v.rear.arb is not None
-    assert v.rear.arb.type == "flexural"
+    assert v.rear.arb.type == "beam"
 
 
 def test_rocker_axis_normalized() -> None:
@@ -119,6 +119,14 @@ def _torsional_bar_length(d: dict[str, Any]) -> None:
     d["front"]["arb"]["bar_length"] = 0.45
 
 
+def _beam_center_off(d: dict[str, Any]) -> None:
+    d["rear"]["arb"]["beam_center"][1] = 0.01
+
+
+def _torsional_arm_on_axis(d: dict[str, Any]) -> None:
+    d["front"]["arb"]["bar_pivot"] = [-0.04, 0.20, 0.40]
+
+
 def _wc_z_wide(d: dict[str, Any]) -> None:
     d["front"]["hardpoints"]["wheel_center"][2] = 0.2032 + 0.025
 
@@ -136,6 +144,8 @@ def _wc_z_wide(d: dict[str, Any]) -> None:
         _coilover_too_short,
         _override_outer_y_zero,
         _torsional_bar_length,
+        _beam_center_off,
+        _torsional_arm_on_axis,
         _wc_z_wide,
         _neg_y,
         _zero_axis,

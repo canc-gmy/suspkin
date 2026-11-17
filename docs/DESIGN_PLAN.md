@@ -392,7 +392,7 @@ The package name `suspkin` is a placeholder.
 | D8 | FEM / NN | Deferred to future phases |
 | O1 | Validation data | User **may** have real hardpoints. v0.x uses a reference FS geometry + analytical tests. The YAML schema must accept user hardpoints directly so their data drops in as a regression case later. |
 | O2 | Pushrod mount | Solver supports `upright`, `lca` and `uca`. **Reference car (from v0.2): pushrod on the UCA, both axles**, rod in compression going up to a rocker mounted above the UCA (changed 2026-11-17, was upright). |
-| O3 | ARB | **Both axles**. Type (torsional / flexural) chosen per axle in YAML. |
+| O3 | ARB | **Both axles**. Type chosen per axle in YAML (decided 2026-11-17 for v0.4): `torsional` (round arms, bar twist GJ/L **in series with arm bending** 3EI/L³), `blade` (torsion tube + flat blade arms with an orientation angle: flat = soft, edge-on = stiff), `beam` (transverse bending bar: heave-free central slider, clamped in rotation; roll bends the two halves as cantilevers). Replaces the earlier single `flexural` type. |
 | O4 | Brakes / drive | **Outboard** brakes on both axles, **RWD**. Configurable. |
 | O5 | Tyre | **Rigid disc** for now. Loaded radius later. |
 | O6 | Optimization | **Deferred**. Kinematics first; optimization design gets its own grilling round before v0.7. |

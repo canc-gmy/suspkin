@@ -7,7 +7,7 @@
 #   wheelbase 1.550 m, front track 1.220 m, rear track 1.180 m (wheel-centre track)
 #   10" wheels, 18x6-10 tyres (R = 0.228 m), outboard brakes, RWD
 #   pushrod on the UPPER wishbone (both axles), in compression, rocker above the UCA
-#   ARB: torsional bar at the front, flexural blade at the rear
+#   ARB: torsional bar (round steel arms) at the front, blade-arm torsion tube at the rear
 
 vehicle:
   name: fs_reference
@@ -74,12 +74,14 @@ front:
   arb:
     type: torsional
     arm_end: [-0.090, 0.260, 0.579]    # arm tip, linked to rocker_arb by a vertical drop link (0.10 m)
-    bar_pivot: [-0.150, 0.260, 0.579]  # bar axis point where the arm is clamped (arm length 0.06 m)
+    bar_pivot: [-0.240, 0.260, 0.579]  # bar axis point where the arm is clamped (arm length 0.15 m)
     bar_axis: [0.0, 1.0, 0.0]
     bar_length: 0.52                   # = 2 * bar_pivot.y (bar spans the mirrored pivots)
-    outer_diameter: 0.016
-    inner_diameter: 0.012
+    outer_diameter: 0.012              # thin-wall steel tube
+    inner_diameter: 0.010
     shear_modulus: 7.93e10
+    arm_diameter: 0.012                # round solid steel arms, bending in series with the tube
+    arm_youngs_modulus: 2.0e11
   steering:
     c_factor: 0.090          # m of rack travel per pinion revolution
     rack_travel: [-0.030, 0.030]
@@ -97,7 +99,8 @@ rear:
   #  - Same pushrod/rocker layout as the front: UCA-mounted pushrod in compression (~68 deg,
   #    0.19 m), rocker above the UCA, horizontal transverse coilover on top of the chassis
   #    (z = 0.5565 m, static length 0.200 m), motion ratio ~0.99, progression ~9 %.
-  #  - Flexural ARB blade sits above the rocker, drop link vertical (0.10 m) going up.
+  #  - Blade ARB: steel torsion tube between the mirrored pivots with 25x3 mm flat blade arms
+  #    (0.15 m long, blade_angle 0 = flat = soft) above the rocker, drop link vertical (0.10 m) going up.
   hardpoints:
     uca_front: [-1.420, 0.300, 0.320]
     uca_rear: [-1.680, 0.300, 0.320]
@@ -128,11 +131,15 @@ rear:
     length_min: 0.160
     length_max: 0.240
   arb:
-    type: flexural
+    type: blade
     arm_end: [-1.640, 0.260, 0.579]     # blade tip, linked to rocker_arb by a vertical drop link (0.10 m)
-    blade_root: [-1.640, 0.150, 0.579]  # blade clamp on the chassis
-    blade_pivot_axis: [1.0, 0.0, 0.0]   # blade bends vertically about a longitudinal axis
-    blade_length: 0.110
+    bar_pivot: [-1.790, 0.260, 0.579]   # tube end where the blade is clamped (blade length 0.15 m)
+    bar_axis: [0.0, 1.0, 0.0]
+    bar_length: 0.52                    # = 2 * bar_pivot.y
+    outer_diameter: 0.016
+    inner_diameter: 0.012
+    shear_modulus: 7.93e10
     blade_width: 0.025
     blade_thickness: 0.003
-    youngs_modulus: 2.0e11
+    blade_youngs_modulus: 2.0e11
+    blade_angle: 0.0                    # 0 = flat (soft), pi/2 = edge-on (stiff)

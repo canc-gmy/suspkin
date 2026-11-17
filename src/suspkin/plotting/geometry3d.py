@@ -74,9 +74,10 @@ def _draw_corner(ax: Axes3D, c: Corner, show_labels: bool) -> list[NDArray[np.fl
     ab = arb_points(c)
     markers = list(p.values())
     if ab:
-        root = ab["bar_pivot"] if "bar_pivot" in ab else ab["blade_root"]
+        root = ab["bar_pivot"] if "bar_pivot" in ab else ab["beam_center"]
         if "rocker_arb" in p:
             _line(ax, [p["rocker_arb"], ab["arm_end"]], col["ARB"])
+        # torsional/blade: arm from bar pivot to arm end; beam: half beam from centre to end
         _line(ax, [ab["arm_end"], root], col["ARB"])
         markers += [ab["arm_end"], root]
 
@@ -128,8 +129,10 @@ def plot_vehicle_3d(
     pairs: list[tuple[CornerId, CornerId]] = [("FL", "FR"), ("RL", "RR")]
     for left, right in pairs:
         al, ar = arb_points(corners[left]), arb_points(corners[right])
-        if "bar_pivot" in al:
+        if "bar_pivot" in al:  # torsional / blade: tube between the pivots
             _line(ax, [al["bar_pivot"], ar["bar_pivot"]], GROUP_COLORS["ARB"], 2.5)
+        elif "beam_center" in al:  # beam: line between the two ends through the centre
+            _line(ax, [al["arm_end"], al["beam_center"], ar["arm_end"]], GROUP_COLORS["ARB"], 2.5)
 
     allp = np.array(pts)
     lo, hi = allp.min(axis=0), allp.max(axis=0)
