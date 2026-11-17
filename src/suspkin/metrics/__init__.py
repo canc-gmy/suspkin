@@ -50,6 +50,7 @@ from suspkin.metrics.centres import (
     sv_wc_angle,
     svsa_length,
 )
+from suspkin.metrics.joints import JOINTS, body_rotations, joint_angle, joint_angles_frame
 from suspkin.metrics.table import add_gradients, metrics_frame, static_summary
 from suspkin.metrics.vehicle import (
     LoadTransfer,
@@ -76,6 +77,7 @@ from suspkin.metrics.vehicle import (
 from suspkin.metrics.vehicle_summary import AxleSummary, VehicleSummary, vehicle_summary
 
 __all__ = [
+    "JOINTS",
     "ArbRates",
     "AxleSummary",
     "InstantCentre",
@@ -94,6 +96,7 @@ __all__ = [
     "arb_metrics",
     "arb_rates",
     "axle_roll_stiffness",
+    "body_rotations",
     "bump_stroke_remaining",
     "camber",
     "caster",
@@ -109,6 +112,8 @@ __all__ = [
     "half_track",
     "half_track_change",
     "inner_outer",
+    "joint_angle",
+    "joint_angles_frame",
     "kingpin_offset_wc",
     "kpi",
     "lateral_load_transfer",
