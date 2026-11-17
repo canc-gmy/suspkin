@@ -204,8 +204,11 @@ _VS_UNITS: dict[str, tuple[float, str]] = {
     "rc_height": (1e3, "mm"),
     "roll_camber": (1.0, "deg/deg"),
     "roll_steer": (1.0, "deg/deg"),
-    "rc_migration": (1e3 / _DEG, "mm/deg"),
-    "rc_height_gradient": (1e3 / _DEG, "mm/deg"),
+    "rc_migration": (
+        1e3 / _DEG,
+        "mm/deg (+ = toward left of the car centreline, for left-up roll)",
+    ),
+    "rc_height_curvature": (1e3 / _DEG**2, "mm/deg^2"),
     "wheelbase": (1e3, "mm"),
     "sprung_mass": (1.0, "kg"),
     "sprung_cg_height": (1e3, "mm"),
@@ -226,7 +229,7 @@ _VS_UNITS: dict[str, tuple[float, str]] = {
     "ackermann_5deg": (1.0, "%"),
     "ackermann_10deg": (1.0, "%"),
     "ackermann_15deg": (1.0, "%"),
-    "steering_ratio": (1.0, "-"),
+    "steering_ratio": (1.0, "deg/deg (handwheel/road wheel)"),
     "turning_radius": (1.0, "m"),
 }
 
@@ -293,6 +296,10 @@ def vsweep(
     base_roll: Annotated[float, typer.Option("--base-roll", help="Fixed roll [deg].")] = 0.0,
     base_pitch: Annotated[float, typer.Option("--base-pitch", help="Fixed pitch [deg].")] = 0.0,
     base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack [m].")] = 0.0,
+    pivot: Annotated[
+        tuple[float, float, float] | None,
+        typer.Option("--pivot", help="Body rotation centre X Y Z [m] (default: the CG)."),
+    ] = None,
 ) -> None:
     """Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).
 
@@ -326,7 +333,7 @@ def vsweep(
     }
     base.pop(name)
     try:
-        states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base)
+        states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base, pivot=pivot)
         df = vehicle_frame(states, veh)
     except (KinematicsError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)

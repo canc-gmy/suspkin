@@ -48,3 +48,15 @@ def test_reference_vehicle_summary(vehicle) -> None:  # type: ignore[no-untyped-
         assert a == pytest.approx(0.0, abs=1e-6)  # parallel side-view wishbones
     assert math.isfinite(s.ackermann_10deg)
     assert s.roll_stiffness_total == pytest.approx(s.front.roll_stiffness + s.rear.roll_stiffness)
+
+
+def test_reference_signs_and_cg_pivot(vehicle) -> None:  # type: ignore[no-untyped-def]
+    from suspkin.metrics import vehicle_summary
+
+    s = vehicle_summary(vehicle)
+    assert s.front.rc_migration > 0.0 and s.rear.rc_migration > 0.0  # + = toward +y
+    assert s.front.roll_camber > 0.0  # outer wheel loses negative camber vs the ground
+    rolls = np.radians(np.array([0.0, 1.0]))
+    df = vehicle_frame(sweep_vehicle(vehicle, roll=rolls), vehicle)
+    assert df["rc_front_y"].iloc[1] > 0.0
+    assert df["FR_camber_ground"].iloc[1] > df["FR_camber_ground"].iloc[0]

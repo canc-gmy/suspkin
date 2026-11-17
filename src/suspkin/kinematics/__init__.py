@@ -8,7 +8,7 @@ from suspkin.kinematics.corner import (
     sweep_rack,
 )
 from suspkin.kinematics.rocker import KinematicsError, RockerResult, solve_rocker
-from suspkin.kinematics.vehicle import VehicleState, contact_point, solve_vehicle
+from suspkin.kinematics.vehicle import VehicleState, cg_pivot, contact_point, solve_vehicle
 
 __all__ = [
     "ArbState",
@@ -18,6 +18,7 @@ __all__ = [
     "VehicleState",
     "arb_energy",
     "arb_stiffness",
+    "cg_pivot",
     "contact_point",
     "solve_arb",
     "solve_corner",

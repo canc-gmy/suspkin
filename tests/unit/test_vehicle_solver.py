@@ -60,8 +60,8 @@ def test_pure_roll() -> None:
         assert abs(sh.arb[axle].elastic) < 1e-6  # type: ignore[union-attr]
 
 
-def test_pitch_nose_down_about_mid_wheelbase() -> None:
-    t = _travels(solve_vehicle(VEHICLE, CORNERS, pitch=0.01, pivot=(-0.775, 0.0, 0.0)))
+def test_pitch_nose_down_about_cg() -> None:
+    t = _travels(solve_vehicle(VEHICLE, CORNERS, pitch=0.01))
     assert t["FL"] > 0 and t["FR"] > 0
     assert t["RL"] < 0 and t["RR"] < 0
 
@@ -89,6 +89,52 @@ def test_contact_on_ground_plane(h: float, phi: float, th: float, rack: float) -
     n = s.ground_normal
     for k in IDS:
         cp = contact_point(s.corners[k], n, CORNERS[k].axle_cfg.wheel.tyre_radius)
-        z_world = float(n @ cp) + h  # origin pivot
+        z_world = float(n @ (cp - s.pivot)) + s.pivot[2] + h
         assert z_world == pytest.approx(float(_static_contact(CORNERS[k])[2]), abs=1e-9)
         np.testing.assert_allclose(cp, s.contact_points[k], atol=1e-12)
+
+
+def test_default_pivot_is_cg_and_overridable() -> None:
+    from suspkin.kinematics import cg_pivot
+
+    s = solve_vehicle(VEHICLE, CORNERS, pitch=0.01)
+    a = VEHICLE.wheelbase * (1.0 - VEHICLE.vehicle.front_mass_ratio)
+    np.testing.assert_allclose(s.pivot, [-a, 0.0, VEHICLE.vehicle.cg_height])
+    np.testing.assert_allclose(s.pivot, cg_pivot(VEHICLE))
+    s0 = solve_vehicle(VEHICLE, CORNERS, pitch=0.01, pivot=(0.0, 0.0, 0.0))
+    assert abs(s0.corners["FL"].travel) < abs(s.corners["FL"].travel)  # origin = front axle
+
+
+def _brute_lowest(state, n, radius):  # type: ignore[no-untyped-def]
+    from scipy.optimize import minimize_scalar
+
+    s = np.asarray(state.spin_axis)
+    u = np.cross(s, [0.0, 0.0, 1.0])
+    u /= np.linalg.norm(u)
+    v = np.cross(s, u)
+    c = np.asarray(state.points["wheel_center"])
+
+    def pt(t: float):  # type: ignore[no-untyped-def]
+        return c + radius * (np.cos(t) * u + np.sin(t) * v)
+
+    ts = np.linspace(0.0, 2.0 * np.pi, 20001)
+    h = np.array([n @ pt(t) for t in ts])
+    t0 = ts[int(np.argmin(h))]
+    res = minimize_scalar(lambda t: n @ pt(t), bracket=(t0 - 1e-3, t0, t0 + 1e-3), tol=1e-14)
+    return pt(res.x)
+
+
+@pytest.mark.parametrize(
+    "pose",
+    [
+        {"roll": 0.03},
+        {"pitch": -0.02, "heave": 0.01},
+        {"roll": -0.02, "pitch": 0.015, "rack": 0.015, "heave": -0.01},
+    ],
+)
+def test_contact_matches_brute_force(pose: dict[str, float]) -> None:
+    s = solve_vehicle(VEHICLE, CORNERS, **pose)
+    for k in IDS:
+        r = CORNERS[k].axle_cfg.wheel.tyre_radius
+        ref = _brute_lowest(s.corners[k], s.ground_normal, r)
+        np.testing.assert_allclose(s.contact_points[k], ref, atol=1e-6)

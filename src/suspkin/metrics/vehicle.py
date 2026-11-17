@@ -68,8 +68,9 @@ def anti_angle_for(
     """Pick the side-view angle that governs the anti-feature.
 
     Braking: outboard brakes react through the contact patch (``sv_swing_angle``),
-    inboard brakes through the chassis (``sv_wc_angle``). Drive always uses the
-    wheel-centre angle.
+    inboard brakes through the chassis (``sv_wc_angle``). Drive uses the wheel-centre
+    angle (inboard drive with halfshafts, the usual layout); hub/outboard drive (drive
+    torque reacted by the upright) would use the contact-patch angle instead.
     """
     if phase == "drive":
         return sv_wc_angle
@@ -127,7 +128,12 @@ def roll_axis_height_at(
 
 @dataclass(frozen=True)
 class LoadTransfer:
-    """Lateral load transfer per axle [N] (outside minus inside wheel load, per axle)."""
+    """Lateral load transfer per axle [N].
+
+    Each value is the load shift ``dW`` per wheel: the outside wheel gains ``dW`` and the
+    inside wheel loses ``dW``, so the outside-minus-inside load difference of the axle
+    is ``2 dW``.
+    """
 
     front_elastic: float
     front_geometric: float

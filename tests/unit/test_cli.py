@@ -148,3 +148,15 @@ def test_vsweep_roll_degrees(tmp_path: Path) -> None:
 def test_vsweep_requires_one_variable(tmp_path: Path) -> None:
     res = runner.invoke(app, ["vsweep", str(FIXTURE), "--out", str(tmp_path / "x.csv")])
     assert res.exit_code == 2
+
+
+def test_vsweep_pivot_option(tmp_path: Path) -> None:
+    import pandas as pd
+
+    out_a, out_b = tmp_path / "a.csv", tmp_path / "b.csv"
+    base = ["vsweep", str(FIXTURE), "--pitch", "0", "1", "--steps", "3"]
+    assert runner.invoke(app, [*base, "--out", str(out_a)]).exit_code == 0
+    res = runner.invoke(app, [*base, "--pivot", "0", "0", "0", "--out", str(out_b)])
+    assert res.exit_code == 0, res.output
+    a, b = pd.read_csv(out_a), pd.read_csv(out_b)
+    assert abs(a["FL_travel"].iloc[-1] - b["FL_travel"].iloc[-1]) > 1e-4

@@ -8,7 +8,9 @@ Body motion convention (body pose relative to the fixed ground, ISO 8855 axes):
 * ``rack`` [m]: rack displacement, applied to the front corners only.
 
 A body point ``x_b`` maps to the world as ``x_w = R (x_b - pivot) + pivot + h e_z``
-with ``R = R_y(theta) R_x(phi)``; ``pivot`` defaults to the vehicle-frame origin. The
+with ``R = R_y(theta) R_x(phi)``. ``pivot`` defaults to the vehicle CG
+(``cg_pivot``: x = -a, y = 0, z = cg_height, with a = wheelbase (1 - front_mass_ratio)
+measured rearward from the front axle); it applies to roll and pitch. The
 corner solver works in the body frame, so the ground is expressed there: the height
 of a body point is ``n . (x_b - pivot) + pivot_z + h`` with ``n = R^T e_z`` (the
 ground normal in the body frame).
@@ -55,6 +57,7 @@ class VehicleState:
     ground_normal: Vec
     arb: dict[str, ArbState | None]
     max_residual: float
+    pivot: Vec
 
 
 def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: float) -> Vec:
@@ -65,6 +68,12 @@ def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: flo
     up = up / np.linalg.norm(up)
     out: Vec = np.asarray(state.points["wheel_center"], dtype=np.float64) - tyre_radius * up
     return out
+
+
+def cg_pivot(vehicle: Vehicle) -> Vec:
+    """Default rotation pivot: the vehicle CG ``(-a, 0, cg_height)`` in the vehicle frame."""
+    a = vehicle.wheelbase * (1.0 - vehicle.vehicle.front_mass_ratio)
+    return np.array([-a, 0.0, vehicle.vehicle.cg_height])
 
 
 def body_rotation(roll: float, pitch: float) -> Vec:
@@ -133,7 +142,7 @@ def solve_vehicle(
     roll: float = 0.0,
     pitch: float = 0.0,
     rack: float = 0.0,
-    pivot: ArrayLike = (0.0, 0.0, 0.0),
+    pivot: ArrayLike | None = None,
     guess: VehicleState | None = None,
 ) -> VehicleState:
     """Solve all corners (and ARBs) for a prescribed body pose.
@@ -147,7 +156,7 @@ def solve_vehicle(
     heave, roll, pitch, rack : float
         Body heave [m, up positive], roll [rad, left up], pitch [rad, nose down], rack [m].
     pivot : array-like
-        Centre of the body rotations (default: vehicle-frame origin).
+        Centre of the body rotations (default: the vehicle CG, see ``cg_pivot``).
     guess : VehicleState, optional
         Neighbouring solution for continuation.
 
@@ -158,7 +167,7 @@ def solve_vehicle(
     """
     if corners is None:
         corners = build_corners(vehicle)
-    pv = np.asarray(pivot, dtype=np.float64)
+    pv = cg_pivot(vehicle) if pivot is None else np.asarray(pivot, dtype=np.float64)
     rot = body_rotation(roll, pitch)
     n: Vec = rot.T @ _E_Z
     offset = float(pv[2]) - float(n @ pv) + heave
@@ -202,4 +211,5 @@ def solve_vehicle(
         ground_normal=n,
         arb=arbs,
         max_residual=worst,
+        pivot=np.array(pv, dtype=np.float64),
     )

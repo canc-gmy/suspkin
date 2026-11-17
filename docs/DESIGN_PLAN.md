@@ -399,4 +399,5 @@ The package name `suspkin` is a placeholder.
 | O5 | Tyre | **Rigid disc** for now. Loaded radius later. |
 | O6 | Optimization | **Deferred**. Kinematics first; optimization design gets its own grilling round before v0.7. |
 | O7 | Package name | `suspkin` |
+| D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |

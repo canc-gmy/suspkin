@@ -7,11 +7,17 @@ All values SI (m, rad, N, N/m, N*m/rad, kg). Conventions:
   wheel (FR / RR); ``roll_camber_*`` is d(camber_ground of that wheel)/d(roll), a
   negative value meaning the outer wheel gains negative camber relative to the ground.
 * ``roll_steer_*`` = d(mean of left and right ``steer_ground``)/d(roll) [rad/rad].
-* Roll centres are in the ground frame (height above ground); ``rc_migration_*`` =
-  d(rc_y)/d(roll) [m/rad] and ``rc_height_gradient_*`` = d(rc_z)/d(roll) [m/rad].
-* Mass: ``vehicle.mass`` is the total mass, ``cg_height`` the total CG height; the
-  sprung CG height follows from removing the unsprung masses at
-  ``unsprung_cg_height`` (default: the tyre radius).
+* Roll centres: height above ground (ground frame); lateral position y relative to the
+  car centreline (body frame, independent of the pivot); ``rc_migration_*`` =
+  d(rc_y)/d(roll) [m/rad] and ``rc_height_curvature`` = d2(rc_z)/d(roll)2 [m/rad^2]
+  (the first derivative is zero by symmetry).
+* Mass: ``vehicle.mass`` is the total mass, ``cg_height`` the total CG height and the
+  total CG is at ``x = -a``, ``a = wheelbase (1 - front_mass_ratio)``. The sprung CG
+  follows from removing the unsprung masses (per axle: 2 * ``unsprung_mass`` at the axle
+  wheel-centre x and at ``unsprung_cg_height``, default the tyre radius): moments
+  give ``h_s = (M h - sum m_u h_u) / m_s`` and ``x_s = (M x - sum m_u x_u) / m_s``.
+  The sprung CG x/height feed the roll axis height and the load transfer.
+* Body rotations use ``pivot`` (default: the total CG, see ``cg_pivot``).
 * Steering (rack sweep over the full rack travel): angles are relative to the straight
   ahead pose; the lock side is the rack end with the larger mean steer. Ackermann [%] at
   outer-wheel steer of 5/10/15 deg is interpolated on that side (nan if not reached).
@@ -23,7 +29,7 @@ import math
 from dataclasses import asdict, dataclass
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import build_corners
 from suspkin.geometry.models import Vehicle
@@ -58,7 +64,7 @@ class AxleSummary:
     roll_camber: float
     roll_steer: float
     rc_migration: float
-    rc_height_gradient: float
+    rc_height_curvature: float
 
 
 @dataclass(frozen=True)
@@ -103,6 +109,13 @@ def _slope0(x: NDArray[np.float64], y: NDArray[np.float64]) -> float:
     return float(np.polyfit(x, y, 3)[-2])
 
 
+def _curv0(x: NDArray[np.float64], y: NDArray[np.float64]) -> float:
+    """Second derivative at x = 0 of a cubic least-squares fit."""
+    if not np.all(np.isfinite(y)):
+        return _NAN
+    return float(2.0 * np.polyfit(x, y, 3)[-3])
+
+
 def _sv_line(st: CornerState, corner: object) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     cp = st.points["contact_patch"]
     ic = side_view_ic(st, corner)  # type: ignore[arg-type]
@@ -134,17 +147,19 @@ def _axle_static(vehicle: Vehicle, cid_l: str, cid_r: str, axle_name: str) -> di
     }
 
 
-def _steering(vehicle: Vehicle, n_rack: int = 41) -> dict[str, float]:
+def _steering(
+    vehicle: Vehicle, pivot: ArrayLike | None = None, n_rack: int = 41
+) -> dict[str, float]:
     from suspkin.sweeps.vehicle_sweeps import sweep_vehicle
 
     corners = build_corners(vehicle)
     steer = vehicle.front.steering
     assert steer is not None
     fl, fr = corners["FL"], corners["FR"]
-    static = solve_vehicle(vehicle, corners)
+    static = solve_vehicle(vehicle, corners, pivot=pivot)
     s0 = (steer_angle(static.corners["FL"], fl), steer_angle(static.corners["FR"], fr))
     racks = np.linspace(steer.rack_travel[0], steer.rack_travel[1], n_rack)
-    states = sweep_vehicle(vehicle, rack=racks)
+    states = sweep_vehicle(vehicle, rack=racks, pivot=pivot)
     dl = np.array([steer_angle(s.corners["FL"], fl) - s0[0] for s in states])
     dr = np.array([steer_angle(s.corners["FR"], fr) - s0[1] for s in states])
     mean = 0.5 * (dl + dr)
@@ -179,7 +194,7 @@ def _steering(vehicle: Vehicle, n_rack: int = 41) -> dict[str, float]:
         else:
             out[key] = float(np.interp(tgt, o_sel[order], ack[order]))
     r_small = [-1e-3, 0.0, 1e-3]
-    sm = sweep_vehicle(vehicle, rack=r_small)
+    sm = sweep_vehicle(vehicle, rack=r_small, pivot=pivot)
     dm = [
         0.5 * (steer_angle(s.corners["FL"], fl) - s0[0] + steer_angle(s.corners["FR"], fr) - s0[1])
         for s in sm
@@ -189,14 +204,19 @@ def _steering(vehicle: Vehicle, n_rack: int = 41) -> dict[str, float]:
 
 
 def vehicle_summary(
-    vehicle: Vehicle, *, roll_range: float = 0.035, n: int = 15, ay_ref: float = 9.81
+    vehicle: Vehicle,
+    *,
+    roll_range: float = 0.035,
+    n: int = 15,
+    ay_ref: float = 9.81,
+    pivot: ArrayLike | None = None,
 ) -> VehicleSummary:
     """Compute the vehicle summary (see the module docstring)."""
     from suspkin.sweeps.vehicle_sweeps import sweep_vehicle, vehicle_frame
 
     corners = build_corners(vehicle)
     rolls = np.linspace(-roll_range, roll_range, n | 1)
-    states = sweep_vehicle(vehicle, roll=rolls)
+    states = sweep_vehicle(vehicle, roll=rolls, pivot=pivot)
     df = vehicle_frame(states, vehicle)
     i0 = int(np.argmin(np.abs(rolls)))
     roll = df["roll"].to_numpy(dtype=float)
@@ -216,20 +236,24 @@ def vehicle_summary(
             roll_camber=_slope0(roll, df[f"{right}_camber_ground"].to_numpy(dtype=float)),
             roll_steer=_slope0(roll, mean_steer.to_numpy(dtype=float)),
             rc_migration=_slope0(roll, rc_y),
-            rc_height_gradient=_slope0(roll, rc_z),
+            rc_height_curvature=_curv0(roll, rc_z),
         )
     fa, ra = summaries["front"], summaries["rear"]
 
     vp = vehicle.vehicle
     wb = vehicle.wheelbase
     m_s = vm.sprung_mass(vehicle)
-    m_u = vp.mass - m_s
+    m_uf = 2.0 * vehicle.front.unsprung_mass
+    m_ur = 2.0 * vehicle.rear.unsprung_mass
     hu_f = vp.unsprung_cg_height or vehicle.front.wheel.tyre_radius
     hu_r = vp.unsprung_cg_height or vehicle.rear.wheel.tyre_radius
-    h_u = 0.5 * (hu_f + hu_r)
-    h_s = (vp.mass * vp.cg_height - m_u * h_u) / m_s
-    a = (1.0 - vp.front_mass_ratio) * wb  # CG to front axle
-    h_ra = vm.roll_axis_height_at(-a, 0.0, fa.rc_height, -wb, ra.rc_height)
+    x_uf = vehicle.front.hardpoints.wheel_center[0]
+    x_ur = vehicle.rear.hardpoints.wheel_center[0]
+    a_total = (1.0 - vp.front_mass_ratio) * wb  # total CG to front axle
+    h_s = (vp.mass * vp.cg_height - m_uf * hu_f - m_ur * hu_r) / m_s
+    x_s = (vp.mass * (-a_total) - m_uf * x_uf - m_ur * x_ur) / m_s
+    a = -x_s  # sprung CG to front axle
+    h_ra = vm.roll_axis_height_at(x_s, 0.0, fa.rc_height, -wb, ra.rc_height)
     gradient = vm.roll_gradient(m_s, h_s, h_ra, fa.roll_stiffness, ra.roll_stiffness)
     lt = vm.lateral_load_transfer(
         ay_ref,
@@ -249,7 +273,7 @@ def vehicle_summary(
         a,
     )
 
-    static = solve_vehicle(vehicle, corners)
+    static = solve_vehicle(vehicle, corners, pivot=pivot)
     fl, rl = static.corners["FL"], static.corners["RL"]
     cf, cr = corners["FL"], corners["RL"]
     split = vp.effective_drive_split_front
@@ -267,7 +291,7 @@ def vehicle_summary(
         vehicle.front, "drive", sv_swing_angle(fl, cf), sv_wc_angle(fl, cf)
     )
     pc = vm.pitch_centre(_sv_line(fl, cf), _sv_line(rl, cr))
-    steer = _steering(vehicle)
+    steer = _steering(vehicle, pivot)
     return VehicleSummary(
         front=fa,
         rear=ra,

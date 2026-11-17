@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-17
+
+### Added
+
+- Vehicle-level solver (`solve_vehicle`): body heave, roll, pitch and rack;
+  each corner's travel found so the tyre touches the tilted ground; ARBs per axle.
+  Default rotation pivot is the vehicle CG.
+- Vehicle sweeps incl. combined cases and `vehicle_frame` with per-corner metrics
+  (ground contact under pitch), ground-frame camber/steer, axle roll centres.
+- Vehicle formulas: anti-dive, anti-lift, anti-squat (brake bias, drive split,
+  inboard/outboard), roll stiffness (springs, ARB, tyres), roll gradient, lateral
+  load transfer and TLLTD, Ackermann, steering ratio, turning radius, pitch centre.
+- `vehicle_summary` incl. roll camber, roll steer, RC migration (relative to the
+  car centreline) and RC curvature.
+- CLI: `suspkin vehicle` and `suspkin vsweep` (with `--pivot`).
+- `VehicleParams`: `brake_bias_front`, `drive_split_front`, `unsprung_cg_height`.
+
 ## [0.4.0] - 2026-11-17
 
 ### Added
