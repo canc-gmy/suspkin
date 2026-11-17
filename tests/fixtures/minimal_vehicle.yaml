@@ -1,0 +1,93 @@
+vehicle:
+  name: minimal_fs
+  mass: 280.0
+  cg_height: 0.28
+  front_mass_ratio: 0.47
+  drive: rwd
+front:
+  brakes: outboard
+  pushrod_mount: upright
+  unsprung_mass: 11.0
+  hardpoints:
+    uca_front: [0.10, 0.28, 0.30]
+    uca_rear: [-0.10, 0.28, 0.29]
+    uca_outer: [0.0, 0.55, 0.30]
+    lca_front: [0.15, 0.22, 0.12]
+    lca_rear: [-0.15, 0.22, 0.12]
+    lca_outer: [0.0, 0.58, 0.13]
+    tie_inner: [0.08, 0.15, 0.14]
+    tie_outer: [0.08, 0.56, 0.15]
+    pushrod_outer: [0.0, 0.56, 0.27]
+    pushrod_inner: [0.0, 0.22, 0.42]
+    rocker_pivot: [0.0, 0.18, 0.45]
+    rocker_spring: [0.05, 0.18, 0.52]
+    spring_chassis: [0.10, 0.12, 0.30]
+    wheel_center: [0.0, 0.60, 0.2032]
+    rocker_arb: [-0.04, 0.17, 0.48]
+    rocker_axis: [1.0, 0.0, 0.1]
+  wheel:
+    tyre_radius: 0.2032
+    rim_width: 0.18
+    static_camber: -0.03
+    static_toe: 0.0
+    tyre_vertical_stiffness: 90000.0
+  coilover:
+    spring_rate: 35000.0
+    free_length: 0.200
+    preload: 0.0
+    length_min: 0.150
+    length_max: 0.230
+  arb:
+    type: torsional
+    arm_end: [-0.04, 0.12, 0.40]
+    bar_pivot: [-0.04, 0.0, 0.40]
+    bar_axis: [0.0, 1.0, 0.0]
+    bar_length: 0.40
+    outer_diameter: 0.016
+    inner_diameter: 0.0
+    shear_modulus: 7.9e10
+  steering:
+    c_factor: 0.090
+    rack_travel: [-0.030, 0.030]
+rear:
+  brakes: outboard
+  pushrod_mount: upright
+  unsprung_mass: 12.0
+  hardpoints:
+    uca_front: [-1.50, 0.26, 0.30]
+    uca_rear: [-1.70, 0.26, 0.29]
+    uca_outer: [-1.60, 0.52, 0.30]
+    lca_front: [-1.45, 0.22, 0.12]
+    lca_rear: [-1.75, 0.22, 0.12]
+    lca_outer: [-1.60, 0.55, 0.13]
+    tie_inner: [-1.72, 0.20, 0.14]
+    tie_outer: [-1.72, 0.54, 0.15]
+    pushrod_outer: [-1.60, 0.53, 0.27]
+    pushrod_inner: [-1.60, 0.22, 0.42]
+    rocker_pivot: [-1.60, 0.18, 0.45]
+    rocker_spring: [-1.55, 0.18, 0.52]
+    spring_chassis: [-1.50, 0.12, 0.30]
+    wheel_center: [-1.55, 0.58, 0.2032]
+    rocker_arb: [-1.64, 0.17, 0.48]
+    rocker_axis: [1.0, 0.0, 0.1]
+  wheel:
+    tyre_radius: 0.2032
+    rim_width: 0.18
+    static_camber: -0.026
+    static_toe: 0.0
+    tyre_vertical_stiffness: 90000.0
+  coilover:
+    spring_rate: 40000.0
+    free_length: 0.200
+    preload: 0.0
+    length_min: 0.150
+    length_max: 0.230
+  arb:
+    type: flexural
+    arm_end: [-1.64, 0.12, 0.40]
+    blade_root: [-1.64, 0.05, 0.40]
+    blade_pivot_axis: [0.0, 1.0, 0.0]
+    blade_length: 0.10
+    blade_width: 0.02
+    blade_thickness: 0.003
+    youngs_modulus: 2.1e11
