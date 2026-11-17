@@ -1,1 +1,1 @@
-"""Geometry optimization (planned for v0.7)."""
+"""Optimization study spec: regions, metric registry, study loader (v0.7)."""

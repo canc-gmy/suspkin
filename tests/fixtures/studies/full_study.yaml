@@ -1,0 +1,69 @@
+schema: 1
+vehicle: ../minimal_vehicle.yaml
+
+variables:
+  - point: front.uca_front
+    domain:
+      hexahedron:
+        units: mm
+        vertices:
+          - [90, 270, 290]
+          - [110, 270, 290]
+          - [112, 290, 290]
+          - [90, 290, 290]
+          - [90, 270, 310]
+          - [110, 270, 310]
+          - [112, 290, 310]
+          - [90, 290, 310]
+  - point: front.tie_inner
+    domain: {box: {min: [60, 130, 120], max: [100, 170, 160], units: mm}}
+  - point: rear.pushrod_outer
+    domain: {offset: {x: [-10 mm, 10 mm], z: [-0.005, 0.005]}}
+  - point: front.rocker_pivot
+    asymmetric: true
+    side: right
+    domain: {box: {min: ["-20 mm", "-220 mm", "360 mm"], max: ["20 mm", "-180 mm", "390 mm"]}}
+
+sweeps:
+  bump_f: {kind: corner, corner: FL, travel: [-30 mm, 30 mm], steps: 13}
+  roll: {kind: vehicle, input: roll, range: [-2 deg, 2 deg], steps: 9, base: {heave: 0 mm}}
+  steer: {kind: vehicle, input: rack, range: full, steps: 9}
+
+constraints:
+  - {name: camber_band, type: band, sweep: bump_f, metric: camber, where: [-20 mm, 25 mm], min: -2.5 deg, max: -0.5 deg, scale: 1 deg, note: x}
+  - {name: camber_roll, type: slope, sweep: roll, metric: FL_camber_ground, max: 0.8 deg/deg}
+  - {name: camber_gain, type: slope, sweep: bump_f, metric: camber, max: 0.05 deg/mm}
+  - {name: mr_static, type: value, sweep: bump_f, metric: mr_spring, at: 0 mm, min: 0.9, max: 1.1}
+  - {name: travel_f, type: reach, corner: FL, travel: [-30 mm, 30 mm], min_toggle_margin: 15 deg, stroke: true}
+  - {name: rg, type: summary, metric: roll_gradient, max: 1.2 deg/g}
+  - {name: ack, type: summary, metric: ackermann_10deg, min: 50 %, enabled: false}
+  - name: uca_keepout
+    type: outside
+    point: front.uca_front
+    region: {sphere: {center: [0.1, 0.28, 0.2], radius: 20 mm}}
+    over: bump_f
+  - name: uca_zone
+    type: inside
+    point: front.uca_front
+    region: {box: {min: [0, 0.2, 0.2], max: [0.2, 0.3, 0.4]}}
+  - name: tube
+    type: outside
+    point: front.tie_inner
+    region: {cylinder: {p0: [0, 0.1, 0.3], p1: [0.1, 0.1, 0.3], radius: 10 mm}}
+  - name: hexzone
+    type: inside
+    point: front.uca_rear
+    region:
+      hexahedron:
+        - [-0.2, 0.2, 0.2]
+        - [0.0, 0.2, 0.2]
+        - [0.0, 0.3, 0.2]
+        - [-0.2, 0.3, 0.2]
+        - [-0.2, 0.2, 0.4]
+        - [0.0, 0.2, 0.4]
+        - [0.0, 0.3, 0.4]
+        - [-0.2, 0.3, 0.4]
+  - {name: tie_len, type: distance, a: front.tie_inner, b: front.tie_outer, min: 300 mm}
+  - {name: uca_above, type: relation, lhs: front.uca_front.z, op: ">=", rhs: front.lca_front.z, offset: 50 mm}
+  - {name: uca_floor, type: relation, lhs: front.uca_front.z, op: ">=", rhs: 100 mm}
+  - {name: ubj_angle, type: joint_angle, corner: FL, joint: uca_outer, sweep: bump_f, max: 25 deg}
