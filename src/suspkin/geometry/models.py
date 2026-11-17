@@ -340,6 +340,16 @@ class VehicleParams(_Frozen):
     cg_height: float = Field(gt=0)
     front_mass_ratio: float = Field(gt=0, lt=1)
     drive: Literal["rwd", "fwd", "awd"] = "rwd"
+    brake_bias_front: float = Field(default=0.6, ge=0, le=1)
+    drive_split_front: float | None = Field(default=None, ge=0, le=1)
+    unsprung_cg_height: float | None = Field(default=None, gt=0)
+
+    @property
+    def effective_drive_split_front(self) -> float:
+        """Front share of drive torque: explicit value, else 0 (rwd), 1 (fwd), 0.5 (awd)."""
+        if self.drive_split_front is not None:
+            return self.drive_split_front
+        return {"rwd": 0.0, "fwd": 1.0, "awd": 0.5}[self.drive]
 
 
 class Vehicle(_Frozen):

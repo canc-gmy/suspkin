@@ -178,3 +178,48 @@ def test_frozen() -> None:
     v = load_vehicle(FIXTURE)
     with pytest.raises(ValidationError):
         v.vehicle.mass = 1.0  # type: ignore[misc]
+
+
+def test_vehicle_params_new_defaults() -> None:
+    p = load_vehicle(FIXTURE).vehicle
+    assert p.brake_bias_front == pytest.approx(0.6)
+    assert p.drive_split_front is None
+    assert p.unsprung_cg_height is None
+    assert p.effective_drive_split_front == 0.0  # rwd
+
+
+@pytest.mark.parametrize(
+    ("drive", "split", "expected"),
+    [("rwd", None, 0.0), ("fwd", None, 1.0), ("awd", None, 0.5), ("awd", 0.3, 0.3)],
+)
+def test_effective_drive_split(drive: str, split: float | None, expected: float) -> None:
+    d = _data()
+    d["vehicle"]["drive"] = drive
+    if split is not None:
+        d["vehicle"]["drive_split_front"] = split
+    v = Vehicle.model_validate(d)
+    assert v.vehicle.effective_drive_split_front == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("brake_bias_front", -0.1),
+        ("brake_bias_front", 1.1),
+        ("drive_split_front", 1.5),
+        ("drive_split_front", -0.2),
+        ("unsprung_cg_height", 0.0),
+    ],
+)
+def test_vehicle_params_new_fields_validated(key: str, value: float) -> None:
+    d = _data()
+    d["vehicle"][key] = value
+    with pytest.raises(ValidationError):
+        Vehicle.model_validate(d)
+
+
+def test_vehicle_params_round_trip_lossless() -> None:
+    d = _data()
+    d["vehicle"].update(brake_bias_front=0.65, drive_split_front=0.2, unsprung_cg_height=0.2)
+    v = Vehicle.model_validate(d)
+    assert Vehicle.model_validate(v.model_dump()) == v
