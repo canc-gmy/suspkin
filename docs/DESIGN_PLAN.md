@@ -390,7 +390,7 @@ The package name `suspkin` is a placeholder.
 | D7 | Metrics | Every metric in §5 |
 | D8 | FEM / NN | Deferred to future phases |
 | O1 | Validation data | User **may** have real hardpoints. v0.x uses a reference FS geometry + analytical tests. The YAML schema must accept user hardpoints directly so their data drops in as a regression case later. |
-| O2 | Pushrod mount | **Upright**, both axles. LCA mount kept as an optional setting. |
+| O2 | Pushrod mount | Solver supports `upright`, `lca` and `uca`. **Reference car (from v0.2): pushrod on the UCA, both axles**, rod in compression going up to a rocker mounted above the UCA (changed 2026-11-17, was upright). |
 | O3 | ARB | **Both axles**. Type (torsional / flexural) chosen per axle in YAML. |
 | O4 | Brakes / drive | **Outboard** brakes on both axles, **RWD**. Configurable. |
 | O5 | Tyre | **Rigid disc** for now. Loaded radius later. |

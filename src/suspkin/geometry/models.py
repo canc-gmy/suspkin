@@ -223,10 +223,15 @@ class Steering(_Frozen):
 
 
 class Axle(_Frozen):
-    """One axle: left-side hardpoints plus components."""
+    """One axle: left-side hardpoints plus components.
+
+    ``pushrod_mount`` selects the member that carries ``pushrod_outer``: the
+    ``"upright"`` (default), the lower wishbone ``"lca"`` or the upper wishbone
+    ``"uca"``.
+    """
 
     brakes: Literal["inboard", "outboard"] = "outboard"
-    pushrod_mount: Literal["upright", "lca"] = "upright"
+    pushrod_mount: Literal["upright", "lca", "uca"] = "upright"
     unsprung_mass: float = Field(gt=0)
     hardpoints: CornerHardpoints
     wheel: Wheel

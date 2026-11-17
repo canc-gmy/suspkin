@@ -28,3 +28,58 @@ def test_show_invalid_yaml(tmp_path: Path) -> None:
     assert res.exit_code == 1
     assert "Traceback" not in res.output
     assert res.output.strip() != ""
+
+
+def test_sweep_travel_writes_csv(tmp_path: Path) -> None:
+    import pandas as pd
+
+    out = tmp_path / "r.csv"
+    res = runner.invoke(
+        app,
+        ["sweep", str(FIXTURE), "--corner", "RL", "--travel", "0.0", "0.02", "--steps", "7",
+         "--out", str(out)],
+    )  # fmt: skip
+    assert res.exit_code == 0, res.output
+    assert str(out) in res.output
+    df = pd.read_csv(out)
+    assert len(df) == 7
+    for col in ("corner", "travel", "rack", "theta_uca", "rocker_angle", "coilover_length",
+                "toggle_margin", "max_residual", "spin_x", "wheel_center_z",
+                "contact_patch_z", "coilover_in_range"):  # fmt: skip
+        assert col in df.columns
+    assert set(df["corner"]) == {"RL"}
+
+
+def test_sweep_rack_front(tmp_path: Path) -> None:
+    import pandas as pd
+
+    out = tmp_path / "r.csv"
+    res = runner.invoke(
+        app,
+        ["sweep", str(FIXTURE), "--corner", "FL", "--rack-sweep", "-0.01", "0.01", "--steps", "5",
+         "--out", str(out)],
+    )  # fmt: skip
+    assert res.exit_code == 0, res.output
+    assert len(pd.read_csv(out)) == 5
+
+
+def test_sweep_requires_exactly_one_mode(tmp_path: Path) -> None:
+    out = tmp_path / "r.csv"
+    res = runner.invoke(app, ["sweep", str(FIXTURE), "--out", str(out)])
+    assert res.exit_code == 2
+    res = runner.invoke(
+        app,
+        ["sweep", str(FIXTURE), "--travel", "-0.01", "0.01", "--rack-sweep", "-0.01", "0.01",
+         "--out", str(out)],
+    )  # fmt: skip
+    assert res.exit_code == 2
+
+
+def test_sweep_rear_rack_fails_cleanly(tmp_path: Path) -> None:
+    res = runner.invoke(
+        app,
+        ["sweep", str(FIXTURE), "--corner", "RL", "--rack-sweep", "-0.01", "0.01",
+         "--out", str(tmp_path / "r.csv")],
+    )  # fmt: skip
+    assert res.exit_code == 1
+    assert "Traceback" not in res.output
