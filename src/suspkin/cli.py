@@ -529,10 +529,11 @@ def check(
     """Evaluate the baseline vehicle against all constraints of a study.
 
     Prints one row per constraint (display units); status is PASS, FAIL, UNSOLVED,
-    INFEASIBLE or OFF (disabled). Exit code 2 on a study file error, 1 with --strict
-    if the baseline is not feasible.
+    INFEASIBLE or OFF (disabled). Exit code 2 on a study file or output error, 1 with
+    --strict if the baseline is not feasible or lies outside a variable domain.
     """
     from suspkin.optimize import DesignSpace, evaluate
+    from suspkin.optimize.design import InfeasibleDesign
     from suspkin.optimize.spec import StudyConfigError, load_study
 
     try:
@@ -541,6 +542,12 @@ def check(
     except (StudyConfigError, ValueError) as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=2) from exc
+    baseline_ok = True
+    try:
+        space.from_vehicle()
+    except InfeasibleDesign as exc:
+        baseline_ok = False
+        typer.echo(f"warning: baseline is outside a variable domain: {exc}", err=True)
     ev = evaluate(space)
     df = ev.display_frame()
     status = [("OFF" if s == "disabled" else s.upper()) for s in df["status"]]
@@ -555,10 +562,11 @@ def check(
             str(r.unit) or "-",
             _cell(float(r.g), "{:.3f}"),
             st,
+            str(r.detail),
         )
         for r, st in zip(records, status, strict=True)
     ]
-    head = ("name", "type", "value", "min", "max", "unit", "g", "status")
+    head = ("name", "type", "value", "min", "max", "unit", "g", "status", "detail")
     widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(head)]
     num = {2, 3, 4, 6}  # right-aligned columns
 
@@ -575,15 +583,19 @@ def check(
     typer.echo(
         f"{n_pass}/{len(enabled)} constraints pass, feasible: {'yes' if ev.feasible else 'no'}"
     )
-    if csv is not None:
-        csv.parent.mkdir(parents=True, exist_ok=True)
-        ev.frame().to_csv(csv, index=False)
-        typer.echo(str(csv))
-    if plot is not None:
-        from suspkin.plotting import plot_study_3d
+    try:
+        if csv is not None:
+            csv.parent.mkdir(parents=True, exist_ok=True)
+            ev.frame().to_csv(csv, index=False)
+            typer.echo(str(csv))
+        if plot is not None:
+            from suspkin.plotting import plot_study_3d
 
-        plot.parent.mkdir(parents=True, exist_ok=True)
-        plot_study_3d(space).savefig(plot, dpi=200)
-        typer.echo(str(plot))
-    if strict and not ev.feasible:
+            plot.parent.mkdir(parents=True, exist_ok=True)
+            plot_study_3d(space).savefig(plot, dpi=200)
+            typer.echo(str(plot))
+    except Exception as exc:
+        typer.echo(f"error: cannot write output: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+    if strict and not (ev.feasible and baseline_ok):
         raise typer.Exit(code=1)

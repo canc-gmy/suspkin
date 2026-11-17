@@ -19,10 +19,11 @@ Semantics per constraint type:
 * ``value``: linear interpolation at ``at``.
 * ``reach``: the corner is solved over its own travel (13 evenly spaced steps). A solver
   failure gives ``unsolved``. ``g`` is the largest of the active terms: ``min_toggle_margin -
-  min(toggle_margin)`` and, with ``stroke``, ``-min(bump_stroke_remaining)`` and
-  ``-min(droop_stroke_remaining)``, all divided by ``scale`` (default 0.1 deg for the toggle
-  term, 1 mm for the stroke terms). ``value``/``dim`` belong to the term with the largest
-  ``g`` (the minimum toggle margin [rad] or the minimum remaining stroke [m]); with no active
+  min(toggle_margin)`` divided by ``toggle_scale`` (default 0.1 deg) and, with ``stroke``,
+  ``-min(bump_stroke_remaining)`` and ``-min(droop_stroke_remaining)`` divided by
+  ``stroke_scale`` (default 1 mm); the plain ``scale`` key is rejected for reach.
+  ``value``/``dim`` belong to the term with the largest ``g`` (named in ``detail``: the
+  minimum toggle margin [rad] or the minimum remaining stroke [m]); with no active
   term the constraint only requires the solve (``g = -1``, value = minimum toggle margin).
 * ``summary``: dotted field of :func:`suspkin.metrics.vehicle_summary`; ``None`` is
   ``unsolved``.
@@ -36,6 +37,9 @@ Semantics per constraint type:
 * ``relation``: ``lhs op rhs + offset`` on static left-side coordinates; ``g = (rhs + offset
   - lhs) / s`` for ``>=`` and the negative for ``<=``; value is ``lhs``.
 * ``joint_angle``: worst ``joint_angle`` over the sweep states (``axis`` override honoured).
+
+Default scales make ``g`` a "margin in display-sized units" (mm, 0.1 deg, ...), so ``g`` is
+not comparable across constraints of different dimensions; v0.8 will revisit the weighting.
 
 Failures: a :class:`~suspkin.kinematics.KinematicsError` (or a non-finite value, a missing
 column or point) marks the constraint ``unsolved`` with ``g = G_FAIL``; an invalid design
@@ -83,6 +87,7 @@ from suspkin.optimize.spec import (
     default_scale,
     parse_coord_ref,
     parse_point_ref,
+    region_centroid,
     sweep_input_dim,
     sweep_metric_dim,
     sweep_range,
@@ -118,6 +123,7 @@ class ConstraintResult:
     g: float
     status: Status
     dim: Dim
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -145,7 +151,7 @@ class Evaluation:
         return np.array([r.g for r in self._enabled()], dtype=np.float64)
 
     def frame(self) -> pd.DataFrame:
-        """Tidy table in SI units: name, type, value, min, max, g, status, dim."""
+        """Tidy table in SI units: name, type, value, min, max, g, status, dim, detail."""
         return pd.DataFrame(
             [
                 {
@@ -157,10 +163,11 @@ class Evaluation:
                     "g": r.g,
                     "status": r.status,
                     "dim": r.dim,
+                    "detail": r.detail,
                 }
                 for r in self.results
             ],
-            columns=["name", "type", "value", "min", "max", "g", "status", "dim"],
+            columns=["name", "type", "value", "min", "max", "g", "status", "dim", "detail"],
         )
 
     def display_frame(self) -> pd.DataFrame:
@@ -338,20 +345,6 @@ def _window(x: F64, y: F64, where: tuple[float, float] | None) -> tuple[F64, F64
     return xs, ys
 
 
-def _centroid(region: Any) -> F64:
-    out: F64
-    if isinstance(region, BoxRegion):
-        out = 0.5 * (np.array(region.lo) + np.array(region.hi))
-    elif isinstance(region, HexahedronRegion):
-        out = np.mean(np.array(region.vertices), axis=0)
-    elif isinstance(region, SphereRegion):
-        out = np.array(region.center, dtype=np.float64)
-    else:
-        assert isinstance(region, CylinderRegion)
-        out = 0.5 * (np.array(region.p0) + np.array(region.p1))
-    return out
-
-
 def _sd(region: Any, pts: F64) -> F64:
     if isinstance(region, BoxRegion):
         return sd_box(pts, region.lo, region.hi)
@@ -374,7 +367,12 @@ def _points(ctx: _Ctx, ref: str, over: str | None, side: str) -> F64:
         sw = ctx.study_sweeps[over]
         if isinstance(sw, CornerSweep) and (axle == "front") == (sw.corner[0] == "F"):
             data = ctx.sweep_corner_data(over)
-            return np.array([s.points[name] for s in data.states], dtype=np.float64).reshape(-1, 3)
+            try:
+                return np.array([s.points[name] for s in data.states], dtype=np.float64).reshape(
+                    -1, 3
+                )
+            except KeyError as exc:
+                raise _Unsolved(f"point {ref!r} is missing from the solved states") from exc
         if isinstance(sw, CornerSweep):
             side = "left" if sw.corner[1] == "L" else "right"
     cid = _corner_id(axle, side)
@@ -391,10 +389,10 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
     user = c.scale
 
     def res(
-        g: float, v: float, dim: Dim, vmin: float | None, vmax: float | None
+        g: float, v: float, dim: Dim, vmin: float | None, vmax: float | None, detail: str = ""
     ) -> ConstraintResult:
         return ConstraintResult(
-            c.name, c.type, v, vmin, vmax, g, "pass" if g <= 0.0 else "fail", dim
+            c.name, c.type, v, vmin, vmax, g, "pass" if g <= 0.0 else "fail", dim, detail
         )
 
     if isinstance(c, BandConstraint | SlopeConstraint | ValueConstraint):
@@ -423,22 +421,32 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
     if isinstance(c, ReachConstraint):
         key = ("reach", c.corner, c.travel)
         data = ctx.corner_run(key, c.corner, c.travel, _REACH_STEPS)
-        terms: list[tuple[float, float, Dim]] = []  # (g, value, dim)
+        terms: list[tuple[float, float, Dim, str]] = []  # (g, value, dim, label)
         tm = float(np.min(_column(data.frame, "toggle_margin")))
         if c.min_toggle_margin is not None:
-            s = _scale(c.scale if c.scale is not None else _TOGGLE_SCALE, "angle", None, None)
-            terms.append(((c.min_toggle_margin - tm) / s, tm, "angle"))
+            s = _scale(
+                c.toggle_scale if c.toggle_scale is not None else _TOGGLE_SCALE, "angle", None, None
+            )
+            terms.append(((c.min_toggle_margin - tm) / s, tm, "angle", "toggle margin"))
         if c.stroke:
-            s = _scale(c.scale if c.scale is not None else _STROKE_SCALE, "length", None, None)
-            for col in ("bump_stroke_remaining", "droop_stroke_remaining"):
+            s = _scale(
+                c.stroke_scale if c.stroke_scale is not None else _STROKE_SCALE,
+                "length",
+                None,
+                None,
+            )
+            for col, label in (
+                ("bump_stroke_remaining", "bump stroke remaining"),
+                ("droop_stroke_remaining", "droop stroke remaining"),
+            ):
                 rem = float(np.min(_column(data.frame, col)))
-                terms.append((-rem / s, rem, "length"))
+                terms.append((-rem / s, rem, "length", label))
         if not np.all(np.isfinite([t[0] for t in terms] + [tm])):
             raise _Unsolved("non-finite reach data")
         if not terms:
-            return res(-1.0, tm, "angle", c.min_toggle_margin, None)
-        g, val, dim = max(terms, key=lambda t: t[0])
-        return res(g, val, dim, c.min_toggle_margin if dim == "angle" else 0.0, None)
+            return res(-1.0, tm, "angle", c.min_toggle_margin, None, "solve only")
+        g, val, dim, label = max(terms, key=lambda t: t[0])
+        return res(g, val, dim, c.min_toggle_margin if dim == "angle" else 0.0, None, label)
 
     if isinstance(c, SummaryConstraint):
         obj = ctx.summary()
@@ -451,7 +459,7 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
         return res(g, val, sdim, lo, hi)
 
     if isinstance(c, InsideConstraint | OutsideConstraint):
-        side = "right" if _centroid(c.region)[1] < 0.0 else "left"
+        side = "right" if region_centroid(c.region)[1] < 0.0 else "left"
         sd = _sd(c.region, _points(ctx, c.point, c.over, side))
         s = _scale(user, "length", None, None)
         if isinstance(c, InsideConstraint):

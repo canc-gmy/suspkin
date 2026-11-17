@@ -4,7 +4,7 @@ Each study variable contributes parameters in the unit cube:
 
 * hexahedron / box domain: three parameters ``<label>.u``, ``.v``, ``.w``;
 * offset domain: one parameter per given axis, named ``<label>.x`` / ``.y`` / ``.z``. Axes
-  that are not given (or have zero width) stay fixed at the baseline and are excluded
+  that are not given stay fixed at the baseline and are excluded
   from ``n`` and ``names``.
 
 Variable labels: a symmetric or ``side: left`` variable is labelled with its point ref
@@ -24,6 +24,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from pydantic import ValidationError
+from scipy.optimize import least_squares
 
 from suspkin.geometry.models import Vehicle
 from suspkin.optimize.regions import hex_inverse, hex_map
@@ -146,12 +147,22 @@ class DesignSpace:
         d = slot.var.domain
         outside = f"{slot.label}: point {p.tolist()} lies outside its domain"
         if isinstance(d, HexahedronRegion):
+            verts = np.array(d.vertices)
             try:
-                return hex_inverse(np.array(d.vertices), p)
+                return hex_inverse(verts, p)
             except ValueError as exc:
                 if not clip:
                     raise InfeasibleDesign(f"{outside} ({exc})") from exc
-                raise
+                sol = least_squares(
+                    lambda u: np.asarray(hex_map(verts, u)) - p,
+                    x0=np.full(3, 0.5),
+                    bounds=(0.0, 1.0),
+                    xtol=1e-14,
+                    ftol=1e-14,
+                    gtol=1e-14,
+                )
+                clipped: F64 = np.clip(sol.x, 0.0, 1.0)
+                return clipped
         if isinstance(d, BoxRegion):
             lo, hi = np.array(d.lo), np.array(d.hi)
             u = (p - lo) / (hi - lo)

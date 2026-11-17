@@ -28,6 +28,8 @@ from suspkin.units import (
         ("0.1 deg/mm", "angle/length", math.radians(0.1) * 1000.0),
         ("1e-3 m", "length", 1e-3),
         ("2 kN", "force", 2000.0),
+        ("9.81 m/s^2", "accel", 9.81),
+        ("9.81 m/s2", "accel", 9.81),
     ],
 )
 def test_parse_units(text: str, dim: str, expected: float) -> None:
@@ -75,3 +77,8 @@ def test_display_roundtrip() -> None:
     for dim, v in [("length", 0.03), ("angle", 0.2), ("stiffness", 35000.0), ("angle/length", 1.7)]:
         text = format_quantity(v, dim, digits=10)
         assert parse_quantity(text, dim) == pytest.approx(v)
+
+
+def test_mm_per_s2_is_not_confused_with_m_per_s2() -> None:
+    with pytest.raises(ValueError, match="unknown unit"):
+        parse_quantity("5 mm/s^2", "accel")

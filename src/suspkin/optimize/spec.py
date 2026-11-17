@@ -202,6 +202,11 @@ class OffsetRegion(_Frozen):
             raise ValueError("offset needs at least one of x, y, z")
         if any(lo > hi for lo, hi in ranges):
             raise ValueError("offset ranges must be [lo, hi] with lo <= hi")
+        if any(lo == hi for lo, hi in ranges):
+            raise ValueError(
+                "offset axis with min == max: omit the axis (the point stays fixed) "
+                "or give a non-zero range"
+            )
         return self
 
 
@@ -486,6 +491,8 @@ class ReachConstraint(_Constraint):
     travel: Pair
     min_toggle_margin: float | None = None
     stroke: bool = True
+    toggle_scale: float | None = Field(default=None, gt=0)  # rad
+    stroke_scale: float | None = Field(default=None, gt=0)  # m
 
     @model_validator(mode="after")
     def _check(self) -> ReachConstraint:
@@ -667,12 +674,20 @@ def _prep_constraint(raw: Any, sweeps: Mapping[str, Any]) -> Any:
         elif t == "reach":
             conv("travel", "length", pair=True)
             conv("min_toggle_margin", "angle")
-            conv("scale", "ratio")
+            if raw.get("scale") is not None:
+                raise ValueError(
+                    "reach has two terms with different units: use `toggle_scale` (angle) "
+                    "and/or `stroke_scale` (length) instead of `scale`"
+                )
+            conv("toggle_scale", "angle")
+            conv("stroke_scale", "length")
         elif t in ("inside", "outside", "distance"):
             for k in ("min", "max", "scale"):
                 conv(k, "length")
-            if raw.get("over") is not None:
-                _raw_sweep(sweeps, raw["over"])
+            if raw.get("over") is not None and _raw_sweep(sweeps, raw["over"])[0] != "corner":
+                raise ValueError(
+                    f"`over` must name a corner sweep, {raw['over']!r} is a vehicle sweep"
+                )
         elif t == "relation":
             conv("offset", "length")
             conv("scale", "length")
@@ -780,15 +795,39 @@ def _check_sweep_refs(study: Study) -> None:
                 )
         if isinstance(c, InsideConstraint | OutsideConstraint | DistanceConstraint) and c.over:
             sw2 = study.sweeps.get(c.over)
-            axle = parse_point_ref(c.point if not isinstance(c, DistanceConstraint) else c.a)[0]
-            want = (
-                "front" if isinstance(sw2, CornerSweep) and sw2.corner in ("FL", "FR") else "rear"
-            )
-            if isinstance(sw2, CornerSweep) and want != axle:
-                raise ValueError(
-                    f"constraint {c.name!r}: sweep {c.over!r} is on the {want} axle, "
-                    f"the point is on the {axle} axle"
-                )
+            if not isinstance(sw2, CornerSweep):
+                raise ValueError(f"constraint {c.name!r}: `over` must name a corner sweep")
+            left = sw2.corner[1] == "L"
+            sweep_axle = "front" if sw2.corner[0] == "F" else "rear"
+            refs = [c.a, c.b] if isinstance(c, DistanceConstraint) else [c.point]
+            for ref in refs:
+                axle = parse_point_ref(ref)[0]
+                if axle != sweep_axle:
+                    raise ValueError(
+                        f"constraint {c.name!r}: sweep {c.over!r} is on the {sweep_axle} "
+                        f"axle, point {ref!r} is on the {axle} axle"
+                    )
+            if not isinstance(c, DistanceConstraint):
+                cy = region_centroid(c.region)[1]
+                if cy == 0.0 or (cy > 0.0) != left:
+                    side = "left (y > 0)" if left else "right (y < 0)"
+                    raise ValueError(
+                        f"constraint {c.name!r}: sweep {c.over!r} is a {side} corner but the "
+                        f"region centroid is at y = {cy:g}"
+                    )
+
+
+def region_centroid(region: Any) -> tuple[float, float, float]:
+    """Centroid of a region (vertex mean for a hexahedron)."""
+    if isinstance(region, BoxRegion):
+        return tuple(0.5 * (a + b) for a, b in zip(region.lo, region.hi, strict=True))  # type: ignore[return-value]
+    if isinstance(region, HexahedronRegion):
+        n = len(region.vertices)
+        return tuple(sum(v[i] for v in region.vertices) / n for i in range(3))  # type: ignore[return-value]
+    if isinstance(region, SphereRegion):
+        return tuple(region.center)  # type: ignore[return-value]
+    assert isinstance(region, CylinderRegion)
+    return tuple(0.5 * (a + b) for a, b in zip(region.p0, region.p1, strict=True))  # type: ignore[return-value]
 
 
 def _check_ranges(study: Study, vehicle: Vehicle | None) -> None:

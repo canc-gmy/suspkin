@@ -109,6 +109,47 @@ def _twist(d: dict[str, Any]) -> None:
     v[2], v[3] = v[3], v[2]
 
 
+def _add_fr_sweep(d: dict[str, Any]) -> None:
+    d["sweeps"]["bump_fr"] = {
+        "kind": "corner",
+        "corner": "FR",
+        "travel": ["-30 mm", "30 mm"],
+        "steps": 13,
+    }
+
+
+def _over_fr_left_region(d: dict[str, Any]) -> None:
+    _add_fr_sweep(d)
+    d["constraints"][7].update(over="bump_fr")  # keep-out sphere at y > 0
+
+
+def _over_fl_right_region(d: dict[str, Any]) -> None:
+    d["constraints"][7]["region"] = {"sphere": {"center": [0.1, -0.28, 0.2], "radius": "20 mm"}}
+
+
+def _distance_over_wrong_axle(d: dict[str, Any]) -> None:
+    d["sweeps"]["bump_rl"] = {
+        "kind": "corner",
+        "corner": "RL",
+        "travel": ["-30 mm", "30 mm"],
+        "steps": 13,
+    }
+    d["constraints"].append(
+        {
+            "name": "dist_over",
+            "type": "distance",
+            "a": "front.tie_outer",
+            "b": "front.uca_front",
+            "min": "10 mm",
+            "over": "bump_rl",
+        }
+    )
+
+
+def _offset_zero_width(d: dict[str, Any]) -> None:
+    d["variables"][2]["domain"] = {"offset": {"x": [0.0, 0.0]}}
+
+
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
@@ -121,6 +162,12 @@ def _twist(d: dict[str, Any]) -> None:
         (lambda d: d["variables"][0].update(extra=1), "extra"),
         (lambda d: d["sweeps"]["steer"].update(input="roll"), "full"),
         (lambda d: d["variables"][1].update(side="left"), "asymmetric"),
+        (lambda d: d["constraints"][4].update(scale="1 deg"), "toggle_scale"),
+        (lambda d: d["constraints"][7].update(over="roll"), "corner sweep"),
+        (_over_fr_left_region, "right"),
+        (_over_fl_right_region, "left"),
+        (_distance_over_wrong_axle, "axle"),
+        (_offset_zero_width, "min == max"),
     ],
 )
 def test_validation_errors(tmp_path: Path, mutate: Mutator, match: str) -> None:
@@ -166,3 +213,13 @@ def test_registry_errors() -> None:
     assert reg.vehicle_metric_dim("FL_camber_ground") == "angle"
     assert reg.summary_metric_dim("front.rc_height") == "length"
     assert reg.slope_dim(reg.corner_metric_dim("camber"), "length") == "angle/length"
+
+
+def test_over_fr_sweep_with_right_region_loads(tmp_path: Path) -> None:
+    def mutate(d: dict[str, Any]) -> None:
+        _add_fr_sweep(d)
+        d["constraints"][7].update(over="bump_fr")
+        d["constraints"][7]["region"] = {"sphere": {"center": [0.1, -0.28, 0.2], "radius": "20 mm"}}
+
+    study, _ = load_study(_write(tmp_path, mutate))
+    assert study.constraints[7].over == "bump_fr"  # type: ignore[union-attr]

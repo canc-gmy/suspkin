@@ -84,7 +84,7 @@ def _factors(expr: str, table: dict[str, tuple[float, str]]) -> tuple[float, _Ex
 
     ``table`` maps a symbol to (factor, atom); atom names themselves are also accepted.
     """
-    text = expr.replace(" ", "").replace("m/s^2", "mps2").replace("m/s2", "mps2")
+    text = re.sub(r"(?<![A-Za-z])m/s\^?2(?![A-Za-z0-9])", "mps2", expr.replace(" ", ""))
     exps = [0] * len(_ATOMS)
     factor = 1.0
     if text in ("", "1", "ratio"):

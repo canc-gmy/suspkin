@@ -500,7 +500,17 @@ def test_g_vector_order_and_frames(space: DesignSpace) -> None:
     assert ev.max_g == pytest.approx(float(gv.max()))
     assert ev.feasible == bool(np.all(gv <= 0.0))
     df = ev.frame()
-    assert list(df.columns) == ["name", "type", "value", "min", "max", "g", "status", "dim"]
+    assert list(df.columns) == [
+        "name",
+        "type",
+        "value",
+        "min",
+        "max",
+        "g",
+        "status",
+        "dim",
+        "detail",
+    ]
     assert list(df["name"]) == [c.name for c in space.study.constraints]
     row = df[df["name"] == "camber_band"].iloc[0]
     assert row["min"] == pytest.approx(-2.5 * DEG)
@@ -526,3 +536,50 @@ def test_display_frame_units(space: DesignSpace) -> None:
     assert disp.loc["ack", "unit"] == "%"
     assert disp.loc["ack", "status"] == "disabled"
     assert disp.loc["camber_band", "g"] == pytest.approx(si.loc["camber_band", "g"])
+
+
+def test_reach_scales_and_detail(space: DesignSpace) -> None:
+    c = _con(space, "travel_f", min_toggle_margin=179 * DEG, stroke=False)
+    r = _one(space, c)
+    assert r.detail == "toggle margin"
+    r2 = _one(space, c.model_copy(update={"toggle_scale": 1.0 * DEG}))
+    assert r2.g == pytest.approx((179 * DEG - r2.value) / (1.0 * DEG))
+    stroke_only = _one(space, _con(space, "travel_f", min_toggle_margin=None, stroke=True))
+    assert stroke_only.detail.endswith("stroke remaining")
+    assert stroke_only.dim == "length"
+    assert stroke_only.g == pytest.approx(-stroke_only.value / MM)
+    scaled = _one(
+        space, _con(space, "travel_f", min_toggle_margin=None, stroke=True, stroke_scale=5 * MM)
+    )
+    assert scaled.g == pytest.approx(-scaled.value / (5 * MM))
+
+
+def _with_fr_sweep(space: DesignSpace, c: Constraint) -> DesignSpace:
+    sw = space.study.sweeps["bump_f"].model_copy(update={"corner": "FR"})
+    study = space.study.model_copy(
+        update={"constraints": (c,), "sweeps": {**space.study.sweeps, "bump_fr": sw}}
+    )
+    return DesignSpace(study, space.baseline)
+
+
+def test_region_over_fr_sweep_with_right_region(space: DesignSpace) -> None:
+    corner = build_corners(space.baseline)["FR"]
+    p = np.array(corner.points["tie_outer"], dtype=np.float64)
+    assert p[1] < 0.0
+    box = BoxRegion(lo=_t(p, -0.001, -0.001, -0.001), hi=_t(p, 0.001, 0.001, 0.001))
+    c = _con(space, "uca_zone", point="front.tie_outer", region=box, over="bump_fr")
+    r = evaluate(_with_fr_sweep(space, c)).results[0]
+    assert r.status == "fail"
+    sw = space.study.sweeps["bump_f"]
+    states = sweep_corner(corner, np.linspace(sw.travel[0], sw.travel[1], sw.steps))  # type: ignore[union-attr]
+    pts = np.array([s.points["tie_outer"] for s in states])
+    assert r.value == pytest.approx(float(np.max(np.abs(pts - p))) - 0.001, abs=1e-6)
+
+
+def test_missing_point_in_states_is_unsolved(
+    space: DesignSpace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c = _con(space, "uca_zone", point="front.tie_outer", over="bump_f")
+    fake = SimpleNamespace(states=[SimpleNamespace(points={})])
+    monkeypatch.setattr(evaluate_mod._Ctx, "sweep_corner_data", lambda self, name: fake)
+    assert _one(space, c).status == "unsolved"

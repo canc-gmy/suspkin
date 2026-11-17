@@ -100,3 +100,46 @@ def test_nonconvex_detected() -> None:
     v[6] = [1.0, 1.0, 1.5]  # warped (non-planar) top face
     check_hexahedron(v)
     assert not is_convex_hexahedron(v)
+
+
+def _frustum() -> np.ndarray:
+    v = _CORNERS.copy()
+    v[:4] = v[:4] * 2.0 - 0.5  # bottom face 2x2 centred on the top face
+    v[4:] = v[4:] * 1.0 + np.array([0.5, 0.5, 0.0])
+    v[:4, :2] = _CORNERS[:4, :2] * 2.0
+    v[4:, :2] = _CORNERS[4:, :2] * 1.0 + 0.5
+    return v
+
+
+def test_hexahedron_frustum_distance_vs_bruteforce() -> None:
+    v = _frustum()
+    assert is_convex_hexahedron(v)
+    rng = np.random.default_rng(0)
+    # dense sampling of the six bilinear (planar) faces
+    s, t = np.meshgrid(np.linspace(0, 1, 60), np.linspace(0, 1, 60))
+    uv = np.stack([s.ravel(), t.ravel()], axis=1)
+    zeros, ones = np.zeros(len(uv)), np.ones(len(uv))
+    faces = [
+        np.column_stack([uv, zeros]),
+        np.column_stack([uv, ones]),
+        np.column_stack([zeros, uv]),
+        np.column_stack([ones, uv]),
+        np.column_stack([uv[:, 0], zeros, uv[:, 1]]),
+        np.column_stack([uv[:, 0], ones, uv[:, 1]]),
+    ]
+    surface = hex_map(v, np.vstack(faces))
+    pts = rng.uniform([-1.5, -1.5, -1.0], [3.5, 3.5, 2.0], size=(40, 3))
+    sd = sd_hexahedron(pts, v)
+    brute = np.min(np.linalg.norm(pts[:, None, :] - surface[None], axis=-1), axis=1)
+    out = sd > 0
+    assert out.any()
+    np.testing.assert_allclose(sd[out], brute[out], atol=0.03)
+    assert np.all(brute[out] >= sd[out] - 1e-9)  # sampling can only overestimate
+    np.testing.assert_allclose(np.abs(sd[~out]), brute[~out], atol=0.03)
+
+
+def test_warped_face_rejected_by_convexity_check() -> None:
+    v = _CORNERS.copy()
+    v[5] = [1.0, 0.0, 1.4]  # lifts one corner of the top face: non-planar side faces
+    check_hexahedron(v)  # still a valid (positive Jacobian) map
+    assert not is_convex_hexahedron(v)

@@ -67,3 +67,30 @@ def test_check_writes_csv_and_plot(tmp_path: Path) -> None:
     assert len(df) == 20
     assert set(df["status"]) == {"pass"}
     assert {"name", "value", "g", "dim"} <= set(df.columns)
+
+
+def _baseline_outside(tmp_path: Path) -> Path:
+    # shift the first hexahedron (around (130, 300, 325) mm) by 100 mm in x
+    old = STUDY.read_text(encoding="utf-8")
+    block = old[old.index("- [112, 282, 307]") : old.index("- [116, 324, 343]") + 18]
+    shifted = block.replace("[112,", "[212,").replace("[148,", "[248,")
+    shifted = shifted.replace("[116,", "[216,").replace("[144,", "[244,")
+    return _variant(tmp_path, block, shifted)
+
+
+def test_check_warns_when_baseline_outside_domain(tmp_path: Path) -> None:
+    study = _baseline_outside(tmp_path)
+    res = runner.invoke(app, ["check", str(study)])
+    assert "warning" in res.output
+    assert "front.uca_front" in res.output
+    assert res.exit_code == 0, res.output
+    strict = runner.invoke(app, ["check", str(study), "--strict"])
+    assert strict.exit_code == 1
+
+
+def test_check_output_write_failure_exits_2(tmp_path: Path) -> None:
+    blocker = tmp_path / "blocker"
+    blocker.write_text("x", encoding="utf-8")
+    res = runner.invoke(app, ["check", str(STUDY), "--csv", str(blocker / "out.csv")])
+    assert res.exit_code == 2
+    assert "cannot write output" in res.output

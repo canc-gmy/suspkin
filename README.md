@@ -36,6 +36,18 @@ uv run suspkin report configs/vehicles/fs_reference.yaml --compare other.yaml --
 `report` writes `report.html` (self-contained), `report.md`, `figures/`, `data/*.csv` and
 `summary.json`; every design given with `--compare` is overlaid on the same figures.
 
+### Constraint check
+
+A study YAML in `configs/studies/` points to a vehicle and lists the design variables and
+constraints (see [DESIGN_PLAN section 7](docs/DESIGN_PLAN.md) and
+[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-study-v07)). `check` evaluates the
+baseline vehicle against every constraint and prints PASS/FAIL per row; `--plot` writes the 3D
+view of the variable domains and keep-outs.
+
+```bash
+uv run suspkin check configs/studies/fs_reference_constraints.yaml --plot results/study.png
+```
+
 ## Development
 
 ```bash

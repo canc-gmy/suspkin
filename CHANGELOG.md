@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-18
+
+### Added
+
+- Optimization study spec (`suspkin.optimize.spec`): study YAML (schema 1) with variables,
+  sweeps and constraints; `load_study` with cross-checks against the vehicle and the metric
+  registry.
+- Unit strings in study YAML (`units.parse_quantity`), converted to SI and checked against the
+  metric dimension.
+- Regions (`optimize.regions`): trilinear hexahedron map with Jacobian check, Newton inverse,
+  signed distances for box, convex hexahedron, sphere and cylinder.
+- Design space (`optimize.design`): unit-cube vector to `Vehicle`, with symmetric and
+  asymmetric variables.
+- Evaluator (`optimize.evaluate`): band, slope, value, reach, summary, inside, outside,
+  distance, relation and joint_angle constraints with normalised `g`; each sweep runs once
+  per evaluation.
+- Joint misalignment angles (`metrics.joints`): Kabsch body rotations, rod-end and ball-joint
+  angles over a corner sweep.
+- `suspkin check STUDY.yaml [--csv] [--plot] [--strict]` command.
+- Region 3D plot (`plotting.regions.plot_study_3d`).
+- Reference study `configs/studies/fs_reference_constraints.yaml`.
+
 ### Changed
 
 - Faster corner solver: own damped Newton with an analytic Jacobian (scipy `hybr` kept as

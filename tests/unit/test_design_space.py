@@ -185,3 +185,30 @@ def test_x_tolerance_accepted() -> None:
     x = np.full(sp.n, 0.5)
     x[0], x[1] = -1e-13, 1.0 + 1e-13
     sp.to_vehicle(x)
+
+
+def test_from_vehicle_clip_on_hexahedron() -> None:
+    veh = fixture_vehicle()
+    hexv = [
+        [0.5, 0.2, 0.2],
+        [0.6, 0.2, 0.2],
+        [0.6, 0.3, 0.2],
+        [0.5, 0.3, 0.2],
+        [0.5, 0.2, 0.3],
+        [0.6, 0.2, 0.3],
+        [0.6, 0.3, 0.3],
+        [0.5, 0.3, 0.3],
+    ]
+    sp = DesignSpace(_study([{"point": "front.uca_front", "domain": {"hexahedron": hexv}}]), veh)
+    with pytest.raises(InfeasibleDesign):
+        sp.from_vehicle()
+    u = sp.from_vehicle(clip=True)
+    assert u.shape == (3,)
+    assert np.all((u >= 0.0) & (u <= 1.0))
+    # the baseline x is far in -x of the box: the nearest point is on the u = 0 face
+    assert u[0] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_offset_zero_width_rejected() -> None:
+    with pytest.raises(ValueError, match="min == max"):
+        _study([{"point": "front.uca_front", "domain": {"offset": {"x": [0.0, 0.0]}}}])
