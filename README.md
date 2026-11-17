@@ -43,6 +43,7 @@ uv run pre-commit install
 ```
 
 Design plan: [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md)
+Architecture and math: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ![Reference FS vehicle](docs/images/fs_reference.png)
 
