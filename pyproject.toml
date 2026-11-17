@@ -60,3 +60,4 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = ["perf: wall-clock performance guard (machine dependent, generous limits)"]

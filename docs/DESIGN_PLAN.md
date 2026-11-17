@@ -141,10 +141,18 @@ Notes from the v0.1.0 review:
 
 ### 4.2 Numerical method
 
-- `scipy.optimize.root` (hybrid Powell / Levenberg–Marquardt) with an
-  analytic Jacobian where practical.
+- Own damped Newton on the 3x3 closing system (unknowns `theta_uca`, `theta_lca`,
+  `psi`) with an **analytic Jacobian** and a backtracking line search on `||F||`
+  (stop at `max|F| < 1e-12`, at most 30 iterations). `scipy.optimize.root`
+  (`hybr`, same analytic Jacobian) is only the fallback before `KinematicsError`.
+  The inner loop uses scalar float arithmetic (no numpy calls on 3-vectors).
+  A guess that is far from the target is reached by staged continuation from the guess.
 - Sweeps use **continuation**: each step starts from the previous
-  solution. Step refinement kicks in on non-convergence.
+  solution (linear extrapolation of the three angles once two states exist).
+  Step refinement kicks in on non-convergence, and also when a solve moves any
+  angle by more than 0.05 rad from its guess (branch-jump guard; cold solves exempt).
+  In rack sweeps near lock (psi changes about 0.13 rad per 10 mm) the guard triggers
+  extra halvings; this costs work but the result is correct.
 - Convergence tolerance: 1e-9 m on constraint residuals.
 - Health checks after each step:
   - link-length invariance
@@ -401,3 +409,4 @@ The package name `suspkin` is a placeholder.
 | O7 | Package name | `suspkin` |
 | D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |
+| D10 | Corner solver | Own damped Newton with analytic Jacobian replaces `scipy.optimize.root` as the primary corner solver (decided 2026-11-17); scipy `hybr` with the same Jacobian stays as fallback, and far guesses go through staged continuation from the guess. Why: finite-difference `hybr` needed about 15 residual evaluations per solve with numpy overhead on 3-vectors; Newton needs about 3 on the reference car and a scalar evaluation is much cheaper, with results identical to 1e-9. Continuation gained a linear predictor and a 0.05 rad branch-jump guard that triggers step halving (extra work in rack sweeps near lock). |
