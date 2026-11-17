@@ -34,3 +34,17 @@ def test_roll_sweep_speed_and_symmetry(vehicle) -> None:  # type: ignore[no-unty
     # roll of 1 deg: wheel travel ~ half-track * phi
     i = int(np.argmin(np.abs(rolls - np.radians(1.0))))
     assert df["FR_travel"][i] == pytest.approx(0.61 * np.radians(1.0), rel=0.05)
+
+
+def test_reference_vehicle_summary(vehicle) -> None:  # type: ignore[no-untyped-def]
+    import math
+
+    from suspkin.metrics import vehicle_summary
+
+    s = vehicle_summary(vehicle)
+    assert 0.5 < math.degrees(s.roll_gradient) < 2.5
+    assert 0.3 < s.tlltd_front < 0.8
+    for a in (s.anti_dive_front, s.anti_lift_rear, s.anti_squat_rear):
+        assert a == pytest.approx(0.0, abs=1e-6)  # parallel side-view wishbones
+    assert math.isfinite(s.ackermann_10deg)
+    assert s.roll_stiffness_total == pytest.approx(s.front.roll_stiffness + s.rear.roll_stiffness)

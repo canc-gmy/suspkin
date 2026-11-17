@@ -11,7 +11,8 @@ from numpy.typing import ArrayLike
 from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.models import Vehicle
 from suspkin.kinematics.rocker import KinematicsError
-from suspkin.kinematics.vehicle import VehicleState, solve_vehicle
+from suspkin.kinematics.vehicle import VehicleState, body_rotation, solve_vehicle
+from suspkin.metrics.centres import roll_centre_pair
 from suspkin.metrics.table import metrics_frame
 
 _VARS = ("heave", "roll", "pitch", "rack")
@@ -88,7 +89,12 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
     Columns: ``heave``, ``roll``, ``pitch``, ``rack``; per corner (prefix ``FL_`` ...)
     the :func:`suspkin.metrics.metrics_frame` columns (``FL_travel`` included, the
     corner ``rack`` column replaced by the shared ``rack``), ``<id>_cp_x/_y/_z`` (contact
-    point, body frame); and ``arb_front_elastic`` / ``arb_rear_elastic`` (NaN without ARB).
+    point, body frame); ``<id>_camber_ground`` (camber to the ground normal, negative = top
+    toward the centreline) and ``<id>_steer_ground`` (wheel heading in the ground plane,
+    ISO yaw sign); ``rc_front_y/_z`` and ``rc_rear_y/_z`` (roll centre in the ground frame,
+    z = height above ground; NaN if undefined); and ``arb_front_elastic`` /
+    ``arb_rear_elastic`` (NaN without ARB). The ground frame is the world frame with the
+    body rotated about the vehicle-frame origin (the default ``pivot`` of the solver).
     """
     corners = build_corners(vehicle)
     data: dict[str, object] = {k: [float(getattr(s, k)) for s in states] for k in _VARS}
@@ -99,6 +105,7 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
         cp = np.array([s.contact_points[cid] for s in states], dtype=np.float64).reshape(-1, 3)
         cpf = pd.DataFrame({f"{cid}_cp_{a}": cp[:, i] for i, a in enumerate("xyz")})
         parts += [mf, cpf]
+    parts.append(_ground_frame(states, corners))
     for axle in ("front", "rear"):
         parts.append(
             pd.DataFrame(
@@ -111,3 +118,31 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
             )
         )
     return pd.concat(parts, axis=1)
+
+
+def _ground_frame(states: Sequence[VehicleState], corners: dict[CornerId, Corner]) -> pd.DataFrame:
+    """Ground-frame camber, steer and roll centre columns."""
+    cols: dict[str, list[float]] = {}
+
+    def add(name: str, v: float) -> None:
+        cols.setdefault(name, []).append(v)
+
+    for s in states:
+        rot = body_rotation(s.roll, s.pitch)
+        for cid in _CORNERS:
+            st = s.corners[cid]
+            sw = rot @ np.asarray(st.spin_axis, dtype=np.float64)
+            o = 1.0 if corners[cid].side == "left" else -1.0
+            add(f"{cid}_camber_ground", -float(np.arcsin(np.clip(sw[2], -1.0, 1.0))))
+            add(f"{cid}_steer_ground", float(np.arctan2(-o * sw[0], o * sw[1])))
+        for axle, (lc, rc) in (("front", ("FL", "FR")), ("rear", ("RL", "RR"))):
+            y_b, z_b = roll_centre_pair(s.corners[lc], s.corners[rc])  # type: ignore[index]
+            if np.isfinite(y_b) and np.isfinite(z_b):
+                x_cp = 0.5 * (s.contact_points[lc][0] + s.contact_points[rc][0])  # type: ignore[index]
+                w = rot @ np.array([x_cp, y_b, z_b]) + np.array([0.0, 0.0, s.heave])
+                add(f"rc_{axle}_y", float(w[1]))
+                add(f"rc_{axle}_z", float(w[2]))
+            else:
+                add(f"rc_{axle}_y", float("nan"))
+                add(f"rc_{axle}_z", float("nan"))
+    return pd.DataFrame(cols)

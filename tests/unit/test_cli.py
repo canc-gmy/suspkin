@@ -113,3 +113,38 @@ def test_summary_output_and_json(tmp_path: Path) -> None:
     data = json.loads(out.read_text())
     assert set(data) == {"FL", "RL"}
     assert abs(data["FL"]["camber"] - (-0.03)) < 1e-6  # SI (rad) in JSON
+
+
+def test_vehicle_summary_and_json(tmp_path: Path) -> None:
+    import json
+
+    out = tmp_path / "v.json"
+    res = runner.invoke(app, ["vehicle", str(FIXTURE), "--json", str(out)])
+    assert res.exit_code == 0, res.output
+    assert "roll_gradient" in res.output and "deg/g" in res.output
+    assert "front.roll_stiffness" in res.output and "N*m/deg" in res.output
+    data = json.loads(out.read_text())
+    assert data["wheelbase"] > 0 and "front" in data
+
+
+def test_vsweep_roll_degrees(tmp_path: Path) -> None:
+    import numpy as np
+    import pandas as pd
+
+    out = tmp_path / "vs.csv"
+    res = runner.invoke(
+        app,
+        ["vsweep", str(FIXTURE), "--roll", "-1", "1", "--steps", "5", "--base-rack", "0.002",
+         "--out", str(out)],
+    )  # fmt: skip
+    assert res.exit_code == 0, res.output
+    df = pd.read_csv(out)
+    assert len(df) == 5
+    np.testing.assert_allclose(df["roll"].iloc[[0, -1]], np.radians([-1, 1]))
+    assert (df["rack"] == 0.002).all()
+    assert "FL_camber_ground" in df.columns and "rc_front_z" in df.columns
+
+
+def test_vsweep_requires_one_variable(tmp_path: Path) -> None:
+    res = runner.invoke(app, ["vsweep", str(FIXTURE), "--out", str(tmp_path / "x.csv")])
+    assert res.exit_code == 2

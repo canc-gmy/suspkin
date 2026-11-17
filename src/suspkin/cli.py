@@ -188,3 +188,148 @@ def summary(
     if json_out is not None:
         json_out.write_text(json.dumps(result, indent=2))
         typer.echo(str(json_out))
+
+
+# key -> (scale from SI, unit) for the vehicle summary display
+_DEG = 180.0 / 3.141592653589793
+_VS_UNITS: dict[str, tuple[float, str]] = {
+    "track": (1e3, "mm"),
+    "wheel_rate": (1e-3, "N/mm"),
+    "arb_wheel_rate_roll": (1e-3, "N/mm"),
+    "roll_stiffness_springs": (1 / _DEG, "N*m/deg"),
+    "roll_stiffness_arb": (1 / _DEG, "N*m/deg"),
+    "roll_stiffness_tyres": (1 / _DEG, "N*m/deg"),
+    "roll_stiffness": (1 / _DEG, "N*m/deg"),
+    "roll_stiffness_total": (1 / _DEG, "N*m/deg"),
+    "rc_height": (1e3, "mm"),
+    "roll_camber": (1.0, "deg/deg"),
+    "roll_steer": (1.0, "deg/deg"),
+    "rc_migration": (1e3 / _DEG, "mm/deg"),
+    "rc_height_gradient": (1e3 / _DEG, "mm/deg"),
+    "wheelbase": (1e3, "mm"),
+    "sprung_mass": (1.0, "kg"),
+    "sprung_cg_height": (1e3, "mm"),
+    "roll_axis_height_at_cg": (1e3, "mm"),
+    "roll_gradient": (_DEG, "deg/g"),
+    "ay_ref": (1.0, "m/s^2"),
+    "load_transfer_front": (1.0, "N"),
+    "load_transfer_rear": (1.0, "N"),
+    "tlltd_front": (100.0, "%"),
+    "anti_dive_front": (1.0, "%"),
+    "anti_lift_rear": (1.0, "%"),
+    "anti_squat_rear": (1.0, "%"),
+    "anti_lift_front_accel": (1.0, "%"),
+    "pitch_centre_x": (1e3, "mm"),
+    "pitch_centre_z": (1e3, "mm"),
+    "max_steer_inner": (_DEG, "deg"),
+    "max_steer_outer": (_DEG, "deg"),
+    "ackermann_5deg": (1.0, "%"),
+    "ackermann_10deg": (1.0, "%"),
+    "ackermann_15deg": (1.0, "%"),
+    "steering_ratio": (1.0, "-"),
+    "turning_radius": (1.0, "m"),
+}
+
+
+@app.command()
+def vehicle(
+    vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
+    json_out: Annotated[
+        Path | None, typer.Option("--json", help="Write the SI vehicle summary as JSON.")
+    ] = None,
+) -> None:
+    """Print the vehicle-level summary (rates, roll, anti-features, steering) in display units."""
+    import json
+
+    from suspkin.kinematics import KinematicsError
+    from suspkin.metrics import vehicle_summary
+
+    try:
+        veh = load_vehicle(vehicle_yaml)
+    except VehicleConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    try:
+        data = vehicle_summary(veh).to_dict()
+    except (KinematicsError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    rows: list[tuple[str, object]] = []
+    for k, v in data.items():
+        if isinstance(v, dict):
+            rows += [(f"{k}.{kk}", vv) for kk, vv in v.items()]
+        else:
+            rows.append((k, v))
+    width = max(len(k) for k, _ in rows)
+    for k, v in rows:
+        scale, unit = _VS_UNITS.get(k.split(".")[-1], (1.0, ""))
+        if v is None:
+            typer.echo(f"{k:<{width}}  {'n/a':>12}  {unit}")
+        else:
+            typer.echo(f"{k:<{width}}  {float(v) * scale:12.4f}  {unit}")  # type: ignore[arg-type]
+    if json_out is not None:
+        json_out.write_text(json.dumps(data, indent=2))
+        typer.echo(str(json_out))
+
+
+@app.command()
+def vsweep(
+    vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
+    out: Annotated[Path, typer.Option("--out", help="Output CSV path.")],
+    heave: Annotated[
+        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [m].")
+    ] = None,
+    roll: Annotated[
+        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX [deg].")
+    ] = None,
+    pitch: Annotated[
+        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX [deg].")
+    ] = None,
+    rack: Annotated[
+        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [m].")
+    ] = None,
+    steps: Annotated[int, typer.Option("--steps", min=2, help="Number of sweep points.")] = 21,
+    base_heave: Annotated[float, typer.Option("--base-heave", help="Fixed heave [m].")] = 0.0,
+    base_roll: Annotated[float, typer.Option("--base-roll", help="Fixed roll [deg].")] = 0.0,
+    base_pitch: Annotated[float, typer.Option("--base-pitch", help="Fixed pitch [deg].")] = 0.0,
+    base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack [m].")] = 0.0,
+) -> None:
+    """Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).
+
+    Roll and pitch are given in DEGREES on the command line (converted to rad); the CSV
+    is in SI (m, rad). Give exactly one of --heave, --roll, --pitch, --rack.
+    """
+    import numpy as np
+
+    from suspkin.kinematics import KinematicsError
+    from suspkin.sweeps import sweep_vehicle, vehicle_frame
+
+    given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
+    chosen = [k for k, v in given.items() if v is not None]
+    if len(chosen) != 1:
+        typer.echo("error: give exactly one of --heave, --roll, --pitch, --rack", err=True)
+        raise typer.Exit(code=2)
+    try:
+        veh = load_vehicle(vehicle_yaml)
+    except VehicleConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    name = chosen[0]
+    lo, hi = given[name]  # type: ignore[misc]
+    if name in ("roll", "pitch"):
+        lo, hi = np.radians(lo), np.radians(hi)
+    base = {
+        "heave": base_heave,
+        "roll": float(np.radians(base_roll)),
+        "pitch": float(np.radians(base_pitch)),
+        "rack": base_rack,
+    }
+    base.pop(name)
+    try:
+        states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base)
+        df = vehicle_frame(states, veh)
+    except (KinematicsError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    df.to_csv(out, index=False)
+    typer.echo(str(out))
