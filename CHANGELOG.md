@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-17
+
+### Added
+
+- Actuation metrics: pushrod angles, rocker rotation, coilover compression and
+  remaining stroke, spring force.
+- Motion ratios from the solver (spring, damper, pushrod, rocker, progression),
+  wheel rate by virtual work (incl. spring-force term), ride rate with tyre.
+- Anti-roll bars: `torsional` (bar twist in series with arm bending), `blade`
+  (torsion tube + oriented blade arms) and `beam` (heave-free bending bar);
+  ARB kinematics, stiffness, energy, roll-mode and single-wheel ARB wheel rates.
+
+### Changed
+
+- **Breaking:** ARB type `flexural` removed; use `blade` or `beam`.
+- Reference car: front torsional ARB with bending arms, rear blade ARB, 0.15 m arms.
+
 ## [0.3.0] - 2026-11-17
 
 ### Added

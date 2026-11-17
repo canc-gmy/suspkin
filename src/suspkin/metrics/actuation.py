@@ -99,7 +99,9 @@ class MotionRatios:
     ``spring = -dL/dz`` is positive when bump compresses the spring. ``damper`` equals
     ``spring`` (a single coilover is both spring and damper). ``pushrod`` is the rate at
     which the pushrod-inner point moves along the pushrod axis (outer -> inner) per unit
-    wheel travel (positive = rod pushes the rocker in bump). ``rocker = spring / pushrod``.
+    wheel travel (positive = rod pushes the rocker in bump); it is the inner-point velocity
+    component along the rod axis, equal to the outer-point component since the rod is rigid.
+    ``rocker = spring / pushrod``.
     ``progression = d(spring)/dz`` (second difference of the coilover length).
     """
 

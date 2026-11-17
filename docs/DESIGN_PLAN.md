@@ -18,8 +18,8 @@ against objectives under geometric constraints.
 - Rigid-body kinematics of all four corners (ideal joints, no compliance).
 - Front: steering rack + tie rods. Rear: fixed toe link.
 - Pushrod → rocker (bellcrank) → coilover on every corner.
-- Anti-roll bar per axle, selectable type: **torsional** (U-bar) or
-  **flexural** (blade / bending bar).
+- Anti-roll bar per axle, selectable type: **torsional** (U-bar),
+  **blade** (torsion tube + blade arms) or **beam** (bending bar).
 - Corner-level sweeps and vehicle-level motions (heave, roll, pitch,
   steer, combined).
 - Full metric set + plots + 3D geometry view.
@@ -61,7 +61,7 @@ against objectives under geometric constraints.
 | Pushrod | `pushrod_outer` (on upright, both axles), `pushrod_inner` (rocker) |
 | Rocker | `rocker_pivot`, `rocker_axis` (direction), `rocker_spring` (spring pickup), `rocker_arb` (drop-link pickup, optional) |
 | Coilover | `spring_chassis` (chassis end); spring rate, free length, preload; damper stroke limits |
-| ARB | Per axle: type (`torsional` / `flexural`), bar pivot points, arm length, drop-link points, material + section → stiffness |
+| ARB | Per axle: type (`torsional` / `blade` / `beam`), bar pivot or beam centre points, arm length, drop-link points, material + section → stiffness |
 | Steering (front) | Rack axis, rack ratio (c-factor, m per pinion rev), rack travel limits |
 
 ### 3.2 Vehicle-level data
@@ -169,8 +169,9 @@ ground plane is fixed and the body moves. Combined cases (roll + steer,
 heave + pitch + steer) are just tuples of inputs.
 
 The ARB couples left and right corners only in forces, not in
-kinematics. Its kinematic output is the bar twist (torsional) or bar
-deflection (flexural) from the left/right drop-link motion.
+kinematics. Its kinematic output is the bar twist β_L − β_R (torsional,
+blade) or the end deflection δ (beam) from the left/right drop-link motion;
+it is zero in pure heave.
 
 ---
 
@@ -217,12 +218,13 @@ All metrics are reported as **curves** vs the sweep variable and as
 
 ### 5.6 Anti-roll bar
 
-- Bar twist angle (torsional) or blade deflection (flexural) vs roll
-- ARB motion ratio
-- ARB wheel rate and ARB roll stiffness
+- Elastic coordinate vs roll: bar twist (torsional, blade) or end deflection (beam)
+- ARB motion ratio (roll mode and single wheel)
+- ARB wheel rate (roll mode ½·k·MR², single wheel k·MR²) and ARB roll stiffness (v0.5)
 - Bar stiffness from material + section
-  - Torsional: GJ/L plus arm bending
-  - Flexural: EI cantilever
+  - Torsional: 1/k = L/(GJ) + 2r/(3EI) (bar twist in series with round-arm bending; rigid arms optional)
+  - Blade: same, with blade arm I_eff = 1/(cos²α/I_flat + sin²α/I_edge)
+  - Beam: two cantilevers of half-length a, k = 6EI/a³ on the end deflection
 
 ### 5.7 Roll
 

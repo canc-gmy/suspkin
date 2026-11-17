@@ -8,8 +8,9 @@ Virtual work: the bar energy is ``E = 1/2 k q^2`` with elastic coordinate ``q``.
 * Single-wheel mode (left ``+z``, right fixed): ``F = dE/dz``, rate
   ``k_w = k MR_single^2``.
 
-The ``q * d2q/dz2`` term (motion-ratio progression) is neglected; it vanishes at
-the static pose, where ``q = 0``.
+The ``q * d2q/dz2`` term (motion-ratio progression) is neglected; it vanishes where
+the elastic coordinate ``q = 0`` (static and symmetric-heave poses, which is where
+``arb_rates`` is evaluated).
 """
 
 from __future__ import annotations

@@ -22,8 +22,10 @@ Stiffness ``k`` of the elastic coordinate ``q`` (``E = 1/2 k q^2``):
   acting with lever ``r`` gives a twist compliance ``1/(k_tip r^2)`` each. Rigid
   arms (``arm_diameter`` None) omit it. Unit: N m/rad.
 * blade: same, with ``I = (w t^3 cos^2 a + t w^3 sin^2 a) / 12``, the standard
-  rotated-rectangle approximation for the load-direction component (the product
-  of inertia is neglected). a = 0: flat (soft), a = pi/2: edge-on (stiff).
+  compliance (harmonic) form ``I_eff = 1 / (cos^2 a / I_flat + sin^2 a / I_edge)``
+  with ``I_flat = w t^3/12`` and ``I_edge = t w^3/12``: tip force along the load
+  direction, lateral deflection free. Exact at a = 0 (flat, soft) and a = pi/2
+  (edge-on, stiff).
 * beam: each half is a cantilever of length ``a`` with tip stiffness
   ``k_end = 3 E I / a^3``; the energy is ``2 * 1/2 k_end delta^2``, hence
   ``k = 2 k_end = 6 E I / a^3`` for ``E = 1/2 k delta^2``. Unit: N/m.
@@ -233,8 +235,10 @@ def solve_arb(
 
 
 def _rect_inertia(width: float, thickness: float, angle: float) -> float:
-    c, s = math.cos(angle), math.sin(angle)
-    return (width * thickness**3 * c * c + thickness * width**3 * s * s) / 12.0
+    i_flat = width * thickness**3 / 12.0
+    i_edge = thickness * width**3 / 12.0
+    c, sn = math.cos(angle), math.sin(angle)
+    return 1.0 / (c * c / i_flat + sn * sn / i_edge)
 
 
 def arm_length(arb: ARB) -> float:

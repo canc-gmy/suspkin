@@ -181,6 +181,17 @@ def test_blade_angle_orientation() -> None:
     assert soft == pytest.approx(1.0 / (1.0 / k_tube + 2.0 / k_arm_twist), rel=1e-12)
 
 
+def test_blade_45deg_harmonic_inertia() -> None:
+    w, t = 0.025, 0.003
+    i_eff = 1.0 / (0.5 / (w * t**3 / 12.0) + 0.5 / (t * w**3 / 12.0))
+    kw = {"shear_modulus": 1e22}
+    k45 = arb_stiffness(_axle("blade", blade_angle=math.pi / 4, **kw))
+    assert k45 == pytest.approx(3.0 * 2.0e11 * i_eff / (2.0 * 0.06), rel=1e-6)
+    k0 = arb_stiffness(_axle("blade", blade_angle=0.0, **kw))
+    assert k45 / k0 == pytest.approx(i_eff / (w * t**3 / 12.0), rel=1e-6)
+    assert k45 / k0 < 2.0  # about 2x flat (not 18x as with the Voigt mix)
+
+
 def test_blade_intermediate_angle_between_extremes() -> None:
     ks = [arb_stiffness(_axle("blade", blade_angle=a)) for a in (0.0, 0.5, 1.0, math.pi / 2)]
     assert ks == sorted(ks)
