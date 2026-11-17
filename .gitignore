@@ -14,6 +14,14 @@ htmlcov/
 # Outputs
 results/
 *.parquet
+# suspkin CLI outputs written to the repo root (show/sweep/report/animate)
+/report/
+/*.png
+/*.html
+/*.gif
+/*.mp4
+/*.csv
+/*.json
 
 # IDE / OS
 .vscode/
