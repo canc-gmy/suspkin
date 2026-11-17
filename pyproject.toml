@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "suspkin"
+version = "0.0.1"
+description = "Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "pandas>=2.2",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "matplotlib>=3.9",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+viz = ["plotly>=5.22"]
+opt = ["pymoo>=0.6.1"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.7",
+    "types-PyYAML",
+    "pandas-stubs",
+]
+
+[project.scripts]
+suspkin = "suspkin.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/suspkin"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "NPY", "RUF"]
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

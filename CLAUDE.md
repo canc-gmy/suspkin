@@ -12,6 +12,7 @@ English only: code, comments, docs, commit messages, configs.
 - Sign conventions: `docs/DESIGN_PLAN.md` §2.
 - Core math = pure functions on numpy arrays. Plotting reads result tables only, never calls the solver.
 - Tooling: `uv`, ruff, mypy, pytest (+ hypothesis).
+- On this PC `uv` may not be on PATH: call it as `python -m uv` (e.g. `python -m uv run pytest -q`).
 
 ## Orchestration (token budget)
 The main session (Opus) only plans, writes specs, decides, and commits.
