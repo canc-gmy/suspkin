@@ -152,8 +152,13 @@ def wheel_center_recession(state: CornerState, static: CornerState, corner: Corn
 
 
 def wheelbase_change_contribution(state: CornerState, static: CornerState, corner: Corner) -> float:
-    """Contribution of this corner to wheelbase change [m]: contact-patch x shift."""
-    return contact_patch_dx(state, static, corner)
+    """Contribution of this corner to wheelbase change [m].
+
+    Wheelbase = x_front - x_rear, so a front corner contributes ``+dx`` and a rear
+    corner ``-dx`` of its contact-patch x shift relative to ``static``.
+    """
+    dx = contact_patch_dx(state, static, corner)
+    return dx if corner.axle == "front" else -dx
 
 
 def alignment_metrics(state: CornerState, corner: Corner, static: CornerState) -> dict[str, float]:

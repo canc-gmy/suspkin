@@ -71,3 +71,15 @@ def test_left_right_symmetry(corners, left, right) -> None:  # type: ignore[no-u
         b = solve_corner(corners[right], travel)
         assert a.rocker_angle == pytest.approx(b.rocker_angle, abs=1e-9)
         assert a.coilover_length == pytest.approx(b.coilover_length, abs=1e-9)
+
+
+@pytest.mark.parametrize("cid", ["FL", "RL"])
+def test_reference_alignment_gradients(corners, cid) -> None:  # type: ignore[no-untyped-def]
+    from suspkin.metrics import add_gradients, metrics_frame, static_summary
+
+    states = sweep_corner(corners[cid], np.linspace(-0.01, 0.01, 21))
+    s = static_summary(add_gradients(metrics_frame(states, corners[cid])))
+    # bump steer below 0.01 rad/m (about 6e-4 deg/mm); actual is ~1e-3 to 5e-3 rad/m
+    assert abs(s["bump_steer"]) < 1e-2
+    # camber becomes more negative in bump
+    assert s["camber_gain"] < 0.0

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -13,11 +14,11 @@ from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_rack
 from suspkin.metrics import alignment as al
-from tests.unit import test_reference_vehicle as ref
 from tests.unit.helpers import fixture_corners
 
 IDS = ("FL", "FR", "RL", "RR")
-REF_CORNERS = build_corners(load_vehicle(ref.CONFIG))
+REF_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "vehicles" / "fs_reference.yaml"
+REF_CORNERS = build_corners(load_vehicle(REF_CONFIG))
 FIX_CORNERS = fixture_corners()
 
 
@@ -57,11 +58,17 @@ def test_static_camber_toe_match_yaml(cid: str) -> None:
 
 @pytest.mark.parametrize("cid", ["FL", "FR"])
 def test_static_reference_matches_temporary_helpers(cid: str) -> None:
-    v = load_vehicle(ref.CONFIG)
+    v = load_vehicle(REF_CONFIG)
     c = REF_CORNERS[cid]  # type: ignore[index]
     s = al.static_state(c)
-    caster_h, kpi_h = ref._caster_kpi(v.front)
-    scrub_h, trail_h = ref._scrub_trail(v.front)
+    h = v.front.hardpoints
+    lb, ub = np.array(h.lca_outer), np.array(h.uca_outer)
+    u = ub - lb
+    caster_h, kpi_h = math.atan2(-u[0], u[2]), math.atan2(-u[1], u[2])
+    g = lb - lb[2] / u[2] * u
+    wc = np.array(h.wheel_center)
+    cp = np.array([wc[0], wc[1] + wc[2] * math.tan(-v.front.wheel.static_camber), 0.0])
+    scrub_h, trail_h = float(cp[1] - g[1]), float(g[0] - cp[0])
     assert al.caster(s, c) == pytest.approx(caster_h, abs=1e-6)
     assert al.kpi(s, c) == pytest.approx(kpi_h, abs=1e-6)
     # The helper's contact patch is a small-angle approximation (tan on wheel-centre
@@ -211,3 +218,46 @@ def test_alignment_metrics_dict() -> None:
     }
     assert m["camber"] == al.camber(s, c)
     assert all(isinstance(v, float) for v in m.values())
+
+
+def test_rear_wheelbase_contribution_sign() -> None:
+    cr = REF_CORNERS["RL"]
+    s0, s = al.static_state(cr), solve_corner(cr, 0.02)
+    dx = al.contact_patch_dx(s, s0, cr)
+    assert dx != 0.0
+    assert al.wheelbase_change_contribution(s, s0, cr) == pytest.approx(-dx)
+    cf = REF_CORNERS["FL"]
+    f0, f = al.static_state(cf), solve_corner(cf, 0.02)
+    assert al.wheelbase_change_contribution(f, f0, cf) == pytest.approx(
+        al.contact_patch_dx(f, f0, cf)
+    )
+
+
+@pytest.mark.parametrize("corners", [FIX_CORNERS, REF_CORNERS])
+@pytest.mark.parametrize("cid", ["FL", "FR"])
+def test_positive_rack_steers_left(corners: dict, cid: str) -> None:  # type: ignore[type-arg]
+    c = corners[cid]
+    s0 = al.static_state(c)
+    s = sweep_rack(c, [0.01])[0]
+    assert al.steer_angle(s, c) - al.steer_angle(s0, c) > 0.0
+    assert al.steer_angle(s, c) > 0.0
+
+
+@pytest.mark.parametrize("cid", ["FL", "FR"])
+def test_hand_built_spin_axis(cid: str) -> None:
+    c = FIX_CORNERS[cid]  # type: ignore[index]
+    o = 1.0 if c.side == "left" else -1.0
+    cam, toe_a = math.radians(-3.0), math.radians(2.0)
+    # Outboard spin axis: n_z = -sin(camber) > 0 for negative camber; n_x = sin(toe)cos(camber)
+    # (toe-in: wheel front toward the centreline).
+    n = np.array(
+        [math.sin(toe_a) * math.cos(cam), o * math.cos(toe_a) * math.cos(cam), -math.sin(cam)]
+    )
+    assert n[2] > 0.0 and n[0] > 0.0
+    s = replace(al.static_state(c), spin_axis=n)
+    assert al.camber(s, c) == pytest.approx(cam, abs=1e-12)
+    assert al.camber(s, c) < 0.0
+    assert al.toe(s, c) == pytest.approx(toe_a, abs=1e-12)
+    assert al.toe(s, c) > 0.0
+    expected_steer = -toe_a if c.side == "left" else toe_a
+    assert al.steer_angle(s, c) == pytest.approx(expected_steer, abs=1e-12)

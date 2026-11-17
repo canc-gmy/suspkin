@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-17
+
+### Added
+
+- Alignment metrics (`suspkin.metrics`): camber, toe, steer angle, caster, KPI,
+  scrub radius, mechanical trail, kingpin offset, spindle length.
+- Wheel position metrics: half-track change, contact-patch shift, wheel-centre
+  recession, wheelbase change contribution.
+- Instant centres by the plane-section method: front/side-view IC, swing-arm
+  lengths and signed swing angles (positive = anti-geometry), symmetric and
+  left/right roll centre.
+- Metrics tables with gradients (camber gain, bump steer, caster change,
+  track change rate, RC migration, steer gain) and static summary.
+- `suspkin sweep --metrics` and `suspkin summary` CLI commands.
+- Line/plane geometry helpers in `suspkin.geom_math`.
+
+### Changed
+
+- Reference-vehicle tests use the metrics module instead of temporary helpers.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added

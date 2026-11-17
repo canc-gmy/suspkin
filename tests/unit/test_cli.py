@@ -83,3 +83,31 @@ def test_sweep_rear_rack_fails_cleanly(tmp_path: Path) -> None:
     )  # fmt: skip
     assert res.exit_code == 1
     assert "Traceback" not in res.output
+
+
+def test_sweep_metrics_columns(tmp_path: Path) -> None:
+    import pandas as pd
+
+    out = tmp_path / "m.csv"
+    res = runner.invoke(
+        app,
+        ["sweep", str(FIXTURE), "--corner", "FL", "--travel", "-0.01", "0.01", "--steps", "5",
+         "--metrics", "--out", str(out)],
+    )  # fmt: skip
+    assert res.exit_code == 0, res.output
+    df = pd.read_csv(out)
+    for col in ("camber", "caster", "rc_height", "camber_gain", "bump_steer", "wheel_center_z"):
+        assert col in df.columns
+
+
+def test_summary_output_and_json(tmp_path: Path) -> None:
+    import json
+
+    out = tmp_path / "s.json"
+    res = runner.invoke(app, ["summary", str(FIXTURE), "--json", str(out)])
+    assert res.exit_code == 0, res.output
+    for word in ("caster", "kpi", "rc_height", "camber_gain", "FL", "RL", "deg/mm"):
+        assert word in res.output
+    data = json.loads(out.read_text())
+    assert set(data) == {"FL", "RL"}
+    assert abs(data["FL"]["camber"] - (-0.03)) < 1e-6  # SI (rad) in JSON

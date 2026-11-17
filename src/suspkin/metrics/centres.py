@@ -9,10 +9,11 @@ Parallel section lines mean an instant centre at infinity: ``is_finite=False`` w
 nan coordinates (never an exception); the common line direction is kept in
 ``InstantCentre.direction`` where a direction is needed (swing angles, roll centre).
 
-Angle sign: swing angles are positive when the IC is above the reference point
-(contact patch, or wheel centre for ``sv_wc_angle``); they use the horizontal distance
-magnitude, so they lie in [-pi/2, pi/2]. For an IC at infinity the line direction is
-used, oriented inboard (front view) or rearward (side view).
+Angle sign: angles are signed, range (-pi, pi]. Front view: positive = FVIC above the
+contact patch (inboard side is the positive horizontal direction). Side view: positive =
+anti-geometry (front axle: SVIC rearward of and above the reference point; rear axle:
+forward of and above). For an IC at infinity the line direction is oriented to the same
+reference side.
 """
 
 from __future__ import annotations
@@ -56,9 +57,12 @@ def _ic(state: CornerState, axis: int) -> InstantCentre:
     p = state.points
     cut = float(p["contact_patch"][axis])
     lines = []
-    for w in ("uca", "lca"):
-        pt, n = plane_from_points(p[f"{w}_front"], p[f"{w}_rear"], p[f"{w}_outer"])
-        lines.append(plane_section_2d(pt, n, axis, cut))
+    try:
+        for w in ("uca", "lca"):
+            pt, n = plane_from_points(p[f"{w}_front"], p[f"{w}_rear"], p[f"{w}_outer"])
+            lines.append(plane_section_2d(pt, n, axis, cut))
+    except ValueError:  # degenerate plane (collinear points / plane parallel to the cut)
+        return InstantCentre(_NAN, _NAN, False, np.array([_NAN, _NAN]))
     d = line_direction_2d(lines[0][0])
     hit = intersect_lines_2d(lines[0], lines[1])
     if hit is None:
@@ -92,36 +96,57 @@ def svsa_length(state: CornerState, corner: Corner) -> float:
     return abs(ic.h - float(state.points["contact_patch"][0]))
 
 
-def _angle(ic: InstantCentre, ref_h: float, ref_z: float, orient: float) -> float:
-    """Angle of the line ref -> IC, positive when the IC is above ``ref``."""
+def _angle(ic: InstantCentre, ref_h: float, ref_z: float, sign: float) -> float:
+    """Signed angle of the line ref -> IC: ``atan2(dz, sign * (ic_h - ref_h))`` [rad].
+
+    ``sign`` picks the positive horizontal direction. Positive angle = IC above ``ref``;
+    the range is (-pi, pi] (beyond +-pi/2 the IC lies on the opposite side). For an IC
+    at infinity the common line direction is oriented so that its horizontal component
+    is on the ``sign`` side, giving the same convention. Degenerate input gives nan.
+    """
     if ic.is_finite:
-        return math.atan2(ic.z - ref_z, abs(ic.h - ref_h))
-    dh, dz = float(ic.direction[0]), float(ic.direction[1])
-    if dh * orient < 0:
+        return math.atan2(ic.z - ref_z, sign * (ic.h - ref_h))
+    dh, dz = float(ic.direction[0]) * sign, float(ic.direction[1])
+    if dh < 0:
         dh, dz = -dh, -dz
-    return math.atan2(dz, abs(dh))
+    return math.atan2(dz, dh)
 
 
 def _inboard(corner: Corner) -> float:
     return -1.0 if corner.side == "left" else 1.0
 
 
+def _anti_sign(corner: Corner) -> float:
+    """Sign of the x direction of the anti side: rearward (-1) at the front, forward at the rear."""
+    return -1.0 if corner.axle == "front" else 1.0
+
+
 def fv_swing_angle(state: CornerState, corner: Corner) -> float:
-    """Angle [rad] of the line contact patch -> FVIC, positive when the FVIC is above it."""
+    """Angle [rad] of the line contact patch -> FVIC.
+
+    Positive when the FVIC is above the patch; equals ``atan2(dz, inboard * dy)``
+    (inboard positive), range (-pi, pi]. An inboard IC gives |angle| < pi/2.
+    """
     cp = state.points["contact_patch"]
     return _angle(front_view_ic(state, corner), float(cp[1]), float(cp[2]), _inboard(corner))
 
 
 def sv_swing_angle(state: CornerState, corner: Corner) -> float:
-    """Angle [rad] of the line contact patch -> SVIC, positive when the SVIC is above it."""
+    """Signed angle [rad] of the line contact patch -> SVIC (feeds anti-features).
+
+    Positive means anti-geometry for the axle: front axle, SVIC rearward of and above
+    the patch; rear axle, SVIC forward of and above it. Equals
+    ``atan2(z_ic - z_cp, s * (x_cp - x_ic))`` with s = +1 front, -1 rear; range
+    (-pi, pi]. ``tan`` of it is the swing-arm slope used for anti %.
+    """
     cp = state.points["contact_patch"]
-    return _angle(side_view_ic(state, corner), float(cp[0]), float(cp[2]), -1.0)
+    return _angle(side_view_ic(state, corner), float(cp[0]), float(cp[2]), _anti_sign(corner))
 
 
 def sv_wc_angle(state: CornerState, corner: Corner) -> float:
-    """Angle [rad] of the line wheel centre -> SVIC, positive when the SVIC is above it."""
+    """Signed angle [rad] of the line wheel centre -> SVIC; same sign rule as above."""
     wc = state.points["wheel_center"]
-    return _angle(side_view_ic(state, corner), float(wc[0]), float(wc[2]), -1.0)
+    return _angle(side_view_ic(state, corner), float(wc[0]), float(wc[2]), _anti_sign(corner))
 
 
 def _roll_line(state: CornerState) -> tuple[Vec, Vec]:
@@ -149,15 +174,21 @@ def roll_centre_symmetric(state: CornerState, corner: Corner) -> float:
 def roll_centre_pair(left: CornerState, right: CornerState) -> tuple[float, float]:
     """Front-view roll centre (y, z) of one axle: both contact patch -> FVIC lines intersected.
 
-    Returns ``(nan, nan)`` if the two lines are parallel.
+    Coincident lines (e.g. parallel horizontal wishbones) return the point on the line
+    at y = 0, as ``roll_centre_symmetric`` does. Returns ``(nan, nan)`` for parallel
+    distinct lines or degenerate input.
     """
-    lines = []
-    for st in (left, right):
-        p0, d = _roll_line(st)
-        lines.append(line_through_2d(p0, p0 + d))
+    segs = [_roll_line(st) for st in (left, right)]
+    if not all(bool(np.all(np.isfinite(d))) for _, d in segs):
+        return (_NAN, _NAN)
+    lines = [line_through_2d(p0, p0 + d) for p0, d in segs]
     hit = intersect_lines_2d(lines[0], lines[1])
     if hit is None:
-        return (_NAN, _NAN)
+        n2, off2 = lines[1]
+        p0, d = segs[0]
+        if abs(float(np.asarray(n2) @ p0) - off2) > 1e-9 or abs(d[0]) < 1e-12:
+            return (_NAN, _NAN)
+        return (0.0, float(p0[1] + d[1] / d[0] * (0.0 - p0[0])))
     return (float(hit[0]), float(hit[1]))
 
 
