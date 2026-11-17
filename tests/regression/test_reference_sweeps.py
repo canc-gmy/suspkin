@@ -83,3 +83,20 @@ def test_reference_alignment_gradients(corners, cid) -> None:  # type: ignore[no
     assert abs(s["bump_steer"]) < 1e-2
     # camber becomes more negative in bump
     assert s["camber_gain"] < 0.0
+
+
+@pytest.mark.parametrize("cid", ["FL", "RL"])
+def test_reference_actuation_and_rates(corners, cid) -> None:  # type: ignore[no-untyped-def]
+    from suspkin.metrics import add_gradients, metrics_frame, motion_ratios, static_summary
+
+    corner = corners[cid]
+    states = sweep_corner(corner, TRAVELS)
+    df = add_gradients(metrics_frame(states, corner))
+    assert 0.9 <= motion_ratios(corner, 0.0).spring <= 1.1
+    assert df["bump_stroke_remaining"].min() > 0.0
+    assert df["droop_stroke_remaining"].min() > 0.0
+    s = static_summary(df)
+    k = corner.axle_cfg.coilover.spring_rate
+    mr_max = float(df["mr_spring"].max())
+    assert s["ride_rate"] < s["wheel_rate"] < k * mr_max**2
+    assert s["spring_force"] > 0.0

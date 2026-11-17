@@ -108,6 +108,8 @@ def test_summary_output_and_json(tmp_path: Path) -> None:
     assert res.exit_code == 0, res.output
     for word in ("caster", "kpi", "rc_height", "camber_gain", "FL", "RL", "deg/mm"):
         assert word in res.output
+    for word in ("pushrod_angle", "mr_spring", "wheel_rate", "ride_rate", "spring_force", "N/mm"):
+        assert word in res.output
     data = json.loads(out.read_text())
     assert set(data) == {"FL", "RL"}
     assert abs(data["FL"]["camber"] - (-0.03)) < 1e-6  # SI (rad) in JSON

@@ -118,14 +118,25 @@ _ANGLE_COLS = (
 )  # fmt: skip
 _ANGLE_RATE_COLS = ("camber_gain", "bump_steer", "caster_change")
 _RATIO_COLS = ("track_change_rate", "rc_migration_rate")
+_ACT_ANGLE_COLS = ("pushrod_angle", "pushrod_angle_fv", "rocker_rotation")
+_FORCE_COLS = ("spring_force", "wheel_load_spring")
+_RATE_COLS = ("spring_rate", "tyre_stiffness", "wheel_rate_linear", "wheel_rate", "ride_rate")
 
 
 def _display(name: str, value: float) -> tuple[float, str]:
     """Convert an SI metric value to display units; return (value, unit)."""
     from suspkin.units import m_to_mm, rad_to_deg
 
-    if name in _ANGLE_COLS:
+    if name in _ANGLE_COLS or name in _ACT_ANGLE_COLS:
         return float(rad_to_deg(value)), "deg"
+    if name in _FORCE_COLS:
+        return value, "N"
+    if name in _RATE_COLS:
+        return value / 1000.0, "N/mm"
+    if name == "mr_spring":
+        return value, "-"
+    if name == "mr_progression":
+        return value / 1000.0, "1/mm"
     if name in _ANGLE_RATE_COLS:
         return float(rad_to_deg(value)) / 1000.0, "deg/mm"
     if name in _RATIO_COLS:
