@@ -6,7 +6,7 @@
 # Targets at static ride height:
 #   wheelbase 1.550 m, front track 1.220 m, rear track 1.180 m (wheel-centre track)
 #   10" wheels, 18x6-10 tyres (R = 0.228 m), outboard brakes, RWD
-#   pushrod on the upright (both axles), rocker near the upper chassis rail
+#   pushrod on the UPPER wishbone (both axles), in compression, rocker above the UCA
 #   ARB: torsional bar at the front, flexural blade at the rear
 
 vehicle:
@@ -18,7 +18,7 @@ vehicle:
 
 front:
   brakes: outboard
-  pushrod_mount: upright
+  pushrod_mount: uca
   unsprung_mass: 10.0      # kg per corner (wheel, tyre, upright, brake, share of links)
 
   # Front design intent:
@@ -30,8 +30,18 @@ front:
   #  - Front-view instant centre on the far (right) side of the car; roll centre ~34 mm.
   #  - Tie rod is FRONT-STEER (rack ahead of the axle) and, in front view, lies on the line from the
   #    outer ball joint to the LCA/UCA instant centre to keep bump steer low.
-  #  - Pushrod goes from the upright just above the lower ball joint up and inboard to the rocker
-  #    (~47 deg from horizontal in front view); it passes between the two UCA legs.
+  #  - Pushrod is mounted on the UCA ~50 mm inboard of the upper ball joint (on the wishbone
+  #    centreline, a tab on the cross-brace) and works in COMPRESSION: it goes up and inboard
+  #    (~65 deg from horizontal in front view, 0.19 m long) to the rocker, which sits ABOVE the
+  #    UCA on the upper chassis structure (pivot z = 0.479 m vs UCA z = 0.325 m).
+  #  - Rocker pivots about a longitudinal axis (x). Pushrod pickup is 0.06 m from the pivot, the
+  #    pickup lever is ~perpendicular to the rod (toggle margin ~67 deg), spring arm 0.0785 m.
+  #  - Coilover lies TRANSVERSE and horizontal on top of the chassis (z = 0.5575 m), running from the
+  #    rocker spring pin inboard to a chassis bracket at y = 0.185 m. In bump the rocker turns so the
+  #    spring pin moves inboard and the coilover shortens. Static length 0.200 m.
+  #  - Motion ratio ~0.98 (|d coilover / d wheel travel|), mild progression (~6 % over +-25 mm).
+  #  - ARB drop link is vertical and goes UP from the rocker to the bar arm above the rocker
+  #    (drop link 0.10 m), offset in x from the coilover axis for clearance.
   hardpoints:
     uca_front: [0.130, 0.300, 0.325]    # chassis upper rail
     uca_rear: [-0.130, 0.300, 0.325]
@@ -41,13 +51,13 @@ front:
     lca_outer: [0.010, 0.586, 0.118]    # lower ball joint
     tie_inner: [0.085, 0.150, 0.154]    # rack end, ahead of the axle
     tie_outer: [0.085, 0.585, 0.150]    # steering arm on the upright
-    pushrod_outer: [0.000, 0.575, 0.165]
-    pushrod_inner: [0.000, 0.280, 0.470]
-    rocker_pivot: [0.000, 0.200, 0.480]
-    rocker_spring: [0.000, 0.200, 0.580]
-    spring_chassis: [0.140, 0.060, 0.600]
+    pushrod_outer: [-0.0087, 0.5175, 0.3374]  # on the UCA, 50 mm inboard of uca_outer
+    pushrod_inner: [0.000, 0.437, 0.509]       # rocker pickup, above the UCA
+    rocker_pivot: [0.000, 0.385, 0.479]
+    rocker_spring: [0.000, 0.385, 0.5575]      # spring pin, directly above the pivot
+    spring_chassis: [0.000, 0.185, 0.5575]     # chassis bracket, coilover horizontal along y
     wheel_center: [0.000, 0.610, 0.228]
-    rocker_arb: [-0.040, 0.260, 0.480]  # drop-link pickup on the rocker
+    rocker_arb: [-0.090, 0.260, 0.479]  # drop-link pickup on the rocker (inboard lever)
     rocker_axis: [1.0, 0.0, 0.0]        # rocker rotates about a longitudinal axis
   wheel:
     tyre_radius: 0.228
@@ -57,14 +67,14 @@ front:
     tyre_vertical_stiffness: 100000.0
   coilover:
     spring_rate: 35000.0
-    free_length: 0.216       # static length 0.1996 m -> 35000 * 0.0164 = ~574 N static spring force
+    free_length: 0.2164      # static length 0.2000 m -> 35000 * 0.0164 = ~574 N static spring force
     preload: 0.0
     length_min: 0.160
     length_max: 0.240
   arb:
     type: torsional
-    arm_end: [-0.040, 0.260, 0.400]    # arm tip, linked to rocker_arb by a vertical drop link
-    bar_pivot: [-0.100, 0.260, 0.400]  # bar axis point where the arm is clamped (arm length 0.06 m)
+    arm_end: [-0.090, 0.260, 0.579]    # arm tip, linked to rocker_arb by a vertical drop link (0.10 m)
+    bar_pivot: [-0.150, 0.260, 0.579]  # bar axis point where the arm is clamped (arm length 0.06 m)
     bar_axis: [0.0, 1.0, 0.0]
     bar_length: 0.52                   # = 2 * bar_pivot.y (bar spans the mirrored pivots)
     outer_diameter: 0.016
@@ -76,7 +86,7 @@ front:
 
 rear:
   brakes: outboard
-  pushrod_mount: upright
+  pushrod_mount: uca
   unsprung_mass: 10.0
 
   # Rear design intent:
@@ -84,6 +94,10 @@ rear:
   #  - Caster ~1 deg, KPI ~4.5 deg, same ball-joint spacing as the front.
   #  - Toe link sits BEHIND the axle and is aligned with the instant centre, fixed toe (no steering).
   #  - Roll centre ~40 mm; UCA shorter than LCA.
+  #  - Same pushrod/rocker layout as the front: UCA-mounted pushrod in compression (~68 deg,
+  #    0.19 m), rocker above the UCA, horizontal transverse coilover on top of the chassis
+  #    (z = 0.5565 m, static length 0.200 m), motion ratio ~0.99, progression ~9 %.
+  #  - Flexural ARB blade sits above the rocker, drop link vertical (0.10 m) going up.
   hardpoints:
     uca_front: [-1.420, 0.300, 0.320]
     uca_rear: [-1.680, 0.300, 0.320]
@@ -93,13 +107,13 @@ rear:
     lca_outer: [-1.550, 0.575, 0.118]
     tie_inner: [-1.640, 0.150, 0.153]
     tie_outer: [-1.640, 0.565, 0.150]
-    pushrod_outer: [-1.550, 0.565, 0.165]
-    pushrod_inner: [-1.550, 0.280, 0.470]
-    rocker_pivot: [-1.550, 0.200, 0.480]
-    rocker_spring: [-1.550, 0.200, 0.580]
-    spring_chassis: [-1.410, 0.060, 0.600]
+    pushrod_outer: [-1.5535, 0.5075, 0.3374]  # on the UCA, 50 mm inboard of uca_outer
+    pushrod_inner: [-1.550, 0.437, 0.509]
+    rocker_pivot: [-1.550, 0.385, 0.479]
+    rocker_spring: [-1.550, 0.385, 0.5565]
+    spring_chassis: [-1.550, 0.185, 0.5565]
     wheel_center: [-1.550, 0.590, 0.228]
-    rocker_arb: [-1.590, 0.260, 0.480]
+    rocker_arb: [-1.640, 0.260, 0.479]
     rocker_axis: [1.0, 0.0, 0.0]
   wheel:
     tyre_radius: 0.228
@@ -109,14 +123,14 @@ rear:
     tyre_vertical_stiffness: 100000.0
   coilover:
     spring_rate: 40000.0
-    free_length: 0.217       # static length 0.1996 m -> 40000 * 0.0174 = ~696 N static spring force
+    free_length: 0.2174      # static length 0.2000 m -> 40000 * 0.0174 = ~696 N static spring force
     preload: 0.0
     length_min: 0.160
     length_max: 0.240
   arb:
     type: flexural
-    arm_end: [-1.590, 0.260, 0.400]     # blade tip, linked to rocker_arb by a vertical drop link
-    blade_root: [-1.590, 0.150, 0.400]  # blade clamp on the chassis
+    arm_end: [-1.640, 0.260, 0.579]     # blade tip, linked to rocker_arb by a vertical drop link (0.10 m)
+    blade_root: [-1.640, 0.150, 0.579]  # blade clamp on the chassis
     blade_pivot_axis: [1.0, 0.0, 0.0]   # blade bends vertically about a longitudinal axis
     blade_length: 0.110
     blade_width: 0.025

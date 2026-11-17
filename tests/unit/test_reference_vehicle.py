@@ -101,3 +101,8 @@ def test_uca_shorter_than_lca(vehicle) -> None:  # type: ignore[no-untyped-def]
         uca = abs(h.uca_outer[1] - 0.5 * (h.uca_front[1] + h.uca_rear[1]))
         lca = abs(h.lca_outer[1] - 0.5 * (h.lca_front[1] + h.lca_rear[1]))
         assert uca < lca
+
+
+def test_pushrod_on_uca(vehicle) -> None:  # type: ignore[no-untyped-def]
+    assert vehicle.front.pushrod_mount == "uca"
+    assert vehicle.rear.pushrod_mount == "uca"
