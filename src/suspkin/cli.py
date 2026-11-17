@@ -55,8 +55,8 @@ def show(
 ) -> None:
     """Show the 3D suspension geometry, static or at a solved body pose.
 
-    On this command heave and rack are in MILLIMETRES and roll and pitch in DEGREES
-    (the vsweep command takes heave/rack in metres). With none of them given the static
+    Heave and rack are in MILLIMETRES and roll and pitch in DEGREES (all commands use
+    the same user-facing units; files are SI). With none of them given the static
     geometry is drawn. --html writes an interactive file (to --out, default
     <vehicle>.html in the current directory) instead of a matplotlib figure.
     """
@@ -124,8 +124,8 @@ def animate(
 ) -> None:
     """Animate a body-pose sweep (heave, roll, pitch or rack) of the 3D geometry.
 
-    Units match the show command: heave and rack in MILLIMETRES, roll and pitch in
-    DEGREES (vsweep uses metres for heave and rack). Give exactly one sweep variable.
+    Heave and rack in MILLIMETRES, roll and pitch in DEGREES. Give exactly one sweep
+    variable.
     """
     import numpy as np
 
@@ -164,21 +164,21 @@ def sweep(
     corner: Annotated[str, typer.Option("--corner", help="Corner: FL, FR, RL or RR.")] = "FL",
     travel: Annotated[
         tuple[float, float] | None,
-        typer.Option("--travel", help="Wheel travel range MIN MAX [m] (bump positive)."),
+        typer.Option("--travel", help="Wheel travel range MIN MAX [mm] (bump positive)."),
     ] = None,
     rack_sweep: Annotated[
         tuple[float, float] | None,
-        typer.Option("--rack-sweep", help="Rack range MIN MAX [m] at zero travel."),
+        typer.Option("--rack-sweep", help="Rack range MIN MAX [mm] at zero travel."),
     ] = None,
     steps: Annotated[int, typer.Option("--steps", min=2, help="Number of sweep points.")] = 21,
     rack: Annotated[
-        float, typer.Option("--rack", help="Fixed rack offset [m] (travel sweep).")
+        float, typer.Option("--rack", help="Fixed rack offset [mm] (travel sweep).")
     ] = 0.0,
     metrics: Annotated[
         bool, typer.Option("--metrics", help="Add metric and gradient columns (>= 3 steps).")
     ] = False,
 ) -> None:
-    """Sweep one corner over wheel travel or rack and write a CSV table (SI units)."""
+    """Sweep one corner over wheel travel or rack (inputs in mm); the CSV is in SI units."""
     if (travel is None) == (rack_sweep is None):
         typer.echo("error: give exactly one of --travel or --rack-sweep", err=True)
         raise typer.Exit(code=2)
@@ -200,10 +200,12 @@ def sweep(
     c = build_corners(vehicle)[corner]  # type: ignore[index]
     try:
         if travel is not None:
-            states = sweep_corner(c, np.linspace(travel[0], travel[1], steps), rack=rack)
+            tr = np.linspace(travel[0], travel[1], steps) / 1000.0
+            states = sweep_corner(c, tr, rack=rack / 1000.0)
         else:
             assert rack_sweep is not None
-            states = sweep_rack(c, np.linspace(rack_sweep[0], rack_sweep[1], steps))
+            rk = np.linspace(rack_sweep[0], rack_sweep[1], steps) / 1000.0
+            states = sweep_rack(c, rk)
     except (KinematicsError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -267,6 +269,7 @@ def summary(
     from suspkin.geometry import build_corners
     from suspkin.kinematics import KinematicsError, sweep_corner
     from suspkin.metrics import add_gradients, metrics_frame, static_summary
+    from suspkin.plotting.figures import format_value
 
     try:
         vehicle = load_vehicle(vehicle_yaml)
@@ -291,7 +294,7 @@ def summary(
         unit = ""
         for cid in ("FL", "RL"):
             v, unit = _display(n, result[cid][n])
-            cells.append(f"{v:12.4f}")
+            cells.append(format_value("{:12.4f}", v))
         typer.echo(f"{n:<{width}}  {cells[0]}  {cells[1]}  {unit}")
     if json_out is not None:
         json_out.write_text(json.dumps(result, indent=2))
@@ -354,6 +357,7 @@ def vehicle(
 
     from suspkin.kinematics import KinematicsError
     from suspkin.metrics import vehicle_summary
+    from suspkin.plotting.figures import format_value
 
     try:
         veh = load_vehicle(vehicle_yaml)
@@ -377,7 +381,8 @@ def vehicle(
         if v is None:
             typer.echo(f"{k:<{width}}  {'n/a':>12}  {unit}")
         else:
-            typer.echo(f"{k:<{width}}  {float(v) * scale:12.4f}  {unit}")  # type: ignore[arg-type]
+            val = format_value("{:12.4f}", float(v) * scale)  # type: ignore[arg-type]
+            typer.echo(f"{k:<{width}}  {val}  {unit}")
     if json_out is not None:
         json_out.write_text(json.dumps(data, indent=2))
         typer.echo(str(json_out))
@@ -388,7 +393,7 @@ def vsweep(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
     out: Annotated[Path, typer.Option("--out", help="Output CSV path.")],
     heave: Annotated[
-        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [m].")
+        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [mm].")
     ] = None,
     roll: Annotated[
         tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX [deg].")
@@ -397,22 +402,23 @@ def vsweep(
         tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX [deg].")
     ] = None,
     rack: Annotated[
-        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [m].")
+        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [mm].")
     ] = None,
     steps: Annotated[int, typer.Option("--steps", min=2, help="Number of sweep points.")] = 21,
-    base_heave: Annotated[float, typer.Option("--base-heave", help="Fixed heave [m].")] = 0.0,
+    base_heave: Annotated[float, typer.Option("--base-heave", help="Fixed heave [mm].")] = 0.0,
     base_roll: Annotated[float, typer.Option("--base-roll", help="Fixed roll [deg].")] = 0.0,
     base_pitch: Annotated[float, typer.Option("--base-pitch", help="Fixed pitch [deg].")] = 0.0,
-    base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack [m].")] = 0.0,
+    base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack [mm].")] = 0.0,
     pivot: Annotated[
         tuple[float, float, float] | None,
-        typer.Option("--pivot", help="Body rotation centre X Y Z [m] (default: the CG)."),
+        typer.Option("--pivot", help="Body rotation centre X Y Z [mm] (default: the CG)."),
     ] = None,
 ) -> None:
     """Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).
 
-    Roll and pitch are given in DEGREES on the command line (converted to rad); the CSV
-    is in SI (m, rad). Give exactly one of --heave, --roll, --pitch, --rack.
+    Heave, rack and pivot are given in MILLIMETRES and roll and pitch in DEGREES on the
+    command line (converted to SI); the CSV is in SI (m, rad). Give exactly one of --heave,
+    --roll, --pitch, --rack.
     """
     import numpy as np
 
@@ -433,18 +439,68 @@ def vsweep(
     lo, hi = given[name]  # type: ignore[misc]
     if name in ("roll", "pitch"):
         lo, hi = np.radians(lo), np.radians(hi)
+    else:
+        lo, hi = lo / 1000.0, hi / 1000.0
     base = {
-        "heave": base_heave,
+        "heave": base_heave / 1000.0,
         "roll": float(np.radians(base_roll)),
         "pitch": float(np.radians(base_pitch)),
-        "rack": base_rack,
+        "rack": base_rack / 1000.0,
     }
+    pivot_m = None if pivot is None else tuple(v / 1000.0 for v in pivot)
     base.pop(name)
     try:
-        states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base, pivot=pivot)
+        states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base, pivot=pivot_m)
         df = vehicle_frame(states, veh)
     except (KinematicsError, ValueError) as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     df.to_csv(out, index=False)
     typer.echo(str(out))
+
+
+@app.command()
+def report(
+    vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
+    out: Annotated[Path, typer.Option("--out", help="Output directory.")],
+    compare: Annotated[
+        list[Path] | None,
+        typer.Option("--compare", help="Further vehicle YAML to overlay (repeatable)."),
+    ] = None,
+    no_3d: Annotated[bool, typer.Option("--no-3d", help="Skip the 3D view and GIF.")] = False,
+    formats: Annotated[
+        str, typer.Option("--formats", help="Figure file formats, comma separated.")
+    ] = "png,svg",
+    steps: Annotated[int, typer.Option("--steps", min=3, help="Points per sweep.")] = 31,
+) -> None:
+    """Run the standard studies and write a report folder (HTML, Markdown, CSV, figures).
+
+    Designs are labelled by their YAML file name. Tables are SI, figures and the HTML
+    summary are in mm and deg.
+    """
+    from suspkin.kinematics import KinematicsError
+    from suspkin.report import build_report, run_standard_studies
+
+    paths = [vehicle_yaml, *(compare or [])]
+    fmts = tuple(f.strip() for f in formats.split(",") if f.strip())
+    if not fmts:
+        typer.echo("error: --formats is empty", err=True)
+        raise typer.Exit(code=2)
+    try:
+        designs = []
+        seen: set[str] = set()
+        for p in paths:
+            label, k = p.stem, 1
+            while label in seen:
+                k += 1
+                label = f"{p.stem}_{k}"
+            seen.add(label)
+            designs.append((label, run_standard_studies(load_vehicle(p), steps=steps)))
+        html_path = build_report(designs, out, formats=fmts, include_3d=not no_3d)
+    except VehicleConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    except (KinematicsError, ValueError, RuntimeError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(str(html_path))

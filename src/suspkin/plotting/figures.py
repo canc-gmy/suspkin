@@ -314,6 +314,10 @@ def _steering_frame(
             inner[i], outer[i] = vm.inner_outer(float(dl[i]), float(dr[i]))
     sgn = np.where(mean >= 0.0, 1.0, -1.0)
     out["outer"] = np.where(np.abs(outer) < 1e-4, np.nan, sgn * outer)
+    if "wheelbase" in df.columns:
+        wheelbase = float(df["wheelbase"].iloc[0])
+    if "steer_c_factor" in df.columns:
+        c_factor = float(df["steer_c_factor"].iloc[0])
     if track is None and {"FL_cp_y", "FR_cp_y"} <= set(df.columns):
         track = float(df["FL_cp_y"].iloc[i0] - df["FR_cp_y"].iloc[i0])
     if wheelbase is not None and track is not None:
@@ -343,7 +347,10 @@ def fig_steering(
 
     ``datasets``: vehicle frames of a rack sweep (``rack``, ``FL_/FR_steer_angle``,
     ``FL_/FR_toe``, ``FL_/FR_cp_y``). Steer angles are shown relative to the static pose.
-    The Ackermann panel needs ``wheelbase`` [m] (``track`` defaults to the front contact
+    ``wheelbase`` [m] and ``c_factor`` [m/rev] are read per dataset from the constant
+    columns ``wheelbase`` and ``steer_c_factor`` when present (so designs of different
+    wheelbase overlay correctly), else from the keyword arguments.
+    The Ackermann panel needs a wheelbase (``track`` defaults to the front contact
     point spacing of the frame). With ``c_factor`` [m/rev] the last panel shows the
     differential steering ratio (handwheel / mean road wheel), otherwise the steer gain
     [deg/mm].
@@ -354,7 +361,7 @@ def fig_steering(
     ]
     last = (
         _Panel("Steering ratio", (_s("ratio", "ratio", "ratio"),))
-        if c_factor is not None
+        if any("ratio" in d.columns for _, d in derived)
         else _Panel("Steer gain", (_s("gain", "mean steer gain", "raw"),), ylabel="[deg/mm]")
     )
     items = [
@@ -497,6 +504,16 @@ _SUMMARY_ROWS: tuple[tuple[str, tuple[str, ...], float, str, str], ...] = (
 )
 
 
+def format_value(fmt: str, value: float) -> str:
+    """``fmt.format(value)`` without a negative zero ("-0.0" becomes "0.0")."""
+    text = fmt.format(value)
+    if "-" in text and not any(c in "123456789" for c in text):
+        return (
+            text.replace("-", " ", 1).strip() if text == text.strip() else text.replace("-", " ", 1)
+        )
+    return text
+
+
 def _lookup(summary: object, path: Sequence[str]) -> float | None:
     cur: Any = summary
     for key in path:
@@ -522,7 +539,7 @@ def fig_summary_table(summary: object, title: str = "Vehicle summary") -> Figure
         v = _lookup(summary, path)
         if v is None:
             continue
-        rows.append([label, fmt.format(v * factor) if math.isfinite(v) else "-", unit])
+        rows.append([label, format_value(fmt, v * factor) if math.isfinite(v) else "-", unit])
     if not rows:
         raise ValueError("summary has none of the expected fields")
     half = math.ceil(len(rows) / 2)

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
+### Added
+
+- 2D figure sets (`suspkin.plotting.figures`): alignment, wheel position, centres,
+  actuation, steering/Ackermann, roll, heave/pitch, summary table; N-design overlays;
+  shared colour-blind-safe style.
+- 3D view at any solved pose, sweep animation (GIF/MP4) and interactive plotly HTML
+  (`viz` extra); `suspkin show` pose options and `suspkin animate`.
+- Report generator (`suspkin.report`): standard studies, CSV/JSON export, figures,
+  self-contained `report.html` and `report.md`; `suspkin report --compare`.
+- README usage section.
+
+### Changed
+
+- **Breaking (CLI):** all length inputs are now in mm (`sweep --travel/--rack/--rack-sweep`,
+  `vsweep --heave/--rack/--base-heave/--base-rack/--pivot`); angles in deg. Files stay SI.
+
 ## [0.5.0] - 2026-11-17
 
 ### Added

@@ -19,6 +19,23 @@ uv run suspkin version
 uv run pytest
 ```
 
+## Usage
+
+User-facing inputs are in mm and deg; CSV/JSON files are SI. `--help` on any command lists the options.
+
+```bash
+uv run suspkin show configs/vehicles/fs_reference.yaml --roll 2 --heave 5 --out pose.png
+uv run suspkin sweep configs/vehicles/fs_reference.yaml --corner FL --travel -30 30 --metrics --out fl.csv
+uv run suspkin summary configs/vehicles/fs_reference.yaml --json summary.json
+uv run suspkin vehicle configs/vehicles/fs_reference.yaml --json vehicle.json
+uv run suspkin vsweep configs/vehicles/fs_reference.yaml --roll -2 2 --out roll.csv
+uv run suspkin animate configs/vehicles/fs_reference.yaml --roll -2 2 --out roll.gif
+uv run suspkin report configs/vehicles/fs_reference.yaml --compare other.yaml --out report/
+```
+
+`report` writes `report.html` (self-contained), `report.md`, `figures/`, `data/*.csv` and
+`summary.json`; every design given with `--compare` is overlaid on the same figures.
+
 ## Development
 
 ```bash

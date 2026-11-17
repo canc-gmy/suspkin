@@ -10,7 +10,7 @@ from suspkin.cli import app
 
 
 def test_version() -> None:
-    assert suspkin.__version__ == "0.5.0"
+    assert suspkin.__version__ == "0.6.0"
 
 
 def test_mm_m_roundtrip_scalar() -> None:

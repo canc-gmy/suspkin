@@ -38,7 +38,7 @@ def test_sweep_travel_writes_csv(tmp_path: Path) -> None:
     out = tmp_path / "r.csv"
     res = runner.invoke(
         app,
-        ["sweep", str(FIXTURE), "--corner", "RL", "--travel", "0.0", "0.02", "--steps", "7",
+        ["sweep", str(FIXTURE), "--corner", "RL", "--travel", "0", "20", "--steps", "7",
          "--out", str(out)],
     )  # fmt: skip
     assert res.exit_code == 0, res.output
@@ -58,7 +58,7 @@ def test_sweep_rack_front(tmp_path: Path) -> None:
     out = tmp_path / "r.csv"
     res = runner.invoke(
         app,
-        ["sweep", str(FIXTURE), "--corner", "FL", "--rack-sweep", "-0.01", "0.01", "--steps", "5",
+        ["sweep", str(FIXTURE), "--corner", "FL", "--rack-sweep", "-10", "10", "--steps", "5",
          "--out", str(out)],
     )  # fmt: skip
     assert res.exit_code == 0, res.output
@@ -71,7 +71,7 @@ def test_sweep_requires_exactly_one_mode(tmp_path: Path) -> None:
     assert res.exit_code == 2
     res = runner.invoke(
         app,
-        ["sweep", str(FIXTURE), "--travel", "-0.01", "0.01", "--rack-sweep", "-0.01", "0.01",
+        ["sweep", str(FIXTURE), "--travel", "-10", "10", "--rack-sweep", "-10", "10",
          "--out", str(out)],
     )  # fmt: skip
     assert res.exit_code == 2
@@ -80,7 +80,7 @@ def test_sweep_requires_exactly_one_mode(tmp_path: Path) -> None:
 def test_sweep_rear_rack_fails_cleanly(tmp_path: Path) -> None:
     res = runner.invoke(
         app,
-        ["sweep", str(FIXTURE), "--corner", "RL", "--rack-sweep", "-0.01", "0.01",
+        ["sweep", str(FIXTURE), "--corner", "RL", "--rack-sweep", "-10", "10",
          "--out", str(tmp_path / "r.csv")],
     )  # fmt: skip
     assert res.exit_code == 1
@@ -93,7 +93,7 @@ def test_sweep_metrics_columns(tmp_path: Path) -> None:
     out = tmp_path / "m.csv"
     res = runner.invoke(
         app,
-        ["sweep", str(FIXTURE), "--corner", "FL", "--travel", "-0.01", "0.01", "--steps", "5",
+        ["sweep", str(FIXTURE), "--corner", "FL", "--travel", "-10", "10", "--steps", "5",
          "--metrics", "--out", str(out)],
     )  # fmt: skip
     assert res.exit_code == 0, res.output
@@ -136,7 +136,7 @@ def test_vsweep_roll_degrees(tmp_path: Path) -> None:
     out = tmp_path / "vs.csv"
     res = runner.invoke(
         app,
-        ["vsweep", str(FIXTURE), "--roll", "-1", "1", "--steps", "5", "--base-rack", "0.002",
+        ["vsweep", str(FIXTURE), "--roll", "-1", "1", "--steps", "5", "--base-rack", "2",
          "--out", str(out)],
     )  # fmt: skip
     assert res.exit_code == 0, res.output
@@ -192,3 +192,39 @@ def test_animate_roll_gif(tmp_path: Path) -> None:
 def test_animate_requires_one_variable(tmp_path: Path) -> None:
     res = runner.invoke(app, ["animate", str(FIXTURE), "--out", str(tmp_path / "a.gif")])
     assert res.exit_code == 2
+
+
+def test_sweep_units_are_mm(tmp_path: Path) -> None:
+    import numpy as np
+    import pandas as pd
+
+    out = tmp_path / "t.csv"
+    args = ["sweep", str(FIXTURE), "--travel", "-30", "30", "--steps", "5", "--rack", "2",
+            "--out", str(out)]  # fmt: skip
+    assert runner.invoke(app, args).exit_code == 0
+    df = pd.read_csv(out)
+    np.testing.assert_allclose(df["travel"].iloc[[0, -1]], [-0.03, 0.03])
+    np.testing.assert_allclose(df["rack"], 0.002)
+
+
+def test_vsweep_heave_mm_and_pivot(tmp_path: Path) -> None:
+    import numpy as np
+    import pandas as pd
+
+    out = tmp_path / "h.csv"
+    args = ["vsweep", str(FIXTURE), "--heave", "-10", "10", "--steps", "3", "--base-rack", "3",
+            "--pivot", "0", "0", "280", "--out", str(out)]  # fmt: skip
+    res = runner.invoke(app, args)
+    assert res.exit_code == 0, res.output
+    df = pd.read_csv(out)
+    np.testing.assert_allclose(df["heave"], [-0.01, 0.0, 0.01])
+    np.testing.assert_allclose(df["rack"], 0.003)
+
+
+def test_report_command(tmp_path: Path) -> None:
+    out = tmp_path / "rep"
+    args = ["report", str(FIXTURE), "--compare", str(FIXTURE), "--out", str(out),
+            "--no-3d", "--formats", "png", "--steps", "5"]  # fmt: skip
+    res = runner.invoke(app, args)
+    assert res.exit_code == 0, res.output
+    assert (out / "report.html").exists() and (out / "summary.json").exists()
