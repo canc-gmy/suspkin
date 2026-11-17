@@ -12,6 +12,7 @@ face 4-5-6-7 above 0-1-2-3 (see :mod:`suspkin.optimize.regions`).
 from __future__ import annotations
 
 import difflib
+import math
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -37,7 +38,7 @@ from suspkin.optimize.metric_registry import (
     vehicle_metric_dim,
 )
 from suspkin.optimize.regions import check_hexahedron, is_convex_hexahedron
-from suspkin.units import Dim, parse_quantity, slope_dim
+from suspkin.units import Dim, normalize_dim, parse_quantity, slope_dim
 
 Vec3 = tuple[float, float, float]
 Pair = tuple[float, float]
@@ -62,6 +63,22 @@ _VEHICLE_INPUT_DIM: dict[str, Dim] = {
 _AXES = ("x", "y", "z")
 _RANGE_TOL = 1e-12
 _COORD_RE = re.compile(r"^(front|rear)\.([a-z_]+)\.([xyz])$")
+
+
+_DEG = math.pi / 180.0
+_DEFAULT_SCALE: dict[str, float] = {
+    "length": 1e-3,
+    "angle": 0.1 * _DEG,
+    "ratio": 0.01,
+    "percent": 1.0,
+    "force": 10.0,
+    "force/length": 1000.0,
+}
+
+
+def default_scale(dim: Dim) -> float | None:
+    """Default normalisation scale (SI) of a dimension; ``None`` if it has none."""
+    return _DEFAULT_SCALE.get(normalize_dim(dim))
 
 
 class StudyConfigError(ValueError):
@@ -717,7 +734,36 @@ class Study(_Frozen):
             raise ValueError(f"duplicate variable point(s): {dup}")
         _check_sweep_refs(self)
         _check_ranges(self, None)
+        _check_scales(self)
         return self
+
+
+def _check_scales(study: Study) -> None:
+    """Constraints on dimensions without a default scale need a usable limit or a scale."""
+    for c in study.constraints:
+        if not isinstance(
+            c, BandConstraint | SlopeConstraint | ValueConstraint | SummaryConstraint
+        ):
+            continue
+        if c.scale is not None:
+            continue
+        if isinstance(c, SummaryConstraint):
+            dim = summary_metric_dim(c.metric)
+        else:
+            sw = study.sweeps[c.sweep]
+            dim = sweep_metric_dim(sw, c.metric)
+            if isinstance(c, SlopeConstraint):
+                dim = slope_dim(dim, sweep_input_dim(sw))
+        if default_scale(dim) is not None:
+            continue
+        lo, hi = c.min, c.max
+        if lo is not None and hi is not None and hi != lo:
+            continue
+        if any(v for v in (lo, hi) if v is not None):
+            continue
+        raise ValueError(
+            f"constraint {c.name!r}: add `scale` (no default for dim {dim} with zero limit)"
+        )
 
 
 def _sweep(study: Study, name: str | None) -> CornerSweep | VehicleSweep | None:
