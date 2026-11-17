@@ -228,3 +228,15 @@ def test_report_command(tmp_path: Path) -> None:
     res = runner.invoke(app, args)
     assert res.exit_code == 0, res.output
     assert (out / "report.html").exists() and (out / "summary.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("command", "units"),
+    [("show", ("(mm)", "(deg)")), ("sweep", ("(mm)",)), ("vsweep", ("(mm)", "(deg)"))],
+)
+def test_help_shows_units(command: str, units: tuple[str, ...]) -> None:
+    # Units in square brackets would be swallowed by Rich markup in --help.
+    res = runner.invoke(app, [command, "--help"])
+    assert res.exit_code == 0, res.output
+    for unit in units:
+        assert unit in res.output

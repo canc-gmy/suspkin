@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Timing tests no longer depend on the machine: work-count budgets plus wall-clock checks
   under the `perf` pytest marker.
+- CLI `--help` shows option units again: `(mm)` / `(deg)` instead of `[mm]` / `[deg]`,
+  which Rich markup swallowed.
 
 ## [0.6.0] - 2026-11-17
 

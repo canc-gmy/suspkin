@@ -45,10 +45,10 @@ def show(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
     out: Annotated[Path | None, typer.Option("--out", help="Save figure to this path.")] = None,
     labels: Annotated[bool, typer.Option("--labels", help="Label hardpoints.")] = False,
-    heave: Annotated[float | None, typer.Option("--heave", help="Body heave [mm].")] = None,
-    roll: Annotated[float | None, typer.Option("--roll", help="Body roll [deg].")] = None,
-    pitch: Annotated[float | None, typer.Option("--pitch", help="Body pitch [deg].")] = None,
-    rack: Annotated[float | None, typer.Option("--rack", help="Rack displacement [mm].")] = None,
+    heave: Annotated[float | None, typer.Option("--heave", help="Body heave (mm).")] = None,
+    roll: Annotated[float | None, typer.Option("--roll", help="Body roll (deg).")] = None,
+    pitch: Annotated[float | None, typer.Option("--pitch", help="Body pitch (deg).")] = None,
+    rack: Annotated[float | None, typer.Option("--rack", help="Rack displacement (mm).")] = None,
     html: Annotated[
         bool, typer.Option("--html", help="Write an interactive plotly HTML (needs the viz extra).")
     ] = False,
@@ -108,16 +108,16 @@ def animate(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
     out: Annotated[Path, typer.Option("--out", help="Output .gif (or .mp4 with ffmpeg).")],
     heave: Annotated[
-        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [mm].")
+        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX (mm).")
     ] = None,
     roll: Annotated[
-        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX [deg].")
+        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX (deg).")
     ] = None,
     pitch: Annotated[
-        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX [deg].")
+        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX (deg).")
     ] = None,
     rack: Annotated[
-        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [mm].")
+        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX (mm).")
     ] = None,
     steps: Annotated[int, typer.Option("--steps", min=2, help="Number of frames.")] = 15,
     fps: Annotated[int, typer.Option("--fps", min=1, help="Frames per second.")] = 15,
@@ -164,15 +164,15 @@ def sweep(
     corner: Annotated[str, typer.Option("--corner", help="Corner: FL, FR, RL or RR.")] = "FL",
     travel: Annotated[
         tuple[float, float] | None,
-        typer.Option("--travel", help="Wheel travel range MIN MAX [mm] (bump positive)."),
+        typer.Option("--travel", help="Wheel travel range MIN MAX (mm, bump positive)."),
     ] = None,
     rack_sweep: Annotated[
         tuple[float, float] | None,
-        typer.Option("--rack-sweep", help="Rack range MIN MAX [mm] at zero travel."),
+        typer.Option("--rack-sweep", help="Rack range MIN MAX (mm) at zero travel."),
     ] = None,
     steps: Annotated[int, typer.Option("--steps", min=2, help="Number of sweep points.")] = 21,
     rack: Annotated[
-        float, typer.Option("--rack", help="Fixed rack offset [mm] (travel sweep).")
+        float, typer.Option("--rack", help="Fixed rack offset (mm, travel sweep).")
     ] = 0.0,
     metrics: Annotated[
         bool, typer.Option("--metrics", help="Add metric and gradient columns (>= 3 steps).")
@@ -393,25 +393,25 @@ def vsweep(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
     out: Annotated[Path, typer.Option("--out", help="Output CSV path.")],
     heave: Annotated[
-        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [mm].")
+        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX (mm).")
     ] = None,
     roll: Annotated[
-        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX [deg].")
+        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX (deg).")
     ] = None,
     pitch: Annotated[
-        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX [deg].")
+        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX (deg).")
     ] = None,
     rack: Annotated[
-        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [mm].")
+        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX (mm).")
     ] = None,
     steps: Annotated[int, typer.Option("--steps", min=2, help="Number of sweep points.")] = 21,
-    base_heave: Annotated[float, typer.Option("--base-heave", help="Fixed heave [mm].")] = 0.0,
-    base_roll: Annotated[float, typer.Option("--base-roll", help="Fixed roll [deg].")] = 0.0,
-    base_pitch: Annotated[float, typer.Option("--base-pitch", help="Fixed pitch [deg].")] = 0.0,
-    base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack [mm].")] = 0.0,
+    base_heave: Annotated[float, typer.Option("--base-heave", help="Fixed heave (mm).")] = 0.0,
+    base_roll: Annotated[float, typer.Option("--base-roll", help="Fixed roll (deg).")] = 0.0,
+    base_pitch: Annotated[float, typer.Option("--base-pitch", help="Fixed pitch (deg).")] = 0.0,
+    base_rack: Annotated[float, typer.Option("--base-rack", help="Fixed rack (mm).")] = 0.0,
     pivot: Annotated[
         tuple[float, float, float] | None,
-        typer.Option("--pivot", help="Body rotation centre X Y Z [mm] (default: the CG)."),
+        typer.Option("--pivot", help="Body rotation centre X Y Z (mm; default: the CG)."),
     ] = None,
 ) -> None:
     """Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).
