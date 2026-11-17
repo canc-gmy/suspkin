@@ -1,6 +1,6 @@
 # Suspension Kinematics Toolkit — Design Plan
 
-Status: **DRAFT v0.1** — for review
+Status: **DRAFT v0.2** — open questions resolved (see §12)
 Language policy: English only (code, comments, docs, commit messages).
 
 ---
@@ -58,7 +58,7 @@ against objectives under geometric constraints.
 | Lower wishbone (LCA) | `lca_front`, `lca_rear` (chassis), `lca_outer` (upright) |
 | Toe control | `tie_inner` (rack or chassis), `tie_outer` (upright) |
 | Wheel | `wheel_center`, spindle axis (from static camber/toe), tyre unloaded radius, rim width |
-| Pushrod | `pushrod_outer` (on LCA or upright), `pushrod_inner` (rocker) |
+| Pushrod | `pushrod_outer` (on upright, both axles), `pushrod_inner` (rocker) |
 | Rocker | `rocker_pivot`, `rocker_axis` (direction), `rocker_spring` (spring pickup), `rocker_arb` (drop-link pickup, optional) |
 | Coilover | `spring_chassis` (chassis end); spring rate, free length, preload; damper stroke limits |
 | ARB | Per axle: type (`torsional` / `flexural`), bar pivot points, arm length, drop-link points, material + section → stiffness |
@@ -87,7 +87,7 @@ front:
   hardpoints:           # left side, metres, ISO 8855
     uca_front: [ 0.130, 0.250, 0.290]
     ...
-  pushrod_mount: lca    # lca | upright
+  pushrod_mount: upright  # upright (default, both axles) | lca (kept as option)
   coilover: {k: 35000.0, free_length: 0.200, preload: 0.0}
   arb: {type: torsional, ...}
   steering: {c_factor: 0.090, rack_travel: [-0.030, 0.030]}
@@ -120,7 +120,8 @@ Constraint equations:
 3. |`tie_outer` − `tie_inner`(rack)| = tie rod length (1 eq).
 4. Driver: wheel-centre z (or contact-patch z) = prescribed value (1 eq).
 
-That gives 8 equations in 8 unknowns. The rocker is then a decoupled
+That gives 8 equations in 8 unknowns. The pushrod is mounted on the
+upright, so `pushrod_outer` moves with the upright pose (R, t). The rocker is then a decoupled
 1-unknown problem: |`pushrod_outer` − `pushrod_inner`(φ_R)| = pushrod
 length. Spring length and ARB drop-link motion follow explicitly.
 
@@ -240,6 +241,11 @@ Plot code consumes the tidy result tables only. It never calls the solver.
 
 ## 7. Optimization
 
+> **Deferred.** The kinematics side (v0.1–v0.6) is built first.
+> Variables, constraints and objectives get decided in a later grilling
+> round, before v0.7. The list below is a draft only. The kinematic core
+> is still designed as pure functions so the optimizer can plug in later.
+
 1. **Design variables**: a user-chosen subset of hardpoint coordinates with bounds (YAML).
 2. **Geometric constraints**:
    - packaging boxes (e.g. inboard points inside the chassis envelope, outboard inside the rim)
@@ -319,7 +325,7 @@ The package name `suspkin` is a placeholder.
   - single-lever rocker → analytic motion ratio
 - **Numerical cross-check**: compare motion ratio and wheel rate from finite differences against the virtual-work result.
 - **Regression**: golden CSVs for the reference FS geometry, compared within tolerance.
-- **External reference**: if real hardpoints or OptimumK / Lotus results become available, add them as regression cases (open question O1).
+- **External reference**: if real hardpoints or OptimumK / Lotus results become available, add them as regression cases (decision O1).
 
 ---
 
@@ -358,15 +364,23 @@ The package name `suspkin` is a placeholder.
 
 ---
 
-## 12. Open questions
+## 12. Decisions log
 
-| # | Question | Proposed default |
+| # | Topic | Decision |
 |---|---|---|
-| O1 | Real hardpoints or reference-tool results to validate against? | Build a reference FS geometry; validate analytically |
-| O2 | Pushrod mounted on LCA or on upright? | Configurable per axle; default LCA |
-| O3 | ARB fitted on which axle(s)? | Both, each optional |
-| O4 | Brakes inboard or outboard? Drive layout? | Outboard brakes, RWD; configurable |
-| O5 | Tyre: rigid disc or loaded radius? | Rigid disc in v0.x; loaded radius as an option |
-| O6 | Optimization: which variables, constraints, objectives first? | Front bump steer + camber gain + RC height, inboard points free |
-| O7 | Package name? | `suspkin` |
-| O8 | GitHub remote + CI? | Yes, once the user creates the repo |
+| D1 | Vehicle class | Formula Student |
+| D2 | Architecture | Double wishbone + pushrod + rocker + coilover on both axles; front rack, rear toe link |
+| D3 | Physics level | Rigid-body kinematics only (no forces, no compliance) for v0.x |
+| D4 | Solver | Own constraint solver on scipy, with continuation |
+| D5 | Frame and units | ISO 8855, SI |
+| D6 | Motions | All: corner bump/rebound, heave, roll, pitch, steer, combined |
+| D7 | Metrics | Every metric in §5 |
+| D8 | FEM / NN | Deferred to future phases |
+| O1 | Validation data | User **may** have real hardpoints. v0.x uses a reference FS geometry + analytical tests. The YAML schema must accept user hardpoints directly so their data drops in as a regression case later. |
+| O2 | Pushrod mount | **Upright**, both axles. LCA mount kept as an optional setting. |
+| O3 | ARB | **Both axles**. Type (torsional / flexural) chosen per axle in YAML. |
+| O4 | Brakes / drive | **Outboard** brakes on both axles, **RWD**. Configurable. |
+| O5 | Tyre | **Rigid disc** for now. Loaded radius later. |
+| O6 | Optimization | **Deferred**. Kinematics first; optimization design gets its own grilling round before v0.7. |
+| O7 | Package name | `suspkin` |
+| O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |
