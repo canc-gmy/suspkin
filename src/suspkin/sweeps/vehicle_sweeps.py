@@ -1,0 +1,113 @@
+"""Vehicle-level sweeps (heave, roll, pitch or rack) and their result table."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+
+import numpy as np
+import pandas as pd
+from numpy.typing import ArrayLike
+
+from suspkin.geometry.corners import Corner, CornerId, build_corners
+from suspkin.geometry.models import Vehicle
+from suspkin.kinematics.rocker import KinematicsError
+from suspkin.kinematics.vehicle import VehicleState, solve_vehicle
+from suspkin.metrics.table import metrics_frame
+
+_VARS = ("heave", "roll", "pitch", "rack")
+_CORNERS: tuple[CornerId, ...] = ("FL", "FR", "RL", "RR")
+_MAX_HALVINGS = 6
+
+
+def _reach(
+    vehicle: Vehicle, corners: dict[CornerId, Corner], prev: VehicleState, target: dict[str, float]
+) -> VehicleState:
+    """Solve ``target`` from ``prev``; halve the step in input space on failure."""
+
+    def go(src: VehicleState, tgt: dict[str, float], depth: int) -> VehicleState:
+        try:
+            return solve_vehicle(vehicle, corners, guess=src, **tgt)
+        except KinematicsError:
+            if depth >= _MAX_HALVINGS:
+                raise
+        cur = {k: float(getattr(src, k)) for k in _VARS}
+        mid = {k: 0.5 * (cur[k] + tgt[k]) for k in _VARS}
+        return go(go(src, mid, depth + 1), tgt, depth + 1)
+
+    return go(prev, target, 0)
+
+
+def sweep_vehicle(
+    vehicle: Vehicle,
+    *,
+    heave: ArrayLike | None = None,
+    roll: ArrayLike | None = None,
+    pitch: ArrayLike | None = None,
+    rack: ArrayLike | None = None,
+    base: Mapping[str, float] | None = None,
+) -> list[VehicleState]:
+    """Sweep exactly one body input; ``base`` sets the others (default 0).
+
+    Continuation runs outward from the sweep value nearest to 0. Returns one state per
+    sweep value, in input order.
+    """
+    given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
+    swept = [k for k, v in given.items() if v is not None]
+    if len(swept) != 1:
+        raise ValueError("exactly one of heave, roll, pitch, rack must be an array")
+    name = swept[0]
+    fixed = {k: 0.0 for k in _VARS}
+    for k, v in (base or {}).items():
+        if k not in _VARS:
+            raise ValueError(f"unknown base key {k!r}; expected one of {_VARS}")
+        fixed[k] = float(v)
+    vals = np.atleast_1d(np.asarray(given[name], dtype=np.float64))
+    if vals.size == 0:
+        return []
+    corners = build_corners(vehicle)
+    start = int(np.argmin(np.abs(vals)))
+    out: dict[int, VehicleState] = {}
+    first = {**fixed, name: float(vals[start])}
+    try:
+        out[start] = solve_vehicle(vehicle, corners, **first)  # type: ignore[arg-type]
+    except KinematicsError:
+        out[start] = _reach(vehicle, corners, solve_vehicle(vehicle, corners), first)
+    for direction in (1, -1):
+        prev = out[start]
+        i = start + direction
+        while 0 <= i < vals.size:
+            prev = _reach(vehicle, corners, prev, {**fixed, name: float(vals[i])})
+            out[i] = prev
+            i += direction
+    return [out[i] for i in range(vals.size)]
+
+
+def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFrame:
+    """One row per state (SI units).
+
+    Columns: ``heave``, ``roll``, ``pitch``, ``rack``; per corner (prefix ``FL_`` ...)
+    the :func:`suspkin.metrics.metrics_frame` columns (``FL_travel`` included, the
+    corner ``rack`` column replaced by the shared ``rack``), ``<id>_cp_x/_y/_z`` (contact
+    point, body frame); and ``arb_front_elastic`` / ``arb_rear_elastic`` (NaN without ARB).
+    """
+    corners = build_corners(vehicle)
+    data: dict[str, object] = {k: [float(getattr(s, k)) for s in states] for k in _VARS}
+    parts = [pd.DataFrame(data)]
+    for cid in _CORNERS:
+        mf = metrics_frame([s.corners[cid] for s in states], corners[cid]).drop(columns=["rack"])
+        mf = mf.add_prefix(f"{cid}_")
+        cp = np.array([s.contact_points[cid] for s in states], dtype=np.float64).reshape(-1, 3)
+        cpf = pd.DataFrame({f"{cid}_cp_{a}": cp[:, i] for i, a in enumerate("xyz")})
+        parts += [mf, cpf]
+    for axle in ("front", "rear"):
+        parts.append(
+            pd.DataFrame(
+                {
+                    f"arb_{axle}_elastic": [
+                        np.nan if s.arb[axle] is None else float(s.arb[axle].elastic)  # type: ignore[union-attr]
+                        for s in states
+                    ]
+                }
+            )
+        )
+    return pd.concat(parts, axis=1)
