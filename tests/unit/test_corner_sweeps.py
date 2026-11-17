@@ -30,12 +30,71 @@ def test_unsorted_travels_keep_input_order() -> None:
     assert [s.travel for s in states] == travels
 
 
-def test_sweep_61_steps_is_fast() -> None:
+# Work budgets for a 33-point sweep_corner (FL of the fixture): about 1.5x the counts
+# measured with the analytic-Jacobian Newton solver (130 evaluations, 97 with Jacobian).
+SWEEP33_EVAL_BUDGET = 200
+SWEEP33_JAC_BUDGET = 150
+# Wall-clock limit (perf marker): about 2x+ the time measured on the development PC.
+SWEEP33_SECONDS = 0.1
+
+
+def test_sweep_33_work_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    from suspkin.kinematics import corner as corner_mod
+
+    counts = {"eval": 0, "jac": 0}
+    real = corner_mod._eval
+
+    def counting(*args, **kwargs):  # type: ignore[no-untyped-def]
+        counts["eval"] += 1
+        counts["jac"] += int(bool(args[-1]))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(corner_mod, "_eval", counting)
+    sweep_corner(fixture_corners()["FL"], np.linspace(-0.04, 0.04, 33))
+    assert counts["eval"] < SWEEP33_EVAL_BUDGET
+    assert counts["jac"] < SWEEP33_JAC_BUDGET
+
+
+@pytest.mark.perf
+def test_sweep_33_wall_clock() -> None:
     c = fixture_corners()["FL"]
     sweep_corner(c, [0.0, 0.001])  # warm-up
     t0 = time.perf_counter()
-    sweep_corner(c, np.linspace(-0.03, 0.03, 61))
-    assert time.perf_counter() - t0 < 1.0
+    sweep_corner(c, np.linspace(-0.04, 0.04, 33))
+    assert time.perf_counter() - t0 < SWEEP33_SECONDS
+
+
+def test_coarse_sweep_matches_fine_sweep() -> None:
+    c = fixture_corners()["FL"]
+    fine = sweep_corner(c, np.linspace(-0.04, 0.04, 81))
+    coarse = sweep_corner(c, [-0.04, 0.0, 0.04])
+    for cs, fs in zip(coarse, (fine[0], fine[40], fine[80]), strict=True):
+        for name in ("theta_uca", "theta_lca", "psi", "rocker_angle", "coilover_length"):
+            assert getattr(cs, name) == pytest.approx(getattr(fs, name), abs=1e-9)
+        for name, pt in fs.points.items():
+            np.testing.assert_allclose(cs.points[name], pt, atol=1e-9)
+
+
+@pytest.mark.parametrize(("travel", "rack"), [(0.02, 0.0), (0.04, 0.0), (-0.03, 0.0), (0.01, 0.02)])
+def test_far_guess_matches_cold_solve(travel: float, rack: float) -> None:
+    c = fixture_corners()["FL"]
+    static = solve_corner(c, 0.0)
+    far = solve_corner(c, travel, rack, guess=static)
+    cold = solve_corner(c, travel, rack)
+    for name in ("theta_uca", "theta_lca", "psi", "rocker_angle"):
+        assert getattr(far, name) == pytest.approx(getattr(cold, name), abs=1e-9)
+    for name, pt in cold.points.items():
+        np.testing.assert_allclose(far.points[name], pt, atol=1e-9)
+
+
+def test_hybr_not_used_in_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    from suspkin.kinematics import corner as corner_mod
+
+    calls = []
+    real = corner_mod.root
+    monkeypatch.setattr(corner_mod, "root", lambda *a, **k: calls.append(1) or real(*a, **k))
+    sweep_corner(fixture_corners()["FL"], np.linspace(-0.04, 0.04, 33))
+    assert calls == []
 
 
 def test_sweep_far_travel_raises() -> None:

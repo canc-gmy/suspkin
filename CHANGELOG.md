@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Faster corner solver: own damped Newton with an analytic Jacobian (scipy `hybr` kept as
+  fallback), scalar fast path without numpy calls on 3-vectors, one `_Ctx` per sweep and a
+  linear predictor in continuation. Results unchanged within 1e-9.
+- Branch-jump guard: a guided solve that moves an angle by more than 0.05 rad from its
+  guess is rejected and the continuation step is halved. `solve_corner` with a far guess
+  now reaches the target by staged continuation from the guess.
+
+### Fixed
+
+- Timing tests no longer depend on the machine: work-count budgets plus wall-clock checks
+  under the `perf` pytest marker.
+
 ## [0.6.0] - 2026-11-17
 
 ### Added
