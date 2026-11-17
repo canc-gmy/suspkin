@@ -22,31 +22,139 @@ def version() -> None:
     typer.echo(f"suspkin {__version__}")
 
 
+def _pose_kwargs(
+    heave: float | None, roll: float | None, pitch: float | None, rack: float | None
+) -> dict[str, float]:
+    """CLI pose (mm, deg) -> solver kwargs (m, rad); only the given entries."""
+    import math
+
+    out: dict[str, float] = {}
+    if heave is not None:
+        out["heave"] = heave / 1000.0
+    if roll is not None:
+        out["roll"] = math.radians(roll)
+    if pitch is not None:
+        out["pitch"] = math.radians(pitch)
+    if rack is not None:
+        out["rack"] = rack / 1000.0
+    return out
+
+
 @app.command()
 def show(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
     out: Annotated[Path | None, typer.Option("--out", help="Save figure to this path.")] = None,
     labels: Annotated[bool, typer.Option("--labels", help="Label hardpoints.")] = False,
+    heave: Annotated[float | None, typer.Option("--heave", help="Body heave [mm].")] = None,
+    roll: Annotated[float | None, typer.Option("--roll", help="Body roll [deg].")] = None,
+    pitch: Annotated[float | None, typer.Option("--pitch", help="Body pitch [deg].")] = None,
+    rack: Annotated[float | None, typer.Option("--rack", help="Rack displacement [mm].")] = None,
+    html: Annotated[
+        bool, typer.Option("--html", help="Write an interactive plotly HTML (needs the viz extra).")
+    ] = False,
 ) -> None:
-    """Show the static 3D suspension geometry of a vehicle."""
+    """Show the 3D suspension geometry, static or at a solved body pose.
+
+    On this command heave and rack are in MILLIMETRES and roll and pitch in DEGREES
+    (the vsweep command takes heave/rack in metres). With none of them given the static
+    geometry is drawn. --html writes an interactive file (to --out, default
+    <vehicle>.html in the current directory) instead of a matplotlib figure.
+    """
     try:
         vehicle = load_vehicle(vehicle_yaml)
     except VehicleConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
 
+    state = None
+    pose = _pose_kwargs(heave, roll, pitch, rack)
+    if pose:
+        from suspkin.kinematics import KinematicsError, solve_vehicle
+
+        try:
+            state = solve_vehicle(vehicle, **pose)  # type: ignore[arg-type]
+        except (KinematicsError, ValueError) as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+    if html:
+        from suspkin.plotting.interactive import interactive_view
+
+        target = out if out is not None else Path(f"{vehicle_yaml.stem}.html")
+        try:
+            interactive_view(vehicle, state, target)
+        except ImportError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+        typer.echo(str(target))
+        return
+
     import matplotlib.pyplot as plt
 
     from suspkin.plotting import plot_vehicle_3d
 
     if out is not None:
-        fig = plot_vehicle_3d(vehicle, show_labels=labels)
+        fig = plot_vehicle_3d(vehicle, state=state, show_labels=labels)
         fig.savefig(out, dpi=200)
         typer.echo(str(out))
         return
     fig = plt.figure(figsize=(9, 6))
-    plot_vehicle_3d(vehicle, fig.add_subplot(projection="3d"), show_labels=labels)
+    plot_vehicle_3d(vehicle, fig.add_subplot(projection="3d"), state=state, show_labels=labels)
     plt.show()
+
+
+@app.command()
+def animate(
+    vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
+    out: Annotated[Path, typer.Option("--out", help="Output .gif (or .mp4 with ffmpeg).")],
+    heave: Annotated[
+        tuple[float, float] | None, typer.Option("--heave", help="Heave range MIN MAX [mm].")
+    ] = None,
+    roll: Annotated[
+        tuple[float, float] | None, typer.Option("--roll", help="Roll range MIN MAX [deg].")
+    ] = None,
+    pitch: Annotated[
+        tuple[float, float] | None, typer.Option("--pitch", help="Pitch range MIN MAX [deg].")
+    ] = None,
+    rack: Annotated[
+        tuple[float, float] | None, typer.Option("--rack", help="Rack range MIN MAX [mm].")
+    ] = None,
+    steps: Annotated[int, typer.Option("--steps", min=2, help="Number of frames.")] = 15,
+    fps: Annotated[int, typer.Option("--fps", min=1, help="Frames per second.")] = 15,
+) -> None:
+    """Animate a body-pose sweep (heave, roll, pitch or rack) of the 3D geometry.
+
+    Units match the show command: heave and rack in MILLIMETRES, roll and pitch in
+    DEGREES (vsweep uses metres for heave and rack). Give exactly one sweep variable.
+    """
+    import numpy as np
+
+    from suspkin.kinematics import KinematicsError
+    from suspkin.sweeps import sweep_vehicle
+
+    given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
+    chosen = [k for k, v in given.items() if v is not None]
+    if len(chosen) != 1:
+        typer.echo("error: give exactly one of --heave, --roll, --pitch, --rack", err=True)
+        raise typer.Exit(code=2)
+    try:
+        veh = load_vehicle(vehicle_yaml)
+    except VehicleConfigError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    name = chosen[0]
+    lo, hi = given[name]  # type: ignore[misc]
+    scale = _pose_kwargs(1.0, 1.0, 1.0, 1.0)[name]
+    values = np.linspace(lo, hi, steps) * scale
+    from suspkin.plotting.animation import animate_sweep
+
+    try:
+        states = sweep_vehicle(veh, **{name: values})  # type: ignore[arg-type]
+        animate_sweep(veh, states, out, fps=fps)
+    except (KinematicsError, ValueError, RuntimeError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(str(out))
 
 
 @app.command()

@@ -5,11 +5,13 @@ from pathlib import Path
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
+import pytest
 from typer.testing import CliRunner
 
 from suspkin.cli import app
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
+PNG_MAGIC = bytes([0x89, 0x50, 0x4E, 0x47])
 runner = CliRunner()
 
 
@@ -17,7 +19,7 @@ def test_show_writes_png(tmp_path: Path) -> None:
     out = tmp_path / "v.png"
     res = runner.invoke(app, ["show", str(FIXTURE), "--out", str(out)])
     assert res.exit_code == 0, res.output
-    assert out.read_bytes()[:4] == b"\x89PNG"
+    assert out.read_bytes()[:4] == PNG_MAGIC
     assert str(out) in res.output
 
 
@@ -160,3 +162,33 @@ def test_vsweep_pivot_option(tmp_path: Path) -> None:
     assert res.exit_code == 0, res.output
     a, b = pd.read_csv(out_a), pd.read_csv(out_b)
     assert abs(a["FL_travel"].iloc[-1] - b["FL_travel"].iloc[-1]) > 1e-4
+
+
+def test_show_roll_writes_png(tmp_path: Path) -> None:
+    out = tmp_path / "r.png"
+    args = ["show", str(FIXTURE), "--roll", "2", "--heave", "5", "--out", str(out)]
+    res = runner.invoke(app, args)
+    assert res.exit_code == 0, res.output
+    assert out.read_bytes()[:4] == PNG_MAGIC
+
+
+def test_show_html(tmp_path: Path) -> None:
+    pytest.importorskip("plotly")
+    out = tmp_path / "v.html"
+    res = runner.invoke(app, ["show", str(FIXTURE), "--roll", "1", "--html", "--out", str(out)])
+    assert res.exit_code == 0, res.output
+    assert "plotly" in out.read_text(encoding="utf-8")
+
+
+def test_animate_roll_gif(tmp_path: Path) -> None:
+    out = tmp_path / "a.gif"
+    res = runner.invoke(
+        app, ["animate", str(FIXTURE), "--roll", "-1", "1", "--steps", "3", "--out", str(out)]
+    )
+    assert res.exit_code == 0, res.output
+    assert out.read_bytes()[:3] == b"GIF"
+
+
+def test_animate_requires_one_variable(tmp_path: Path) -> None:
+    res = runner.invoke(app, ["animate", str(FIXTURE), "--out", str(tmp_path / "a.gif")])
+    assert res.exit_code == 2

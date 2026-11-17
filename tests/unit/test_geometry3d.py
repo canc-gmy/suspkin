@@ -10,9 +10,10 @@ import numpy as np
 import pytest
 from matplotlib.figure import Figure
 
-from suspkin.geometry import load_vehicle
+from suspkin.geometry import build_corners, load_vehicle
+from suspkin.kinematics import solve_vehicle
 from suspkin.plotting import plot_vehicle_3d, wheel_spin_axis
-from suspkin.plotting.geometry3d import GROUP_COLORS, _wheel_basis
+from suspkin.plotting.geometry3d import GROUP_COLORS, _wheel_basis, vehicle_segments
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
 Side = Literal["left", "right"]
@@ -79,5 +80,58 @@ def test_arb_drawing_beam_and_torsional_bar() -> None:
     ys = [np.asarray(ln.get_data_3d()[1]) for ln in arb_lines]
     # torsional tube: two points at the mirrored pivots (y = +-0.20)
     assert any(len(y) == 2 and np.allclose(y, [0.20, -0.20]) for y in ys)
-    # beam: end - centre - end through y = 0
-    assert any(len(y) == 3 and np.allclose(y, [0.2342, 0.0, -0.2342]) for y in ys)
+    # beam: end - centre and centre - end, meeting on y = 0
+    assert any(np.allclose(y, [0.2342, 0.0]) for y in ys)
+    assert any(np.allclose(y, [-0.2342, 0.0]) for y in ys)
+
+
+def _has_segment(segs: list[tuple[np.ndarray, np.ndarray]], a: np.ndarray, b: np.ndarray) -> bool:
+    return any(np.allclose(p, a) and np.allclose(q, b) for p, q in segs)
+
+
+def test_static_segments_match_hardpoints() -> None:
+    veh = load_vehicle(FIXTURE)
+    scene = vehicle_segments(veh)
+    for c in build_corners(veh).values():
+        p = c.points
+        assert _has_segment(scene.segments["wishbones"], p["uca_front"], p["uca_outer"])
+        assert _has_segment(scene.segments["tie rod"], p["tie_inner"], p["tie_outer"])
+        assert _has_segment(scene.segments["pushrod"], p["pushrod_outer"], p["pushrod_inner"])
+        assert _has_segment(scene.segments["coilover"], p["rocker_spring"], p["spring_chassis"])
+    assert len(scene.wheels) == 4
+    np.testing.assert_allclose(scene.ground_normal, [0, 0, 1])
+
+
+def test_zero_pose_state_equals_static() -> None:
+    veh = load_vehicle(FIXTURE)
+    a = vehicle_segments(veh)
+    b = vehicle_segments(veh, solve_vehicle(veh))
+    for group, segs in a.segments.items():
+        for (p0, p1), (q0, q1) in zip(segs, b.segments[group], strict=True):
+            np.testing.assert_allclose(p0, q0, atol=1e-6)
+            np.testing.assert_allclose(p1, q1, atol=1e-6)
+    for ca, cb in zip(a.wheels, b.wheels, strict=True):
+        np.testing.assert_allclose(ca, cb, atol=1e-6)
+
+
+def test_rolled_pose_moves_wheels_in_body_frame() -> None:
+    veh = load_vehicle(FIXTURE)
+    corners = build_corners(veh)
+    st = solve_vehicle(veh, roll=np.radians(2.0))
+    # body frame fixed, ground moves: the left (lifted) corner droops, the right bumps
+    assert st.corners["FL"].points["wheel_center"][2] < corners["FL"].points["wheel_center"][2]
+    assert st.corners["FR"].points["wheel_center"][2] > corners["FR"].points["wheel_center"][2]
+    scene = vehicle_segments(veh, st)
+    assert abs(scene.ground_normal[1]) > 1e-3
+    # chassis points do not move
+    p0, p1 = corners["FL"].points, st.corners["FL"].points
+    np.testing.assert_allclose(p1["uca_front"], p0["uca_front"])
+    # the drawn wheel circle is centred on the moved wheel centre
+    ctr = scene.wheels[0][:-1].mean(axis=0)
+    np.testing.assert_allclose(ctr, p1["wheel_center"], atol=1e-3)
+
+
+def test_plot_with_state_returns_figure() -> None:
+    veh = load_vehicle(FIXTURE)
+    fig = plot_vehicle_3d(veh, state=solve_vehicle(veh, heave=0.01, roll=0.02))
+    assert isinstance(fig, Figure)
