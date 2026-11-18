@@ -9,11 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Experimental neural-network surrogate `suspkin.surrogate` (v1.1, see `docs/DESIGN_PLAN.md`
+  §13 and `docs/ARCHITECTURE.md` section 15). Not exported in `suspkin.__all__`; its API may
+  change in minor releases.
+  - Latin-hypercube dataset of the left corner of each axle on a fixed grid, sharded and
+    resumable; channel registry and corner extractor.
+  - Per-axle MLP with a regression and a validity head, Optuna architecture search, and
+    validation against a test split.
+  - Analytic vehicle layer: roll and pitch travel from tyre contact, roll centre, anti-features,
+    roll stiffness, TLLTD, steering and the vehicle summary, with a measured layer error.
+  - `SurrogateProblem` (the v0.8 `Problem` on the networks) and an active-learning optimizer
+    with a trust region, FOM verification of every reported design, fine-tuning and run folders.
+- Study YAML: optional `surrogate` block (`grid`, `dataset`, `training`, `hpo`,
+  `active_learning`); study schema 1 is otherwise unchanged.
+- CLI (experimental): `suspkin surrogate sample`, `suspkin surrogate train`,
+  `suspkin surrogate validate` (all with `--root`) and `suspkin optimize --surrogate DIR`
+  with `--device auto|cpu|cuda`.
+- Surrogate validation plots and active-learning figures (`suspkin.plotting.surrogate`).
+- Benchmark study `configs/studies/fs_reference_surrogate.yaml` (90 variables) and
+  `scripts/benchmark_surrogate.py`. The benchmark is not yet run.
+- Optional `surrogate` extra (`torch`, `optuna`): CUDA wheels on Windows, CPU wheels on Linux.
 - Vectorised metric kernels `suspkin.metrics.batch` (`corner_metric_arrays`,
   `joint_angle_arrays`): the same columns as `metrics_frame` / `joint_angles_frame`, computed
   over all states at once.
-- Experimental `suspkin.surrogate` (v1.1 surrogate work, see `docs/DESIGN_PLAN.md` §13):
-  optional `surrogate.grid` study block, output channel registry and the corner extractor.
 - `scripts/profile_fom.py`: timing breakdown of one full-order evaluation.
 
 ### Changed
@@ -22,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   tables, `states_to_frame` and `vehicle_frame` are built from the vectorised kernels, and
   the corner pose and rocker use the scalar fast path. Results are unchanged (max deviation
   9e-16 against the per-state functions; golden snapshots untouched).
+- Evaluator logic is faster: closed-form line fit and window fast paths.
+- Convex-hull cache in `optimize/regions.py`.
 
 ## [1.0.0] - 2026-11-18
 

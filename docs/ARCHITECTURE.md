@@ -1,12 +1,12 @@
 # suspkin architecture and mathematics
 
-> Version described: **suspkin 1.0.0** ([pyproject.toml](../pyproject.toml), [CHANGELOG.md](../CHANGELOG.md)).
+> Version described: **suspkin 1.0.0** ([pyproject.toml](../pyproject.toml), [CHANGELOG.md](../CHANGELOG.md)). [Section 15](#15-surrogate-v11-experimental) (surrogate) describes v1.1.0, which is unreleased.
 > Companion documents: [DESIGN_PLAN.md](DESIGN_PLAN.md) (design intent and decisions log), [CLAUDE.md](../CLAUDE.md) (project rules), [README.md](../README.md) (usage).
 >
 > Every formula, default and sign convention below was taken from the code. Citations such as
 > [corner.py:88](../src/suspkin/kinematics/corner.py#L88) point at the line where the statement is implemented. Where the code and the
 > design plan disagree, the code is described and the disagreement is listed in
-> [section 15](#15-known-gaps-discrepancies-limitations).
+> [section 16](#16-known-gaps-discrepancies-limitations).
 
 ## Contents
 
@@ -24,8 +24,9 @@
 12. [Tooling and workflow](#12-tooling-and-workflow)
 13. [Extending the code](#13-extending-the-code)
 14. [Optimization (v0.7–v0.8)](#14-optimization-v07v08)
-15. [Known gaps / discrepancies / limitations](#15-known-gaps-discrepancies-limitations)
-16. [Glossary](#16-glossary)
+15. [Surrogate (v1.1, experimental)](#15-surrogate-v11-experimental)
+16. [Known gaps / discrepancies / limitations](#16-known-gaps-discrepancies-limitations)
+17. [Glossary](#17-glossary)
 
 ---
 
@@ -47,8 +48,8 @@ What the model **is**:
 * quasi-static: no inertia, no time, no tyre forces;
 * a rigid-disc tyre (contact patch = lowest point of the wheel circle).
 
-What it is **not** (yet): a force solver, FEM of members, a neural-network surrogate, or an
-elasto-kinematic (K&C) model ([DESIGN_PLAN.md sections 1 and 11](DESIGN_PLAN.md)). The optimizer
+What it is **not** (yet): a force solver, FEM of members, stress prediction, or an
+elasto-kinematic (K&C) model ([DESIGN_PLAN.md sections 1 and 11](DESIGN_PLAN.md)). A kinematic neural-network surrogate is experimental in v1.1.0 ([section 15](#15-surrogate-v11-experimental)). The optimizer
 (objectives, drivers, `suspkin optimize`) was added in v0.8.0, see [section 14](#14-optimization-v07v08).
 The `opt` extra (`pymoo`) is used by the NSGA-II driver ([pyproject.toml](../pyproject.toml)).
 
@@ -60,7 +61,7 @@ The `opt` extra (`pymoo`) is used by the NSGA-II driver ([pyproject.toml](../pyp
 * SI units everywhere internally and in YAML/CSV/JSON; mm and deg only at the CLI and in figures.
 * **Plotting reads result tables** (pandas frames or solved states) and does not run the solver itself;
   the only solver call on the output side is the report layer's 3D section
-  ([builder.py:144](../src/suspkin/report/builder.py#L144), see [section 15](#15-known-gaps-discrepancies-limitations)).
+  ([builder.py:144](../src/suspkin/report/builder.py#L144), see [section 16](#16-known-gaps-discrepancies-limitations)).
 * One source of truth for geometry: the YAML file validated by pydantic.
 
 ### 1.3 Data-flow pipeline
@@ -259,10 +260,12 @@ veichle-dynamics/
 ├── configs/
 │   ├── vehicles/fs_reference.yaml reference Formula Student car (the main worked example)
 │   ├── vehicles/.gitkeep
-│   └── studies/                   fs_reference_constraints.yaml (v0.7), fs_reference_optimize.yaml (v0.8 demo)
+│   └── studies/                   fs_reference_constraints.yaml (v0.7), fs_reference_optimize.yaml (v0.8 demo), fs_reference_surrogate.yaml (v1.1 benchmark)
 ├── scripts/
 │   ├── setup.ps1                  one-shot setup (Windows): installs uv if missing, `uv sync --all-extras`
-│   └── setup.sh                   same for Linux and macOS
+│   ├── setup.sh                   same for Linux and macOS
+│   ├── profile_fom.py             timing breakdown of one FOM evaluation (v1.1)
+│   └── benchmark_surrogate.py     resumable surrogate vs direct DE benchmark (v1.1, not yet run)
 ├── docs/
 │   ├── DESIGN_PLAN.md             design intent, milestones, decisions log (D1-D9, O1-O8)
 │   ├── ARCHITECTURE.md            this document
@@ -292,7 +295,8 @@ veichle-dynamics/
 │   │   ├── table.py               metrics_frame, add_gradients, static_summary
 │   │   ├── vehicle.py             anti-features, roll stiffness/gradient, load transfer, steering, pitch centre
 │   │   ├── vehicle_summary.py     the static vehicle summary (VehicleSummary)
-│   │   └── joints.py              body rotations (Kabsch), rod-end and ball-joint misalignment angles (v0.7)
+│   │   ├── joints.py              body rotations (Kabsch), rod-end and ball-joint misalignment angles (v0.7)
+│   │   └── batch.py               vectorised corner kernels over N states, shared by the FOM and the surrogate (v1.1)
 │   ├── sweeps/
 │   │   ├── corner_sweeps.py       states_to_frame
 │   │   └── vehicle_sweeps.py      sweep_vehicle, vehicle_frame
@@ -303,10 +307,28 @@ veichle-dynamics/
 │   │   ├── animation.py           GIF / MP4 sweep animation
 │   │   ├── interactive.py         plotly HTML (optional `viz` extra)
 │   │   ├── regions.py             plot_study_3d: variable domains and keep-outs of a study (v0.7)
-│   │   └── optimization.py        convergence, Pareto front, parallel coordinates, constraint margins (v0.8)
+│   │   ├── optimization.py        convergence, Pareto front, parallel coordinates, constraint margins (v0.8)
+│   │   └── surrogate.py           surrogate validation plots and active-learning figures (v1.1)
 │   ├── report/
 │   │   ├── studies.py             run_standard_studies -> StudyResults
 │   │   └── builder.py             build_report -> folder with CSV/JSON/figures/HTML/MD
+│   ├── surrogate/                 neural-network surrogate, active learning (v1.1, experimental), section 15
+│   │   ├── channels.py            output channel registry (encodings, tolerances, axle membership)
+│   │   ├── grid.py                fixed travel x rack output grid per axle
+│   │   ├── extract.py             corner extractor: sweep -> channel tensor and mask
+│   │   ├── data_types.py          AxleDataset (sampling -> training contract)
+│   │   ├── sampling.py            sub design space per axle, Latin hypercube
+│   │   ├── dataset.py             sharded .npz dataset, sampling with resume, load
+│   │   ├── normalise.py           channel standardisation, POD basis (numpy)
+│   │   ├── model.py               per-axle MLP (regression and validity heads, torch)
+│   │   ├── train.py               resolve_device, masked loss, training, fine-tuning, evaluation
+│   │   ├── hpo.py                 Optuna architecture search (torch, optuna)
+│   │   ├── predict.py             batched inference from a saved axle model
+│   │   ├── workflow.py            train_surrogate, validate_surrogate
+│   │   ├── vehicle_layer.py       analytic vehicle layer (numpy), layer_error
+│   │   ├── evaluate.py            SurrogateEvaluator: networks -> corner states -> v0.8 evaluator
+│   │   ├── problem.py             SurrogateProblem (v0.8 Problem interface)
+│   │   └── active.py              active-learning optimizer, trust region, run folder
 │   └── optimize/                  study layer (v0.7) and optimizer (v0.8), section 14
 │       ├── spec.py                study models, load_study, objectives, optimizer block
 │       ├── regions.py             hexahedron map, inverse, signed distances
@@ -459,7 +481,7 @@ Joint misalignment angles (v0.7), used by the `joint_angle` constraint. `body_ro
 Vert, a\cdot b)$ in rad
 for one of `JOINTS` (`tie_inner`, `tie_outer`, `pushrod_outer`, `pushrod_inner`, `spring_chassis`, `rocker_spring`, `uca_outer`, `lca_outer`): rod ends compare the current link direction with the static one carried by the housing body, ball joints compare the stud axis
 (static `lca_outer -> uca_outer`) carried by the upright with the same axis carried by the wishbone. `axis` overrides the stud/bore axis (approximate for rod ends). `joint_angles_frame(states, corner)` gives columns `joint_<name>` over a sweep.
-Evaluated, not enforced by the solver ([section 15](#15-known-gaps-discrepancies-limitations)).
+Evaluated, not enforced by the solver ([section 16](#16-known-gaps-discrepancies-limitations)).
 
 #### 3.2.14 `metrics/actuation.py` and `metrics/arb.py`
 
@@ -503,6 +525,12 @@ The study layer (v0.7) and the optimizer (v0.8). `optimize/__init__.py` re-expor
 * `drivers.py`: `run_optimization` and the method drivers ([14.6](#146-drivers)).
 * `outputs.py`: run folder writer ([14.7](#147-run-folder-and-outputs)).
 
+
+---
+
+#### 3.2.20 `surrogate/*`, `metrics/batch.py`, `plotting/surrogate.py` (v1.1, experimental)
+
+Purpose: the neural-network surrogate of the corner kinematics, the analytic vehicle layer and the active-learning optimizer; the batch kernels are shared by the FOM and the surrogate. Data flow, folder layout, CLI and limitations are in [section 15](#15-surrogate-v11-experimental). Entry points: `sample_axle`, `load_dataset` (`dataset.py`); `train_surrogate`, `validate_surrogate` (`workflow.py`); `SurrogateEvaluator` (`evaluate.py`); `SurrogateProblem` (`problem.py`); `vehicle_layer`, `layer_error` (`vehicle_layer.py`); `run_active_learning` (`active.py`); `corner_metric_arrays`, `joint_angle_arrays` (`metrics/batch.py`). The package is not exported in `suspkin.__all__`.
 
 ---
 
@@ -992,7 +1020,7 @@ Remarks:
 * Caster is measured in the x-z projection and KPI in the y-z projection of the steering axis (the usual definitions), so they are not true angles in orthogonal planes for a skew axis.
 * Scrub, trail and kingpin offset need $u_z\ne0$, guaranteed by the "UBJ above LBJ" validator.
 * In `vehicle_frame` the same functions run on a state whose `contact_patch` is replaced by the tilted-ground contact point ([vehicle_sweeps.py:137-140](../src/suspkin/sweeps/vehicle_sweeps.py#L137)); the "static" reference is still the body-frame
-  corner static pose, so under roll/pitch the shifts mix the tilted-ground contact point with the body-frame static point (this is how the code is written; see [15](#15-known-gaps-discrepancies-limitations)).
+  corner static pose, so under roll/pitch the shifts mix the tilted-ground contact point with the body-frame static point (this is how the code is written; see [16](#16-known-gaps-discrepancies-limitations)).
 
 ### 7.2 Instant centres, swing arms and roll centre
 
@@ -1608,7 +1636,7 @@ Snapshots are rewritten only on purpose with `python -m uv run pytest tests/regr
 | pytest | `testpaths = ["tests"]`, `addopts = "-ra"` | |
 
 **Pre-commit** ([.pre-commit-config.yaml](../.pre-commit-config.yaml)): local hooks `ruff check --fix`, `ruff format`, `mypy src` (`pass_filenames: false`) through `python -m uv run`; plus `pre-commit-hooks` v5.0.0: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `mixed-line-ending --fix=lf`.
-Install with `uv run pre-commit install` (README). Tests are **not** part of pre-commit (the design plan says they should be; see [15](#15-known-gaps-discrepancies-limitations)).
+Install with `uv run pre-commit install` (README). Tests are **not** part of pre-commit (the design plan says they should be; see [16](#16-known-gaps-discrepancies-limitations)).
 
 **CI** ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): on push and pull request to `main`; matrix **ubuntu-latest, windows-latest** x Python **3.11, 3.12, 3.13**; steps `actions/checkout@v4`, `astral-sh/setup-uv@v5` (with the matrix Python), `uv sync --all-extras`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest -q -m "not examples" --cov=suspkin` (coverage floor `fail_under` in [pyproject.toml](../pyproject.toml)). Two more jobs: `docs` (`mkdocs build --strict`) and `examples` (ubuntu, Python 3.12, `pytest -m examples`).
 
@@ -1622,7 +1650,7 @@ Install with `uv run pre-commit install` (README). Tests are **not** part of pre
 
 * `main` stays green; feature branches `feat/<topic>`, `fix/<topic>`, `docs/<topic>` (plan).
 * **Conventional Commits** (`feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`, with scopes as in `fix(sweeps): ...`, `feat(report): ...` in the history).
-* **SemVer** annotated tag `vX.Y.Z` at the end of each milestone (plan section 11: v0.0.1 scaffold ... v0.6.0 plots and report; v0.7.0 optimization study spec; v0.8.0 optimizers; v1.0.0 stable kinematics).
+* **SemVer** annotated tag `vX.Y.Z` at the end of each milestone (plan section 11: v0.0.1 scaffold ... v0.6.0 plots and report; v0.7.0 optimization study spec; v0.8.0 optimizers; v1.0.0 stable kinematics; v1.1.0 surrogate, unreleased).
 * `CHANGELOG.md` in **Keep a Changelog** format; entries go under `## [Unreleased]` until a release.
 * Only the orchestrator commits (agents never do).
 
@@ -1693,7 +1721,7 @@ Add a function decorated `@app.command()` in [cli.py](../src/suspkin/cli.py): `t
   constraints map to existing signals: link lengths (validators), `toggle_margin`, `coilover_in_range`/stroke remaining, packaging regions (`inside`/`outside`). Joint angles are evaluated as constraints, not enforced in the solver. Cost note: sweeps are sequential Python (no vectorisation); the roll regression test budgets 3 s for 41 poses |
 | **Forces** (v1.x) | new `forces/` consuming `CornerState`/`VehicleState` | virtual work is already used for wheel and ARB rates; motion ratios, pushrod/rocker geometry and instant centres give the load paths; link loads need tyre load cases per axle (load-transfer formulas exist) |
 | **FEM** (next after forces) | new module fed by link loads | solved hardpoint positions per pose (every `CornerState.points`) provide geometry for member models |
-| **NN surrogate** (after FEM) | behind the same `evaluate`/`Problem` interface as the optimizer | `history.csv` of an optimization run is ready-made training data: unit-cube `x_*`, hardpoint coordinates `p_*`, objectives `f_*`, constraints `g_*` and `status` per evaluation ([14.7](#147-run-folder-and-outputs)); tidy frames and CSV export also allow Sobol/LHS dataset generation as a loop over `run_standard_studies` |
+| **NN surrogate** (v1.1, implemented, experimental) | behind the same `evaluate`/`Problem` interface as the optimizer: `SurrogateProblem` subclasses `Problem` | Training data are FOM corner sweeps on a fixed grid, sampled by Latin hypercube, not the `history.csv` of optimization runs. See [section 15](#15-surrogate-v11-experimental). |
 
 ---
 
@@ -2008,17 +2036,149 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 - The pool parallelises across designs only. Each evaluation still runs its sweeps sequentially, so
   one evaluation costs one solve per sweep.
 - Joint angles are evaluated as study constraints only; the solver does not enforce them
-  ([section 15](#15-known-gaps-discrepancies-limitations)).
+  ([section 16](#16-known-gaps-discrepancies-limitations)).
 - The demo budget (300 evaluations, 15 min) is a smoke run. A real study needs thousands of
   evaluations.
 
 ---
 
-## 15. Known gaps / discrepancies / limitations
+## 15. Surrogate (v1.1, experimental)
+
+**Status**: implemented in v1.1.0 (unreleased). Design and decisions: [DESIGN_PLAN.md section 13](DESIGN_PLAN.md) and the S-decisions in [section 12](DESIGN_PLAN.md). The benchmark against direct DE is **not yet run** ([15.8](#158-limitations)). `suspkin.surrogate` is experimental ([stability](guides/stability.md)): its API may change in minor releases and it is not exported in `suspkin.__all__`. Training and inference need the `surrogate` extra (`torch`, `optuna`). Torch is imported only by the training and prediction modules, never by the FOM worker processes.
+
+The surrogate predicts the **left corner** of each axle on a fixed grid (front: wheel travel × rack; rear: wheel travel). Two networks (one per axle) propose designs. An analytic vehicle layer turns the curves into vehicle results. The unchanged v0.8 evaluator then gives the constraints and objectives. Every design the optimizer reports is verified with the full-order model (FOM).
+
+### 15.1 Package map
+
+`src/suspkin/surrogate/`, one line per module:
+
+| Module | Role |
+|---|---|
+| [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry: name, source column, encoding (`value`, `cos`, `sin`), SI tolerance, axle membership. 32 front and 31 rear channels. |
+| [grid.py](../src/suspkin/surrogate/grid.py) | Fixed output grid per axle (`AxleGrid`): travel and, on the front, rack; both contain 0. |
+| [extract.py](../src/suspkin/surrogate/extract.py) | Corner extractor: one design's left-corner sweep gives the channel tensor `Y` and the validity mask. |
+| [data_types.py](../src/suspkin/surrogate/data_types.py) | `AxleDataset`: the in-memory contract between sampling and training. |
+| [sampling.py](../src/suspkin/surrogate/sampling.py) | Sub design space of one axle (`AxleSpace`) and the Latin hypercube (`lhs`). |
+| [dataset.py](../src/suspkin/surrogate/dataset.py) | Sharded `.npz` dataset: sampling with resume, append, load, split assignment, meta hashes. |
+| [normalise.py](../src/suspkin/surrogate/normalise.py) | Per-channel standardisation (`ChannelScaler`) and POD basis (`PodBasis`); numpy only. |
+| [model.py](../src/suspkin/surrogate/model.py) | `MLPConfig` and `SurrogateMLP`: body, regression head and validity head. |
+| [train.py](../src/suspkin/surrogate/train.py) | `TrainConfig`, `resolve_device`, masked loss, training and fine-tuning, `evaluate`, `TrainedModel` save and load. |
+| [hpo.py](../src/suspkin/surrogate/hpo.py) | Optuna architecture search per axle (TPE, Hyperband pruner, SQLite storage). |
+| [predict.py](../src/suspkin/surrogate/predict.py) | Batched inference from a saved axle model. |
+| [workflow.py](../src/suspkin/surrogate/workflow.py) | `train_surrogate` and `validate_surrogate` from a study and a surrogate root; validation tables and figures. |
+| [vehicle_layer.py](../src/suspkin/surrogate/vehicle_layer.py) | Analytic vehicle layer (numpy): heave, roll and pitch travel, roll centre, anti-features, roll stiffness, TLLTD, steering, summary; `layer_error`. |
+| [evaluate.py](../src/suspkin/surrogate/evaluate.py) | `SurrogateEvaluator`: networks, then exact corner states, then the v0.8 constraint evaluator. |
+| [problem.py](../src/suspkin/surrogate/problem.py) | `SurrogateProblem`: the v0.8 `Problem` on the networks, with constraint margin `delta`. |
+| [active.py](../src/suspkin/surrogate/active.py) | `run_active_learning`: trust region, infill, FOM verification, fine-tuning, stop rules, run folder. |
+
+Outside the package: [metrics/batch.py](../src/suspkin/metrics/batch.py) (vectorised corner kernels, [15.6](#156-where-metricsbatch-fits)) and [plotting/surrogate.py](../src/suspkin/plotting/surrogate.py) (validation plots and active-learning figures).
+
+### 15.2 Data flow
+
+```
+study YAML (surrogate block)
+  sample    sampling -> extract (FOM corner sweeps, left corner) -> dataset
+            ROOT/dataset/<axle>/
+  train     hpo (Optuna) -> train per axle (front and rear in parallel on CUDA)
+            ROOT/models/<axle>/
+  validate  test-split error per channel, layer error, plots
+            ROOT/validation/<axle>/
+  optimize --surrogate DIR
+            SurrogateProblem: networks -> curves -> vehicle layer -> SurrogateEvaluator -> f, g
+            iteration k: trust-region search on the networks -> infill points
+                         -> FOM verification (whole design, both axles)
+                         -> rows appended to the datasets (source al_<k>) -> fine-tune
+```
+
+A dataset sample runs the FOM for the left corner of one axle (about half the cost of a design). A verification run runs the whole design. Rates (camber gain, motion ratios, wheel rate) are finite differences of the predicted curves, not network outputs.
+
+### 15.3 Folder layout
+
+Surrogate root (`--root DIR` of `sample`, `train`, `validate`; `DIR` of `optimize --surrogate`):
+
+```
+DIR/
+├── dataset/<axle>/            shard_00000.npz, shard_00001.npz, ... (X, Y, mask, feasible, source)
+│                              meta.json (vehicle, design-space, grid hashes; channels; seed), lhs.npy
+├── models/<axle>/
+│   ├── optuna.db, trials.csv  architecture search (SQLite, resumable)
+│   ├── model/                 current network: model.pt, model.json, norm.npz
+│   ├── pre_al/                network before the active-learning loop
+│   └── al_<k>/                network snapshot after iteration k
+└── validation/<axle>/         validation.csv, worst.csv, parity.csv, worst_curves.csv, summary.json, figures/
+```
+
+`lhs.npy` caches the Latin-hypercube matrix (row 0 is the baseline), so an interrupted sampling resumes with the same design points. Shards are append-only.
+
+Active-learning run folder (`optimize --surrogate DIR --out RUN`):
+
+```
+RUN/
+├── study.yaml, vehicle.yaml   copies of the inputs
+├── meta.json                  package and git versions, seed, surrogate hashes, AL settings, stop reason, budgets
+├── history.csv                FOM history; sources baseline and al_<k>
+├── al.csv                     one row per iteration (radius, f_nn, f_fom, feasibility, rho, best f, budgets)
+├── al/iter_<k>/               surrogate_history.csv of the inner network search of iteration k
+├── figures/                   al_progress, al_residual, al_radius (png)
+└── best.yaml                  best FOM-verified design (pareto/ holds the verified front in pareto mode)
+```
+
+### 15.4 CLI commands
+
+- `suspkin surrogate sample STUDY --root DIR`: Latin-hypercube dataset of each axle (`--axle front|rear|both`, `--n`, `--workers N|auto`, `--resume`). Reports the feasible fraction and warns below 30 %. `--out` is a deprecated alias of `--root`.
+- `suspkin surrogate train STUDY --root DIR`: architecture search, then training, per axle (`--axle`, `--trials`, `--timeout`, `--device`).
+- `suspkin surrogate validate STUDY --root DIR`: test-split error per channel against its tolerance (`--axle`, `--device`). Exit 1 when a channel is over tolerance.
+- `suspkin optimize STUDY --surrogate DIR`: active-learning optimizer (`--device`, `--evaluations` as the FOM budget of the whole run folder, `--time`, `--resume`, `--out`).
+
+Options and exit codes are in the [CLI guide](guides/cli.md). Settings are in the study `surrogate` block ([study YAML guide](guides/study-yaml.md)).
+
+### 15.5 Device handling and installation
+
+- `resolve_device`: `auto` picks CUDA when available, else the CPU (logged once). `cuda` raises when no CUDA device exists. The study key `training.device` is overridden by `--device`.
+- Models load on any device. Inference moves inputs to the caller's device.
+- Installation: `uv sync --extra surrogate`. Windows gets the CUDA build of torch from the `pytorch-cu124` index (about 2.5 GB). Linux gets the CPU build. macOS uses the PyPI wheels: Intel Macs have no torch build in the pinned range, so the extra is unsupported there; Apple silicon works. The `surrogate` extra is not in the dev dependency group, so a plain `uv sync` installs neither torch nor optuna.
+- Process pools: FOM workers never import torch. On Windows the pools use the spawn method, so a script that calls `sample_axle`, `search_axles` or `run_active_learning` directly needs an `if __name__ == "__main__":` guard. The CLI is safe.
+- Reproducibility: with the same seed, a run repeats on the same device. CPU and CUDA runs are not bit-identical, because deterministic algorithms are requested in warn-only mode.
+- Fine-tuning uses `training.finetune_lr_factor` (default 0.1) and no warm-up. The returned model is never worse than the starting weights on the scoring set.
+- Compatibility: models and datasets store the grid, design-space and vehicle hashes and the channel list. The entry points `sample --resume`, `train`, `validate` and `optimize --surrogate` are being changed to refuse a mismatch. Until that change lands, do not rely on this check.
+
+### 15.6 Where `metrics.batch` fits
+
+[metrics/batch.py](../src/suspkin/metrics/batch.py) holds vectorised kernels over N corner states at once (`corner_metric_arrays`, `joint_angle_arrays`). The FOM uses them in `metrics_frame` and `states_to_frame`, which makes a full evaluation about 3× faster (0.75 s to 0.24 s on the reference study; max deviation 9e-16 from the per-state functions). The surrogate uses the same formulas in two places: [extract.py](../src/suspkin/surrogate/extract.py) builds the training targets, and [evaluate.py](../src/suspkin/surrogate/evaluate.py) rebuilds the corner columns from the solver coordinates (`theta_uca`, `theta_lca`, `psi`, rocker angle). Training targets and surrogate outputs therefore come from the same formulas as the FOM.
+
+### 15.7 Measured performance and accuracy
+
+| Item | Measured value |
+|---|---|
+| FOM evaluation, reference study, after vectorisation | about 240 ms per design |
+| `SurrogateProblem` evaluation | about 2.5 to 2.9 ms per design at batch 1024 |
+| Vehicle layer | about 0.46 ms per design at batch 256 |
+| Surrogate evaluator with exact curves (`OraclePredictor`) vs FOM | g within 8e-6, f within 2e-6 |
+| Vehicle-layer error with FOM curves (broad designs, all ARB types, brake and drive layouts) | roll-centre height about 1e-13 mm; TLLTD up to 2.6e-4 %-pt; roll gradient up to 4e-6 deg/g; wheel rate about 5e-5 relative |
+| Dataset sampling, front 41 × 21 grid | 14.8 samples/s, about 23 min for 20 000 samples |
+| Dataset size | about 100 kB per sample (float32) |
+| Training, GPU smoke test (GTX 1650) | 20 000 samples, 29 channels, 21 × 41 grid: 1.33 GB, 4.4 s per epoch |
+| Test RMSE per channel | not yet recorded in the repository; run `suspkin surrogate validate` |
+
+### 15.8 Limitations
+
+- **Symmetric variables only** (decision S1). A variable moves the left point and the right side mirrors it. Right-hand overrides cannot be represented: the right corner is the mirror of the left one.
+- **One ARB type per batch**: mixed ARB types in one batch are unsupported.
+- **Unsupported vehicle-sweep columns**: a constraint or objective that needs a column the vehicle layer does not provide is reported as unsolved, not approximated.
+- **Mask and extrapolation**: the mask is "kinematically solved and finite" only. Coilover range and toggle margin are constraints and channels, not mask. A query outside the grid, or touching a masked node, gives NaN for the affected outputs; the layer never extrapolates.
+- **Channels**: no ARB channel (the drop-link position is rebuilt from the rocker angle) and no wheel-centre z (it follows from the travel). Swing angles are cos/sin pairs.
+- **Derived rates**: gains, motion ratios and wheel rates come from finite differences of the grid curves, so their accuracy is bounded by the grid spacing. Spring rates and ARB stiffness are not design variables on this path.
+- **Bound networks**: a model is bound to one vehicle baseline, one design space and one output grid. Changing any of them needs a new dataset ([15.5](#155-device-handling-and-installation)).
+- **Benchmark not yet run**: the claim that the active-learning optimizer matches direct DE at the same FOM budget is unmeasured ([DESIGN_PLAN 13.13](DESIGN_PLAN.md)).
+- **Platforms**: no torch build for Intel macOS in the pinned range; see [15.5](#155-device-handling-and-installation).
+
+---
+
+## 16. Known gaps / discrepancies / limitations
 
 **Rule applied**: the code is the truth; where [DESIGN_PLAN.md](DESIGN_PLAN.md) says something else it is listed here.
 
-### 15.1 Code vs design plan
+### 16.1 Code vs design plan
 
 | # | Plan statement | What the code does |
 |---|---|---|
@@ -2037,7 +2197,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 | 13 | Section 2: origin "mid-point between front contact patches at static ride height" | the loader requires front `wheel_center.x` = 0 (+-5 mm); the corner metrics take the ground as the horizontal plane through each corner's own contact patch; the vehicle solver additionally uses each corner's **static contact height** ([vehicle.py:19-21](../src/suspkin/kinematics/vehicle.py#L19)), which differs from 0 when `wheel_center.z != tyre_radius` or camber is non-zero |
 | 14 | CLAUDE.md: "Plotting reads result tables only, never calls the solver" | holds for `plotting/` apart from drawing helpers that import pure formulas (`metrics.vehicle.ackermann_percent`, `inner_outer`) and `build_corners` for geometry; the **report layer** (`report/builder.py:_three_d`) calls `sweep_vehicle` to render the 3D GIF ([builder.py:144-153](../src/suspkin/report/builder.py#L144)) |
 
-### 15.2 Docstring / documentation inconsistencies inside the code
+### 16.2 Docstring / documentation inconsistencies inside the code
 
 * [arb.py:24-27](../src/suspkin/kinematics/arb.py#L24): the module docstring writes the blade inertia first as the arithmetic form $(wt^3\cos^2a+tw^3\sin^2a)/12$ and then as the harmonic form; the **implemented** form is harmonic ([arb.py:237-241](../src/suspkin/kinematics/arb.py#L237)).
 * [metrics/arb.py:47-54](../src/suspkin/metrics/arb.py#L47): the `arb_metrics` docstring promises the "change from the static pose" of the drop-link angles; the function returns only the absolute angles (the static ARB state is used only as a root-branch guess).
@@ -2045,7 +2205,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 * `Wheel.rim_width` is validated and stored but used by no computation.
 * The reference-car YAML comments state design intent (roll centres about 34/40 mm, motion ratio about 0.98/0.99, progression about 6/9 %); these are comments, not asserted values (the tests use ranges), and the file is the only place those targets are recorded.
 
-### 15.3 Modelling limitations (only what the code/docs show)
+### 16.3 Modelling limitations (only what the code/docs show)
 
 * **Rigid-disc tyre** (decision O5): contact patch = lowest point of the rigid wheel circle; no tyre deflection, loaded radius, carcass or contact-patch width effects ([5.10](#510-contact-patch-on-the-wheel-circle)). Tyre vertical stiffness enters only in the ride rate and roll-stiffness series formulas.
 * **Rigid links, ideal joints**: no compliance, no joint limits, no clearance/packaging checks. The pushrod outer point is rigidly attached to its wishbone ([5.6](#56-pushrod-mounts)).
@@ -2062,15 +2222,15 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 * **Gravity constant**: $g=9.80665$ m/s² in the roll gradient and load-transfer formulas, but the default reference lateral acceleration of the summary is 9.81 m/s² (`ay_ref`); the difference is 0.03 %.
 * **Instant-centre degeneracy** returns `nan`/`inf` rather than raising; downstream tables and figures must tolerate them (the plots do, [9.1](#91-style-rules)).
 * **Relative wheel-position metrics in vehicle frames** compare the tilted-ground contact point with the **body-frame static** contact point ([7.1](#71-wheel-alignment-and-wheel-position)).
-* **Not implemented**: forces, FEM, surrogate, elasto-kinematics, Parquet export, joint-angle limits in the solver, loaded tyre radius, rear steer. Objectives and optimizers are in v0.8.0 ([section 14](#14-optimization-v07v08)).
+* **Not implemented**: forces, FEM, stresses, elasto-kinematics, Parquet export, joint-angle limits in the solver, loaded tyre radius, rear steer. Objectives and optimizers are in v0.8.0 ([section 14](#14-optimization-v07v08)); the kinematic surrogate is experimental in v1.1.0 ([section 15](#15-surrogate-v11-experimental)), with the limitations in [15.8](#158-limitations).
 * **Optimizer (v0.8)**: constraint scaling, `start` handling, unreliable finite-difference gradients near the failure cliff, parallelism across designs only and the smoke-size demo budget are listed in [14.9](#149-limitations-of-v08).
 * **Local-only artefacts**: `results/` and `.hypothesis/` are generated, git-ignored folders; the sample report in `results/` is not part of the repository.
 
 ---
 
-## 16. Glossary
+## 17. Glossary
 
-### 16.1 Terms
+### 17.1 Terms
 
 | Term | Meaning |
 |---|---|
@@ -2112,7 +2272,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 | TLLTD | total lateral load transfer distribution (front share) |
 | Wheel rate | vertical wheel force per unit wheel travel from the spring (and ARB) at the contact patch |
 
-### 16.2 Symbols
+### 17.2 Symbols
 
 | Symbol | Meaning | Unit |
 |---|---|---|

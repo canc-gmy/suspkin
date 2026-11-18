@@ -9,8 +9,8 @@ Documentation: <https://canc-gmy.github.io/suspkin/>
 Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars.
 It computes kinematic curves (camber, toe, caster, anti-dive/anti-squat, roll centre,
 motion ratios, steering geometry) from hardpoint geometry and turns them into
-vehicle-dynamics plots and reports. Planned later: geometry optimization, FEM
-checks of key parts, and a neural-network surrogate for fast design sweeps.
+vehicle-dynamics plots and reports. Planned later: FEM checks of key parts. A neural-network
+surrogate for fast design sweeps is available as an experimental feature (v1.1, see below).
 Geometry optimization (v0.8) is available: multi-objective and weighted-sum studies on the
 constraint specification.
 
@@ -102,6 +102,37 @@ uv run suspkin optimize configs/studies/fs_reference_optimize.yaml --out results
 The `nsga2` method needs pymoo: `pip install suspkin[opt]` or `uv sync --extra opt`. The other
 methods (`de`, `slsqp`, `trust-constr`, `de+slsqp`) use scipy only. See
 [ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08) for the math and outputs.
+
+### Surrogate optimisation (experimental)
+
+A neural-network surrogate of the corner kinematics proposes designs with far fewer full-order
+(FOM) runs. Every design that is reported is verified with the FOM. The API may change in minor
+releases. See [ARCHITECTURE section 15](docs/ARCHITECTURE.md#15-surrogate-v11-experimental) and
+[DESIGN_PLAN section 13](docs/DESIGN_PLAN.md#13-surrogate-model-and-active-learning-v110-implemented).
+
+Install the optional extra (torch and optuna; not part of the dev group):
+
+```bash
+uv sync --extra surrogate
+```
+
+On Windows this installs the CUDA build of torch (a download of about 2.5 GB). On Linux it installs
+the CPU build. `--device auto` uses CUDA when it is available and the CPU otherwise. Intel macOS has
+no torch build in the supported range, so the extra is not available there; Apple silicon works.
+
+The workflow has four commands. The `--root` folder holds `dataset/`, `models/` and `validation/`:
+
+```bash
+uv run suspkin surrogate sample configs/studies/fs_reference_surrogate.yaml --root results/surrogate
+uv run suspkin surrogate train configs/studies/fs_reference_surrogate.yaml --root results/surrogate
+uv run suspkin surrogate validate configs/studies/fs_reference_surrogate.yaml --root results/surrogate
+uv run suspkin optimize configs/studies/fs_reference_surrogate.yaml --surrogate results/surrogate --out results/opt/surrogate
+```
+
+`sample` builds the Latin-hypercube dataset (resume with `--resume`), `train` runs the architecture
+search and trains one network per axle, `validate` scores the networks on a held-out split, and
+`optimize --surrogate` runs the active-learning loop. The benchmark study has 90 variables and takes
+several hours; the sample size and budgets are set in its `surrogate` block.
 
 ## Development
 

@@ -44,6 +44,7 @@ nav:
   - Reference:
       - Python API: reference/api.md
       - Optimize (experimental): reference/optimize.md
+      - Surrogate (experimental): reference/surrogate.md
   - Architecture & math: ARCHITECTURE.md
   - Design plan: DESIGN_PLAN.md
   - Changelog: changelog.md

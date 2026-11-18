@@ -524,7 +524,7 @@ The package name `suspkin` is a placeholder.
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
 | v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
 | **v1.0.0** (current, done) | Stable kinematics | Docs complete, regression suite frozen |
-| v1.1.0 (planned, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
+| v1.1.0 (implemented, benchmark pending, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
 
 **Future phases (not planned in detail yet)**:
 
@@ -577,25 +577,25 @@ The package name `suspkin` is a placeholder.
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |
 | D10 | Corner solver | Own damped Newton with analytic Jacobian replaces `scipy.optimize.root` as the primary corner solver (decided 2026-11-17); scipy `hybr` with the same Jacobian stays as fallback, and far guesses go through staged continuation from the guess. Why: finite-difference `hybr` needed about 15 residual evaluations per solve with numpy overhead on 3-vectors; Newton needs about 3 on the reference car and a scalar evaluation is much cheaper, with results identical to 1e-9. Continuation gained a linear predictor and a 0.05 rad branch-jump guard that triggers step halving (extra work in rack sweeps near lock). |
 | S1 | Surrogate scope | v1.1.0 (was planned as v0.9.0 before v1.0.0 shipped) brings the NN surrogate forward from v3.x, for kinematics only (no stresses). Every reported design is FOM-verified (§13). Symmetric variables only; asymmetric variables deferred (decided 2026-11-18). |
-| S2 | Axle split (proposed) | Two independent models, front and rear. Inputs = the axle's design variables in the unit cube; vehicle data are not inputs. |
-| S3 | Outputs (proposed) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as (cos, sin) to avoid the ±π wrap. |
+| S2 | Axle split (decided 2026-11-18) | Two independent models, front and rear. Inputs = the axle's design variables in the unit cube; vehicle data are not inputs. |
+| S3 | Outputs (decided 2026-11-18) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as (cos, sin) to avoid the ±π wrap. As built: the mask is "solved and finite" only; `toggle_margin` and the solver coordinates `theta_uca`, `theta_lca`, `psi` are channels; there is no ARB or wheel-centre-z channel (§13.4). |
 | S4 | Derived quantities (decided 2026-11-18) | Rates (gains, motion ratios, wheel and ride rates) are finite differences of predicted curves, not network outputs. |
-| S5 | Vehicle metrics (proposed) | Computed by an analytic, vectorised layer from the curves (§13.5), never predicted. Layer error measured separately from network error. |
-| S6 | Sampling (proposed) | Latin hypercube (`random-cd`), seeded, baseline as row 0; default 20 000 samples per axle; infeasible samples kept. |
-| S7 | Dataset store (proposed) | Append-only `.npz` shards + `meta.json` with vehicle, design-space and grid hashes. Fixed 80/10/10 split, frozen test split. |
-| S8 | Network (proposed) | PyTorch MLP (`surrogate` extra), CUDA available on the user's PC (CPU fallback), regression + feasibility heads, masked MSE + BCE, optional POD output. |
-| S9 | Architecture search (proposed) | Optuna TPE + Hyperband, objective = validation RMSE normalised by per-channel engineering tolerances; SQLite storage; front and rear in parallel. |
+| S5 | Vehicle metrics (decided 2026-11-18) | Computed by an analytic, vectorised layer from the curves (§13.5), never predicted. Layer error measured separately from network error. As built: layer error is far below the §13.5 tolerances (§13.16). |
+| S6 | Sampling (decided 2026-11-18) | Latin hypercube (`random-cd`), seeded, baseline as row 0; default 20 000 samples per axle; infeasible samples kept. As built: `dataset.lhs_optimization: auto` (`random-cd` up to 5000 samples, none above); the LHS matrix is computed once and cached in `lhs.npy`. |
+| S7 | Dataset store (decided 2026-11-18) | Append-only `.npz` shards + `meta.json` with vehicle, design-space and grid hashes. Fixed 80/10/10 split, frozen test split. As built: shards are `shard_XXXXX.npz` under `dataset/<axle>/`; the meta also holds the channel list. |
+| S8 | Network (decided 2026-11-18) | PyTorch MLP (`surrogate` extra), CUDA available on the user's PC (CPU fallback), regression + feasibility heads, masked MSE + BCE, optional POD output. As built: CUDA (cu124) wheels on Windows, CPU wheels on Linux; `device: auto` picks CUDA when present; fine-tuning never returns a worse model (§13.7). |
+| S9 | Architecture search (decided 2026-11-18) | Optuna TPE + Hyperband, objective = validation RMSE normalised by per-channel engineering tolerances; SQLite storage; front and rear in parallel. As built: front and rear in parallel on CUDA, sequential on CPU (`hpo.parallel: auto`). |
 | S10 | Active learning (decided 2026-11-18) | Optimize on the networks → FOM run at the predicted optimum (+ optional infill) → train on the residual by **variant A**: append the FOM points to the dataset with weight w and fine-tune from the current weights. Variant B (frozen base + correction model) is not implemented. |
-| S11 | Safeguards (proposed) | Trust region around the best FOM-verified design with ratio test; constraint margin `g ≤ −δ` on the surrogate. |
-| S12 | Stopping (proposed) | Model–FOM agreement for p iterations, or stagnation of the best FOM-verified f, or budgets. |
-| S13 | Interface (proposed) | `SurrogateProblem` with the v0.8 `evaluate_batch` interface, so existing drivers run unchanged; `suspkin surrogate sample|train|validate`, `suspkin optimize --surrogate DIR`. |
-| S14 | Go/no-go (proposed) | Slice S0 profiles the FOM first; the plan goes on only if a surrogate evaluation is at least 100× cheaper. |
+| S11 | Safeguards (decided 2026-11-18) | Trust region around the best FOM-verified design with ratio test; constraint margin `g ≤ −δ` on the surrogate. As built: a box trust region around the best verified design; radius rules in §13.9. |
+| S12 | Stopping (decided 2026-11-18) | Model–FOM agreement for p iterations, or stagnation of the best FOM-verified f, or budgets. As built: also `radius_min` (radius at its minimum without improvement for p iterations) and `no_candidates`; see §13.9. |
+| S13 | Interface (decided 2026-11-18) | `SurrogateProblem` with the v0.8 `evaluate_batch` interface, so existing drivers run unchanged; `suspkin surrogate sample|train|validate`, `suspkin optimize --surrogate DIR`. As built: `SurrogateProblem` subclasses the v0.8 `Problem`; the sample, train and validate commands take `--root` (`--out` is a deprecated alias of `--root` for `sample`). |
+| S14 | Go/no-go (decided 2026-11-18) | Slice S0 profiles the FOM first; the plan goes on only if a surrogate evaluation is at least 100× cheaper. Result: go (§13.15). |
 
 ---
 
-## 13. Surrogate model and active learning (v1.1.0, planned)
+## 13. Surrogate model and active learning (v1.1.0, implemented)
 
-Status: **DRAFT**. Decided 2026-11-18: S1 (symmetric only), S4 (derived rates), S10 (variant A). The other S decisions in §12 are proposed.
+Status: **implemented (v1.1.0, unreleased)**. Benchmark (§13.13) pending. Decided 2026-11-18: S1–S14 (§12). The text below is the design as drafted; each **As built** note records what changed.
 
 ### 13.1 Goal and principle
 
@@ -656,15 +656,17 @@ Grid (from the study `surrogate.grid`):
 
 Channels per grid point, left corner, body frame, SI (registry in code; starting set):
 
-| Group | Channels |
+| Group | Channels (as built) |
 |---|---|
-| Alignment | camber, toe (front: steer angle), caster, KPI, scrub radius, mechanical trail |
-| Wheel position | half-track change, contact-patch dx and dy, wheel-centre recession, wheel-centre z |
+| Alignment | camber, toe, steer angle (front only), caster, KPI, scrub radius, mechanical trail |
+| Wheel position | half-track change, contact-patch dx and dy, wheel-centre recession |
 | Centres | front-view swing angle, side-view swing angle, side-view wheel-centre angle, each as (cos, sin) |
-| Actuation | coilover length, rocker angle, pushrod angle |
-| ARB | drop-link end displacement |
-| Joints | misalignment angle per rod end and ball joint |
-| Validity | per-point mask: solved, coilover in range, toggle margin > 0 |
+| Actuation | coilover length, rocker angle, pushrod angle, toggle margin |
+| Joints | misalignment angle per rod end and ball joint (the 8 entries of `JOINTS`) |
+| Solver coordinates | `theta_uca`, `theta_lca`, `psi`: rebuild the exact corner states in the evaluator |
+| Validity | per-point mask: kinematically solved and finite only |
+
+**As built.** The registry has 32 channels on the front (11 alignment and wheel position, 6 swing-angle components, 4 actuation, 8 joints, 3 solver coordinates) and 31 on the rear (the steer angle is front only). There is no ARB channel: the drop-link point follows exactly from the rocker angle, so the vehicle layer rebuilds it. There is no wheel-centre z: it equals the static z plus the travel. Coilover range and toggle margin are constraints and channels, not part of the mask.
 
 - **Swing angles, not instant-centre coordinates.** Instant centres go to infinity for
   parallel arms; the angles stay bounded and smooth. Anti-features use tan(angle)
@@ -681,7 +683,7 @@ the vehicle data. Right corners mirror the left (the right wheel at rack r is th
 mirrored left wheel at −r).
 
 - **Heave:** corner travel = body heave.
-- **Roll φ:** s_L ≈ +(t/2)·tan φ, s_R ≈ −(t/2)·tan φ (small-angle contact mapping).
+- **Roll φ:** each wheel's travel solves "tyre contact height = static contact height" on the tilted ground, as in `solve_vehicle`. The small-angle mapping of the draft had the wrong sign and is not used.
   Roll centre from `roll_centre_pair`, roll camber = camber(s) + φ, roll steer from toe(s).
 - **Anti-features:** `anti_dive_front`, `anti_lift_rear`, `anti_squat_rear` from the
   swing angles (`anti_angle_for` picks contact-patch or wheel-centre angle).
@@ -700,6 +702,8 @@ on random designs. Proposed tolerances, within roll ±2 deg:
 - TLLTD: 0.5 %-point;
 - roll gradient: 0.01 deg/g.
 
+**As built.** Travel 0 and rack 0 must be grid nodes. Curves are interpolated with local cubic Hermite splines (C1, slopes from `np.gradient`, four nodes). A query outside the grid, or touching a masked node, gives NaN for the affected outputs, never an extrapolation. Measured with FOM curves on broad designs, all ARB types and brake/drive layouts: roll-centre height about 1e-13 mm, TLLTD up to 2.6e-4 %-pt, roll gradient up to 4e-6 deg/g, wheel rate about 5e-5 relative. All far inside the tolerances above. Cost about 0.46 ms per design at batch 256.
+
 ### 13.6 Dataset
 
 - **Sampler:** Latin hypercube in the unit cube of each axle (`scipy.stats.qmc`,
@@ -714,7 +718,7 @@ on random designs. Proposed tolerances, within roll ±2 deg:
 - **Infeasible samples** (the corner does not assemble, or the solver fails) are kept
   with `feasible = 0` and an all-false mask: the feasibility head needs them.
   `sample` reports the feasible fraction and warns below 30 % (domains too large).
-- **Storage:** `DIR/dataset/{front,rear}/shard_XXXX.npz` with:
+- **Storage:** `DIR/dataset/{front,rear}/shard_XXXXX.npz` with:
   - `X (N, d)`, `Y (N, C, G)`, `mask (N, G)`, `feasible (N,)`;
   - `source` (`lhs` or `al_<k>`);
   - a `meta.json` (vehicle and design-space hashes, grid, channels, version, seed).
@@ -723,6 +727,8 @@ on random designs. Proposed tolerances, within roll ±2 deg:
 - **Split:** train / validation / test 80 / 10 / 10 by seed. The test split is frozen
   and never used for training or model selection. Active-learning points go to
   training only.
+
+**As built.** The LHS matrix is computed once and cached in `dataset/<axle>/lhs.npy`. `lhs_optimization: auto` uses `random-cd` up to 5000 samples and none above. Measured for the front 41 × 21 grid: 14.8 samples/s, about 23 min for 20 000 samples. About 100 kB per sample in float32. `--root` is the surrogate folder for `sample`, `train` and `validate`.
 
 ### 13.7 Networks
 
@@ -742,6 +748,8 @@ Per axle, in PyTorch (new optional extra `surrogate`):
   - runs on CPU or CUDA.
 
 Front and rear train in two separate processes, each with its own Optuna study.
+
+**As built.** `resolve_device`: `auto` picks CUDA when available, else the CPU; `cuda` raises when no CUDA device exists. Windows installs the CUDA (cu124) torch wheels, Linux the CPU wheels. Models load on any device. Fine-tuning starts from the current weights with `training.finetune_lr_factor` (default 0.1) and no warm-up, and never returns a model worse than its starting weights. GPU smoke test: 20 000 samples, 29 channels, 21 × 41 grid fit in 1.33 GB and take 4.4 s per epoch on a GTX 1650.
 
 ### 13.8 Architecture search with Optuna
 
@@ -805,6 +813,18 @@ The loop stops at the first of:
 
 Result: the best FOM-verified design, with the v0.8 run outputs (§7.14).
 
+**As built.**
+
+- Fine-tuning replays all active-learning rows plus 4096 random earlier training rows (`finetune.replay`). Early stopping scores the mean of the validation score and the score on the active-learning rows (`extra_val`).
+- The dataset update is atomic per iteration; a resumed run repairs a partly written iteration.
+- The trust region is a box `[x_b − r, x_b + r]` in the unit cube around the best FOM-verified design; the inner driver runs on this box.
+- Trust ratio. With a feasible verified best, ρ = (f_b − f_FOM) / (f_b − f_NN); ρ is undefined (NaN) when no gain was predicted, and the radius then halves. A FOM-infeasible optimum gives ρ = 0. Without a feasible verified design, a feasible FOM result gives ρ = 1, a smaller worst g gives 0.5, anything else 0.
+- Radius update: halve when ρ < 0.25 or undefined; double (up to `max`) when ρ > 0.75 **and the step reached the box boundary**; otherwise keep. The draft had no boundary condition.
+- Pareto mode: the trust region is centred on the knee of the FOM-verified front; ρ = 1 when the new optimum extends the verified front, else 0.
+- Stop reasons: `agreement`, `stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget`, `no_candidates` (the network search returns nothing).
+- The FOM budget counts every row of the run folder's history, baseline and resumed rows included. A resume refuses a study whose constraints or objectives changed.
+- The inner network search budget is `active_learning.surrogate_evaluations` (default 20 000).
+
 ### 13.10 Study YAML: `surrogate` block
 
 ```yaml
@@ -825,12 +845,14 @@ surrogate:
     stop: {eps_f: 0.01, patience: 5}
 ```
 
+**As built.** The block also takes `dataset.shard_size` (default 500), `dataset.lhs_optimization` (default `auto`), `training.num_threads`, `training.finetune_lr_factor`, `hpo.parallel`, `active_learning.time`, `active_learning.surrogate_evaluations` and `finetune.replay`. The full key table is in the [study YAML guide](guides/study-yaml.md).
+
 ### 13.11 CLI
 
-- `suspkin surrogate sample STUDY.yaml --out DIR [--axle front|rear|both] [--n N] [--workers N] [--resume]`
-- `suspkin surrogate train DIR [--axle …] [--trials N] [--timeout T] [--device D]`
-- `suspkin surrogate validate DIR`: test error per channel, layer error, parity and worst-case curve plots.
-- `suspkin optimize STUDY.yaml --surrogate DIR`: the active-learning optimizer of §13.9.
+- `suspkin surrogate sample STUDY.yaml --root DIR [--axle front|rear|both] [--n N] [--workers N|auto] [--resume]` (`--out` is a deprecated alias of `--root`)
+- `suspkin surrogate train STUDY.yaml --root DIR [--axle …] [--trials N] [--timeout T] [--device D]`
+- `suspkin surrogate validate STUDY.yaml --root DIR [--axle …] [--device D]`: test error per channel against its tolerance, parity and worst-case curve plots. The layer error is measured separately (`layer_error`, §13.16).
+- `suspkin optimize STUDY.yaml --surrogate DIR [--device D] [--evaluations N] [--time T] [--resume] [--out RUN]`: the active-learning optimizer of §13.9.
 
 ### 13.12 Slices
 
@@ -849,14 +871,11 @@ S2, S3 and S4 run in parallel after S1.
 
 ### 13.13 Done when
 
-- Test RMSE per channel is below its tolerance on both axles (held-out LHS split).
-- Vehicle-layer error on FOM curves is within the §13.5 tolerances.
-- On the benchmark study (all hardpoints free), the active-learning optimizer reaches a
-  FOM-verified best f no worse than direct `de` with the same number of FOM
-  evaluations. The benchmark report gives both numbers.
-- Runs are reproducible with a fixed seed.
-- `main` stays green without the `surrogate` extra: its tests are skipped when torch is
-  missing.
+- [ ] Test RMSE per channel is below its tolerance on both axles (held-out LHS split): **pending**, no `surrogate validate` result is recorded in the repository yet.
+- [x] Vehicle-layer error on FOM curves is within the §13.5 tolerances: **met** (§13.16).
+- [ ] On the benchmark study (all hardpoints free), the active-learning optimizer reaches a FOM-verified best f no worse than direct `de` with the same number of FOM evaluations: **pending**, the benchmark is not yet run (§13.15).
+- [x] Runs are reproducible with a fixed seed: **met per device**. CPU and CUDA runs are not bit-identical.
+- [ ] `main` stays green without the `surrogate` extra (its tests are skipped when torch is missing): **to confirm in CI**.
 
 ### 13.14 Risks
 
@@ -902,3 +921,12 @@ Conditions:
 
 Side finding, outside v1.1: the same vectorisation applied to the FOM tables and to
 `vehicle_summary` would make every v0.8 evaluation about 2× faster.
+
+**Benchmark (v1.1, not yet run).** Study `configs/studies/fs_reference_surrogate.yaml`: 90 variables (all 15 hardpoints of each axle as ±10 mm offsets, wheel centres ±5 mm, symmetric). Runner `scripts/benchmark_surrogate.py` with resumable stages `sample`, `train`, `validate`, `al`, `de_same`, `de_total` and `report`. Command: `python -m uv run python scripts/benchmark_surrogate.py --device cuda --workers auto`. Estimated wall time about 4 to 6 h: sampling about 30 min, architecture search about 1.5 to 2 h, active learning about 1 to 3 h, direct DE at the total cost about 30 min. The report with both numbers of §13.13 is written to `results/benchmark_surrogate/run/benchmark.md`.
+
+### 13.16 As-built performance and accuracy (v1.1.0)
+
+- **FOM speed-ups** (made in this milestone; they benefit the FOM and the surrogate's training data): `metrics.batch` vectorisation (about 3× faster evaluation, 0.75 s to 0.24 s on the reference study); evaluator logic with a closed-form line fit and window fast paths; a convex-hull cache in `optimize/regions.py`.
+- **`SurrogateProblem`** (S5): subclasses the v0.8 `Problem`. Oracle check against the FOM (exact curves through the surrogate evaluator): g within 8e-6, f within 2e-6. About 2.5 to 2.9 ms per design at batch 1024, against about 240 ms for the FOM.
+- **Vehicle layer**: about 0.46 ms per design at batch 256; layer errors in §13.5.
+- **Dataset**: 14.8 samples/s on the front 41 × 21 grid (§13.6).
