@@ -61,6 +61,12 @@ fi
 if [ "$MINIMAL" -eq 1 ]; then
   step "uv sync (minimal)"
   "${UV[@]}" sync || fail "uv sync failed"
+elif [ "$(uname -s)" = "Darwin" ] && [ "$(uname -m)" = "x86_64" ]; then
+  # PyTorch publishes no wheels for Intel Macs after 2.2, and the surrogate extra pins torch 2.6.
+  step "uv sync (all extras except surrogate: Intel Mac)"
+  echo "Intel Mac detected: skipping the 'surrogate' extra (torch has no Intel Mac wheels)."
+  echo "Everything else works; the NN surrogate commands need an Apple Silicon Mac, Linux or Windows."
+  "${UV[@]}" sync --extra viz --extra opt --extra app || fail "uv sync failed"
 else
   step "uv sync --all-extras"
   "${UV[@]}" sync --all-extras || fail "uv sync --all-extras failed"

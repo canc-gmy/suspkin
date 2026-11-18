@@ -22,6 +22,11 @@ bash scripts/setup.sh
 Flags: `-Minimal` / `--minimal` skips the optional extras; `-Test` / `--test` also runs the
 test suite.
 
+**macOS:** Apple silicon Macs get everything, including the NN surrogate; CI tests them on
+every pull request. On Intel Macs the script installs every extra except `surrogate`, because
+torch has no Intel Mac build in the supported range. The web app frontend needs Node 22.12+
+(`brew install node`).
+
 ## Manual
 
 ```bash
