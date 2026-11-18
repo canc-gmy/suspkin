@@ -28,3 +28,6 @@ results/
 .idea/
 .DS_Store
 Thumbs.db
+
+# MkDocs build output
+site/

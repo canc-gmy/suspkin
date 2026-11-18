@@ -1,0 +1,82 @@
+site_name: suspkin
+site_description: Formula Student double-wishbone + pushrod suspension kinematics
+site_url: https://canc-gmy.github.io/suspkin/
+repo_url: https://github.com/canc-gmy/suspkin
+repo_name: canc-gmy/suspkin
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Tutorial: getting-started/tutorial.md
+  - Guides:
+      - Vehicle YAML: guides/vehicle-yaml.md
+      - Study YAML: guides/study-yaml.md
+      - Command line: guides/cli.md
+      - Examples: guides/examples.md
+      - Stability and versioning: guides/stability.md
+  - Reference:
+      - Python API: reference/api.md
+      - Optimize (experimental): reference/optimize.md
+  - Architecture & math: ARCHITECTURE.md
+  - Design plan: DESIGN_PLAN.md
+  - Changelog: changelog.md
+
+validation:
+  links:
+    not_found: ignore
+    anchors: ignore
+    unrecognized_links: ignore
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_root_heading: true
+            show_source: false
+            docstring_style: google
+            members_order: source

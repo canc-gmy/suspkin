@@ -33,6 +33,10 @@ dev = [
     "types-PyYAML",
     "pandas-stubs",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.26",
+]
 
 [project.scripts]
 suspkin = "suspkin.cli:app"
