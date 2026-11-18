@@ -29,7 +29,7 @@ against objectives under geometric constraints.
 
 - Quasi-static force solver (link loads).
 - FEM structural analysis of members.
-- Neural-network surrogate.
+- Neural-network surrogate of forces and stresses (the kinematic surrogate is planned for v0.9, §13).
 - Elasto-kinematics / compliance (K&C).
 
 ---
@@ -524,12 +524,13 @@ The package name `suspkin` is a placeholder.
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
 | v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
 | **v1.0.0** (current, done) | Stable kinematics | Docs complete, regression suite frozen |
+| v0.9.0 (planned, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
 
 **Future phases (not planned in detail yet)**:
 
 - **v1.x Forces**: quasi-static link forces from tyre load cases.
 - **v2.x FEM**: 3D beam/truss FEM of members (stress, pushrod buckling); load cases from the force solver.
-- **v3.x Surrogate**: dataset generation (Sobol/LHS over design variables), MLP surrogate of metrics + stresses, plugged into the optimizer behind the same objective interface.
+- **v3.x Surrogate of stresses**: extend the v0.9 kinematic surrogate (§13) with force and stress outputs.
 
 ---
 
@@ -544,7 +545,7 @@ The package name `suspkin` is a placeholder.
 | D5 | Frame and units | ISO 8855, SI |
 | D6 | Motions | All: corner bump/rebound, heave, roll, pitch, steer, combined |
 | D7 | Metrics | Every metric in §5 |
-| D8 | FEM / NN | Deferred to future phases |
+| D8 | FEM / NN | FEM deferred to future phases. Kinematic NN surrogate planned for v0.9.0 (§13, S1–S14). |
 | O1 | Validation data | User **may** have real hardpoints. v0.x uses a reference FS geometry + analytical tests. The YAML schema must accept user hardpoints directly so their data drops in as a regression case later. |
 | O2 | Pushrod mount | Solver supports `upright`, `lca` and `uca`. **Reference car (from v0.2): pushrod on the UCA, both axles**, rod in compression going up to a rocker mounted above the UCA (changed 2026-11-17, was upright). |
 | O3 | ARB | **Both axles**. Type chosen per axle in YAML (decided 2026-11-17 for v0.4): `torsional` (round arms, bar twist GJ/L **in series with arm bending** 3EI/L³), `blade` (torsion tube + flat blade arms with an orientation angle: flat = soft, edge-on = stiff), `beam` (transverse bending bar: heave-free central slider, clamped in rotation; roll bends the two halves as cantilevers). Replaces the earlier single `flexural` type. |
@@ -575,3 +576,289 @@ The package name `suspkin` is a placeholder.
 | D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |
 | D10 | Corner solver | Own damped Newton with analytic Jacobian replaces `scipy.optimize.root` as the primary corner solver (decided 2026-11-17); scipy `hybr` with the same Jacobian stays as fallback, and far guesses go through staged continuation from the guess. Why: finite-difference `hybr` needed about 15 residual evaluations per solve with numpy overhead on 3-vectors; Newton needs about 3 on the reference car and a scalar evaluation is much cheaper, with results identical to 1e-9. Continuation gained a linear predictor and a 0.05 rad branch-jump guard that triggers step halving (extra work in rack sweeps near lock). |
+| S1 | Surrogate scope | v0.9.0 brings the NN surrogate forward from v3.x, for kinematics only (no stresses). Every reported design is FOM-verified (§13). Symmetric variables only; asymmetric variables deferred (decided 2026-11-18). |
+| S2 | Axle split (proposed) | Two independent models, front and rear. Inputs = the axle's design variables in the unit cube; vehicle data are not inputs. |
+| S3 | Outputs (proposed) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as (cos, sin) to avoid the ±π wrap. |
+| S4 | Derived quantities (decided 2026-11-18) | Rates (gains, motion ratios, wheel and ride rates) are finite differences of predicted curves, not network outputs. |
+| S5 | Vehicle metrics (proposed) | Computed by an analytic, vectorised layer from the curves (§13.5), never predicted. Layer error measured separately from network error. |
+| S6 | Sampling (proposed) | Latin hypercube (`random-cd`), seeded, baseline as row 0; default 20 000 samples per axle; infeasible samples kept. |
+| S7 | Dataset store (proposed) | Append-only `.npz` shards + `meta.json` with vehicle, design-space and grid hashes. Fixed 80/10/10 split, frozen test split. |
+| S8 | Network (proposed) | PyTorch MLP (`surrogate` extra), CUDA available on the user's PC (CPU fallback), regression + feasibility heads, masked MSE + BCE, optional POD output. |
+| S9 | Architecture search (proposed) | Optuna TPE + Hyperband, objective = validation RMSE normalised by per-channel engineering tolerances; SQLite storage; front and rear in parallel. |
+| S10 | Active learning (decided 2026-11-18) | Optimize on the networks → FOM run at the predicted optimum (+ optional infill) → train on the residual by **variant A**: append the FOM points to the dataset with weight w and fine-tune from the current weights. Variant B (frozen base + correction model) is not implemented. |
+| S11 | Safeguards (proposed) | Trust region around the best FOM-verified design with ratio test; constraint margin `g ≤ −δ` on the surrogate. |
+| S12 | Stopping (proposed) | Model–FOM agreement for p iterations, or stagnation of the best FOM-verified f, or budgets. |
+| S13 | Interface (proposed) | `SurrogateProblem` with the v0.8 `evaluate_batch` interface, so existing drivers run unchanged; `suspkin surrogate sample|train|validate`, `suspkin optimize --surrogate DIR`. |
+| S14 | Go/no-go (proposed) | Slice S0 profiles the FOM first; the plan goes on only if a surrogate evaluation is at least 100× cheaper. |
+
+---
+
+## 13. Surrogate model and active learning (v0.9.0, planned)
+
+Status: **DRAFT**. Decided 2026-11-18: S1 (symmetric only), S4 (derived rates), S10 (variant A). The other S decisions in §12 are proposed.
+
+### 13.1 Goal and principle
+
+Optimize **all** hardpoints of both axles together (about 40–45 free coordinates per
+axle, about 90 for the car with symmetric variables). Direct optimization costs about
+1 s per design (v0.8 demo history), too slow for the evaluation counts this needs.
+Two MLPs (front, rear) learn the corner kinematic curves, the optimizer runs on the
+networks, and an active-learning loop corrects the networks with full-order model
+(FOM) runs at the predicted optima.
+
+Rules:
+
+- The FOM is the v0.8 path: corner solver + metric tables + evaluator.
+- **Every reported design is FOM-verified.** The surrogate only proposes designs.
+- Vehicle-level metrics (anti-dive, anti-squat, roll centre, roll stiffness, TLLTD,
+  roll gradient, Ackermann …) are **not** predicted. An analytic layer computes them
+  from the corner curves of the networks (§13.5).
+
+### 13.2 Scope of v0.9.0
+
+In: symmetric variables on both axles, LHS dataset, two MLPs with Optuna architecture
+search, analytic vehicle layer, active-learning optimizer, benchmark against direct DE.
+
+Out (later):
+
+- asymmetric variables (the model is per corner, so they need two model calls per axle);
+- spring rates and ARB stiffness as variables (they enter only the analytic layer, so
+  they can be added without retraining);
+- stresses (v3.x).
+
+A trained model is bound to one vehicle baseline, one design space and one output grid
+(hashes stored with the model). Changing any of them needs a new dataset.
+
+### 13.3 Axle split
+
+Front corner kinematics depend only on front hardpoints, rear only on rear hardpoints:
+
+- front model: x_F ∈ [0, 1]^d_F → front corner curves;
+- rear model: x_R ∈ [0, 1]^d_R → rear corner curves;
+- the study design vector is split by axle with the existing `DesignSpace` slots;
+- vehicle data (mass, CG, wheelbase, brake bias, drive split, spring rates, ARB, tyre)
+  are not network inputs: they enter the analytic layer.
+
+The two datasets and the two trainings are independent and run in parallel. A dataset
+sample solves only the left corner of one axle (about half the cost of a full design).
+
+### 13.4 Network outputs: corner curves on a fixed grid
+
+Grid (from the study `surrogate.grid`):
+
+- front: wheel travel × rack, e.g. 41 × 21 points;
+- rear: wheel travel only, e.g. 41 points.
+
+Channels per grid point, left corner, body frame, SI (registry in code; starting set):
+
+| Group | Channels |
+|---|---|
+| Alignment | camber, toe (front: steer angle), caster, KPI, scrub radius, mechanical trail |
+| Wheel position | half-track change, contact-patch dx and dy, wheel-centre recession, wheel-centre z |
+| Centres | front-view swing angle, side-view swing angle, side-view wheel-centre angle, each as (cos, sin) |
+| Actuation | coilover length, rocker angle, pushrod angle |
+| ARB | drop-link end displacement |
+| Joints | misalignment angle per rod end and ball joint |
+| Validity | per-point mask: solved, coilover in range, toggle margin > 0 |
+
+- **Swing angles, not instant-centre coordinates.** Instant centres go to infinity for
+  parallel arms; the angles stay bounded and smooth. Anti-features use tan(angle)
+  (`metrics.vehicle`); the symmetric roll centre follows from the front-view angle and
+  the contact patch.
+- **Rates are derived, not predicted.** Camber gain, bump steer, motion ratios (spring,
+  ARB), wheel and ride rate are finite differences of the predicted curves on the
+  grid, with the existing formulas. They stay consistent with the curves.
+
+### 13.5 Analytic vehicle layer (curves → vehicle metrics)
+
+Pure numpy, vectorised over a batch of designs. Inputs: front and rear curve tensors and
+the vehicle data. Right corners mirror the left (the right wheel at rack r is the
+mirrored left wheel at −r).
+
+- **Heave:** corner travel = body heave.
+- **Roll φ:** s_L ≈ +(t/2)·tan φ, s_R ≈ −(t/2)·tan φ (small-angle contact mapping).
+  Roll centre from `roll_centre_pair`, roll camber = camber(s) + φ, roll steer from toe(s).
+- **Anti-features:** `anti_dive_front`, `anti_lift_rear`, `anti_squat_rear` from the
+  swing angles (`anti_angle_for` picks contact-patch or wheel-centre angle).
+- **Roll stiffness, TLLTD, roll gradient:** existing functions in `metrics.vehicle`,
+  with wheel and ARB rates from the derived motion ratios.
+- **Steering:** Ackermann %, steering ratio, turning radius from steer angle vs rack of
+  the inner and outer wheel.
+- **Pitch:** travel per axle from pitch angle and axle distance to the pivot.
+
+Layer error is measured **separately from network error**: FOM curves go into the layer
+and the result is compared with `vehicle_summary` / `vehicle_frame` on the baseline and
+on random designs. Proposed tolerances, within roll ±2 deg:
+
+- roll-centre height: 1 mm;
+- anti-features: 1 %-point;
+- TLLTD: 0.5 %-point;
+- roll gradient: 0.01 deg/g.
+
+### 13.6 Dataset
+
+- **Sampler:** Latin hypercube in the unit cube of each axle (`scipy.stats.qmc`,
+  `optimization="random-cd"`), seeded, baseline as row 0.
+- **Size:** `n_initial` per axle, default 20 000. That is about 25 min per axle with 7
+  workers at about 0.5 s per corner sample.
+- **FOM per sample:** corner sweeps on the §13.4 grid for the left corner of that axle,
+  through the existing parallel pool, with the budget and resume rules of O18.
+- **Infeasible samples** (the corner does not assemble, or the solver fails) are kept
+  with `feasible = 0` and an all-false mask: the feasibility head needs them.
+  `sample` reports the feasible fraction and warns below 30 % (domains too large).
+- **Storage:** `DIR/dataset/{front,rear}/shard_XXXX.npz` with:
+  - `X (N, d)`, `Y (N, C, G)`, `mask (N, G)`, `feasible (N,)`;
+  - `source` (`lhs` or `al_<k>`);
+  - a `meta.json` (vehicle and design-space hashes, grid, channels, version, seed).
+
+  Shards are append-only, so sampling resumes.
+- **Split:** train / validation / test 80 / 10 / 10 by seed. The test split is frozen
+  and never used for training or model selection. Active-learning points go to
+  training only.
+
+### 13.7 Networks
+
+Per axle, in PyTorch (new optional extra `surrogate`):
+
+- **Input:** x in [0, 1]^d (already normalised by the design space).
+- **Body:** L fully connected blocks `Linear → activation → (LayerNorm) → (Dropout)`,
+  optional residual connections between equal-width blocks.
+- **Heads:** regression (C·G values, or k POD coefficients) and feasibility (G logits).
+- **Scaling:** per-channel standardisation over the training set.
+- **POD (optional):** PCA of the standardised curves. The network predicts k
+  coefficients and the curves are rebuilt.
+- **Loss:** masked MSE on standardised channels + λ · BCE on the validity mask.
+- **Training:**
+  - AdamW, cosine schedule with warm-up, early stopping on validation loss;
+  - seeded (deterministic algorithms where available);
+  - runs on CPU or CUDA.
+
+Front and rear train in two separate processes, each with its own Optuna study.
+
+### 13.8 Architecture search with Optuna
+
+| Hyperparameter | Range |
+|---|---|
+| layers L | 2–8 |
+| width | 64–1024 (log) |
+| activation | SiLU, GELU, ReLU, tanh |
+| residual, LayerNorm | on / off |
+| dropout | 0–0.2 |
+| learning rate | 1e-4–3e-3 (log) |
+| weight decay | 1e-6–1e-3 (log) |
+| batch size | 128–2048 |
+| output | raw curves, or POD with k in 8–128 |
+| λ (feasibility weight) | 0.01–1 (log) |
+
+- **Objective:** validation error in engineering units, the mean over channels of
+  RMSE_c / tol_c. Each channel has a tolerance in the registry (for example camber
+  0.02 deg, toe 0.01 deg, coilover length 0.1 mm, swing angles 0.05 deg).
+- **Sampler and pruner:** TPE (seeded), with a Hyperband pruner on the per-epoch
+  validation error.
+- **Storage and budget:** SQLite in the model folder, so a search resumes. Budget is
+  `n_trials` plus `timeout`.
+- **When it runs:**
+  - once on the initial dataset;
+  - in the active-learning loop the best architecture is kept and retrained;
+  - a short new search runs when the dataset has doubled or the validation error
+    stops falling.
+
+### 13.9 Active-learning optimization
+
+Iteration k:
+
+1. **Optimize on the surrogate.** `SurrogateProblem` exposes the v0.8 `evaluate_batch`
+   interface, so the existing drivers run unchanged with large budgets (order 1e5
+   evaluations).
+   - Constraints use a margin `g ≤ −δ`, so network error does not push the optimum
+     out of the feasible set.
+   - The search stays inside a trust region around the best FOM-verified design.
+2. **Network optimum.** The infill set is:
+   - weighted mode: the predicted optimum x*_k;
+   - pareto mode: a spread subset of the predicted front;
+   - optional: top-m distinct candidates and p perturbations of x*_k in the trust region.
+3. **FOM run** of the infill set (whole design, both axles). It gives the true curves,
+   f and g. These rows go to `history.csv` with `source = al_<k>`.
+4. **Residual.** r = y_FOM − y_NN on the curves at the infill points, and the
+   prediction errors of f and g. Logged per iteration.
+5. **Training on the residual** (S10, variant A): add the infill points to the dataset
+   with weight w and fine-tune from the current weights for a fixed number of epochs
+   (early stopping on validation). The loss on those points is the residual
+   y_FOM − y_NN. Variant B (frozen base + correction model δ(x)) was considered and not
+   chosen: the residual points are few and clustered along the optimizer path.
+6. **Trust region.** Compute ρ = FOM improvement / predicted improvement. Expand the
+   region if ρ > 0.75, shrink it if ρ < 0.25.
+
+The loop stops at the first of:
+
+- agreement: |f_NN − f_FOM| / scale < ε_f with matching feasibility, p iterations in a row;
+- stagnation: no gain in the best FOM-verified f for p iterations;
+- budgets: iterations, FOM evaluations or wall time.
+
+Result: the best FOM-verified design, with the v0.8 run outputs (§7.14).
+
+### 13.10 Study YAML: `surrogate` block
+
+```yaml
+surrogate:
+  grid:
+    travel: {min: -30 mm, max: 30 mm, points: 41}
+    rack: {min: -25 mm, max: 25 mm, points: 21}     # front only
+  dataset: {n_initial: 20000, seed: 1}
+  training: {device: auto, max_epochs: 2000, patience: 100}
+  hpo: {n_trials: 100, timeout: 4 h}
+  active_learning:
+    max_iterations: 50
+    fom_evaluations: 2000
+    infill: {top: 0, perturb: 4}
+    finetune: {epochs: 200, weight: 5.0}   # S10 variant A
+    margin: 0.05                        # delta on normalised g
+    trust_region: {initial: 0.2, min: 0.01, max: 0.5}
+    stop: {eps_f: 0.01, patience: 5}
+```
+
+### 13.11 CLI
+
+- `suspkin surrogate sample STUDY.yaml --out DIR [--axle front|rear|both] [--n N] [--workers N] [--resume]`
+- `suspkin surrogate train DIR [--axle …] [--trials N] [--timeout T] [--device D]`
+- `suspkin surrogate validate DIR`: test error per channel, layer error, parity and worst-case curve plots.
+- `suspkin optimize STUDY.yaml --surrogate DIR`: the active-learning optimizer of §13.9.
+
+### 13.12 Slices
+
+| Slice | Content | Depends on | Agent |
+|---|---|---|---|
+| S0 | Profile one FOM evaluation (solve vs metric tables vs evaluator). Go/no-go: a surrogate evaluation must be ≥ 100× cheaper | – | coder |
+| S1 | Grid and channel registry; FOM curve extractor for one corner (design → `Y`, mask) | S0 | coder |
+| S2 | Analytic vehicle layer + layer-error validation against the FOM | S1 | coder + reviewer |
+| S3 | LHS sampler, sharded dataset, `surrogate sample`, resume | S1 | coder |
+| S4 | MLP, training, Optuna search, front/rear in parallel, `surrogate train` / `validate` | S1 | coder + reviewer |
+| S5 | `SurrogateProblem`: x → networks → curves → vehicle layer → evaluator → f, g | S2, S4 | coder |
+| S6 | Active-learning driver, trust region, run outputs, AL plots (f_NN vs f_FOM, residual per iteration) | S5 | coder + reviewer |
+| S7 | Benchmark study with all hardpoints free, docs, CHANGELOG, tag `v0.9.0` | S6 | chore + reviewer |
+
+S2, S3 and S4 run in parallel after S1.
+
+### 13.13 Done when
+
+- Test RMSE per channel is below its tolerance on both axles (held-out LHS split).
+- Vehicle-layer error on FOM curves is within the §13.5 tolerances.
+- On the benchmark study (all hardpoints free), the active-learning optimizer reaches a
+  FOM-verified best f no worse than direct `de` with the same number of FOM
+  evaluations. The benchmark report gives both numbers.
+- Runs are reproducible with a fixed seed.
+- `main` stays green without the `surrogate` extra: its tests are skipped when torch is
+  missing.
+
+### 13.14 Risks
+
+- **Low feasible fraction** of LHS in ~40 dimensions, so the dataset is mostly failures.
+  Mitigation: feasibility head, fraction reported by `sample`, domain check before sampling.
+- **Surrogate exploitation:** the optimizer finds regions where the network is wrong.
+  Mitigation: trust region, constraint margin, FOM check every iteration.
+- **Evaluator overhead:** the v0.8 evaluator works on pandas tables. If S0 shows that
+  they dominate, S5 needs a vectorised evaluator path.
+- **Small-angle vehicle layer:** the roll and pitch mapping is approximate. Its error is
+  measured on its own (§13.5), and the final design is FOM-verified anyway.
+- **torch with spawn workers on Windows:** torch is imported only in training and
+  surrogate processes, never in the FOM workers.
