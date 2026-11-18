@@ -70,6 +70,7 @@ def _make_run(root: Path, *, pareto: bool = True) -> Path:
 def test_health_and_figures(client: TestClient) -> None:
     h = client.get(f"{API}/health").json()
     assert h["status"] == "ok" and h["version"]
+    assert Path(h["workspace"]).is_absolute()
     spec = client.get(f"{API}/figures").json()
     assert json.dumps(spec)  # serialisable
     assert len(spec["figures"]) == len(FIGURES)
@@ -286,3 +287,13 @@ def test_cli_app_help() -> None:
     assert r.exit_code == 0
     for opt in ("--port", "--host", "--workspace", "--no-browser"):
         assert opt in r.output
+
+
+def test_openapi_dump(tmp_path: Path) -> None:
+    from suspkin.app.openapi import main
+
+    out = tmp_path / "sub" / "openapi.json"
+    assert main([str(out)]) == 0
+    schema = json.loads(out.read_text(encoding="utf-8"))
+    assert "workspace" in schema["components"]["schemas"]["HealthOut"]["properties"]
+    assert main([]) == 2

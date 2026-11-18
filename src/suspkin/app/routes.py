@@ -53,7 +53,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
 
     @r.get("/health", response_model=HealthOut)
     def health() -> HealthOut:
-        return HealthOut(version=__version__)
+        return HealthOut(version=__version__, workspace=str(manager.workspace))
 
     @r.get("/figures", response_model=dict[str, Any])
     def figures() -> dict[str, Any]:

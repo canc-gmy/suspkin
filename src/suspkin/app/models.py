@@ -11,10 +11,11 @@ EntryKind = Literal["dir", "vehicle", "bundle", "report", "run", "other"]
 
 
 class HealthOut(BaseModel):
-    """Server liveness and package version."""
+    """Server liveness, package version and workspace root."""
 
     status: str = "ok"
     version: str
+    workspace: str = Field(description="Absolute path of the workspace root.")
 
 
 class DatasetOut(BaseModel):
