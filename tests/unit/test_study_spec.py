@@ -233,3 +233,112 @@ def test_over_fr_sweep_with_right_region_loads(tmp_path: Path) -> None:
 
     study, _ = load_study(_write(tmp_path, mutate))
     assert study.constraints[7].over == "bump_fr"  # type: ignore[union-attr]
+
+
+# --------------------------------------------------------------------------- surrogate blocks
+
+_GRID = {"travel": {"min": "-20 mm", "max": "20 mm", "points": 7}}
+
+
+def test_surrogate_training_hpo_defaults() -> None:
+    from suspkin.optimize.spec import SurrogateSpec
+
+    s = SurrogateSpec.model_validate({"grid": _GRID})
+    assert (s.training.device, s.training.max_epochs, s.training.patience) == ("auto", 2000, 100)
+    assert s.training.num_threads is None and s.training.finetune_lr_factor == 0.1
+    assert s.hpo.n_trials == 100 and s.hpo.timeout == 4 * 3600.0 and s.hpo.parallel == "auto"
+
+
+def test_surrogate_training_hpo_units_and_values() -> None:
+    from suspkin.optimize.spec import SurrogateSpec
+
+    s = SurrogateSpec.model_validate(
+        {
+            "grid": _GRID,
+            "training": {"device": "cpu", "max_epochs": 5, "num_threads": 2},
+            "hpo": {"n_trials": 3, "timeout": "90 min", "parallel": False},
+        }
+    )
+    assert s.training.device == "cpu" and s.training.num_threads == 2
+    assert s.hpo.timeout == 5400.0 and s.hpo.parallel is False
+    none = SurrogateSpec.model_validate({"grid": _GRID, "hpo": {"timeout": None}})
+    assert none.hpo.timeout is None
+    assert SurrogateSpec.model_validate({"grid": _GRID, "hpo": {"timeout": 30}}).hpo.timeout == 30.0
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"training": {"device": "tpu"}},
+        {"training": {"max_epochs": 0}},
+        {"training": {"patience": 0}},
+        {"training": {"num_threads": 0}},
+        {"training": {"finetune_lr_factor": 0.0}},
+        {"training": {"bogus": 1}},
+        {"hpo": {"n_trials": 0}},
+        {"hpo": {"timeout": "2 mm"}},
+        {"hpo": {"timeout": "-1 h"}},
+        {"hpo": {"parallel": "yes"}},
+        {"hpo": {"extra": 1}},
+    ],
+)
+def test_surrogate_training_hpo_rejected(block: dict[str, Any]) -> None:
+    from pydantic import ValidationError
+
+    from suspkin.optimize.spec import SurrogateSpec
+
+    with pytest.raises(ValidationError):
+        SurrogateSpec.model_validate({"grid": _GRID, **block})
+
+
+def test_active_learning_defaults_and_units() -> None:
+    from suspkin.optimize.spec import SurrogateSpec
+
+    al = SurrogateSpec.model_validate({"grid": _GRID}).active_learning
+    assert (al.max_iterations, al.fom_evaluations, al.surrogate_evaluations) == (50, 2000, 20000)
+    assert al.time is None and al.margin == 0.05
+    assert (al.infill.top, al.infill.perturb) == (0, 4)
+    assert (al.finetune.epochs, al.finetune.weight, al.finetune.replay) == (200, 5.0, 4096)
+    tr = al.trust_region
+    assert (tr.initial, tr.min, tr.max) == (0.2, 0.01, 0.5)
+    assert (al.stop.eps_f, al.stop.patience) == (0.01, 5)
+    full = SurrogateSpec.model_validate(
+        {
+            "grid": _GRID,
+            "active_learning": {
+                "time": "30 min",
+                "infill": {"top": 2, "perturb": 0},
+                "trust_region": {"initial": 0.1, "min": 0.05, "max": 0.3},
+            },
+        }
+    ).active_learning
+    assert full.time == 1800.0 and full.infill.top == 2 and full.trust_region.max == 0.3
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        {"max_iterations": 0},
+        {"fom_evaluations": 0},
+        {"surrogate_evaluations": 0},
+        {"time": "2 mm"},
+        {"time": 0},
+        {"margin": -0.1},
+        {"infill": {"top": -1}},
+        {"finetune": {"weight": 0}},
+        {"finetune": {"epochs": 0}},
+        {"finetune": {"replay": -1}},
+        {"trust_region": {"initial": 0.6}},
+        {"trust_region": {"min": 0.3, "initial": 0.2}},
+        {"stop": {"patience": 0}},
+        {"stop": {"eps_f": 0}},
+        {"bogus": 1},
+    ],
+)
+def test_active_learning_rejected(block: dict[str, Any]) -> None:
+    from pydantic import ValidationError
+
+    from suspkin.optimize.spec import SurrogateSpec
+
+    with pytest.raises(ValidationError):
+        SurrogateSpec.model_validate({"grid": _GRID, "active_learning": block})

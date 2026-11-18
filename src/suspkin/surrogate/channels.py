@@ -9,6 +9,10 @@ Deliberately absent:
 - ARB drop-link displacement: the drop-link point follows exactly from the rocker angle
   (rigid rotation about the fixed rocker axis), so the vehicle layer rebuilds it.
 - Wheel-centre z: it equals the static z plus the travel by definition.
+
+``theta_uca``, ``theta_lca`` and ``psi`` are the solver coordinates of the corner state
+(side-signed like ``CornerState``): the surrogate evaluator rebuilds the hardpoint
+positions, and from them every other corner column, with the exact forward kinematics.
 """
 
 from __future__ import annotations
@@ -64,6 +68,8 @@ def _build() -> tuple[Channel, ...]:
         Channel("toggle_margin", "toggle_margin", "value", 0.05 * _DEG),
     ]
     ch += [Channel(f"joint_{j}", f"joint_{j}", "value", 0.1 * _DEG) for j in JOINTS]
+    # Solver coordinates: the evaluator rebuilds exact corner states from them.
+    ch += [Channel(n, n, "value", 0.01 * _DEG) for n in ("theta_uca", "theta_lca", "psi")]
     return tuple(ch)
 
 
