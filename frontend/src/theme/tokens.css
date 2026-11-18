@@ -1,0 +1,79 @@
+/* Design tokens: see frontend/DESIGN.md. Components never hard-code colour, font, size or spacing. */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --sheet: #edf1f3;
+  --sheet-raised: #f8fafb;
+  --ink: #1e2830;
+  --ink-muted: #5b6873;
+  --grid: #c9dce4;
+  --grid-minor: #e0ebf0;
+  --rule: #b7c3cb;
+  --layout-blue: #23468f;
+  --on-layout-blue: #f8fafb;
+  --danger: #a3341f;
+  /* revision colour overrides (palette index -> colour that keeps contrast on this sheet) */
+  --rev-6: #b8a800;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --sheet: #0f2a44;
+  --sheet-raised: #133352;
+  --ink: #e6eef4;
+  --ink-muted: #9db3c6;
+  --grid: #2a4d6e;
+  --grid-minor: #1d3c5a;
+  --rule: #3a5f82;
+  --layout-blue: #9cc3ff;
+  --on-layout-blue: #0f2a44;
+  --danger: #ff9c85;
+  --rev-0: #4da3e0;
+  --rev-7: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --sheet: #0f2a44;
+    --sheet-raised: #133352;
+    --ink: #e6eef4;
+    --ink-muted: #9db3c6;
+    --grid: #2a4d6e;
+    --grid-minor: #1d3c5a;
+    --rule: #3a5f82;
+    --layout-blue: #9cc3ff;
+    --on-layout-blue: #0f2a44;
+    --danger: #ff9c85;
+    --rev-0: #4da3e0;
+    --rev-7: #ffffff;
+  }
+}
+
+:root {
+  --font-ui: "Barlow", sans-serif;
+  --font-title: "Barlow Semi Condensed", "Barlow", sans-serif;
+
+  /* type scale, 1.2 ratio from 14 px */
+  --text-12: 0.75rem;
+  --text-14: 0.875rem;
+  --text-17: 1.0625rem;
+  --text-20: 1.25rem;
+  --text-24: 1.5rem;
+  --weight-body: 400;
+  --weight-label: 500;
+  --weight-title: 600;
+
+  /* 8 px spacing base */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+
+  --radius: 2px;
+  --sidebar-width: 288px;
+  --focus-ring: 2px solid var(--layout-blue);
+  --drawer-ms: 150ms;
+  --fresh-ms: 600ms;
+}

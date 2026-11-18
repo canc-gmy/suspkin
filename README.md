@@ -134,6 +134,17 @@ search and trains one network per axle, `validate` scores the networks on a held
 `optimize --surrogate` runs the active-learning loop. The benchmark study has 90 variables and takes
 several hours; the sample size and budgets are set in its `surrogate` block.
 
+## Web app (experimental, branch feat/webapp)
+
+Interactive figures, overlay of several results and a shareable HTML snapshot. See `docs/guides/app.md`.
+
+```bash
+uv sync --extra app --extra viz
+(cd frontend && npm ci && npm run build && npm run build:single)   # Node 22.12+
+uv run suspkin app configs/vehicles/fs_reference.yaml
+uv run suspkin app-export configs/vehicles/fs_reference.yaml --out compare.html
+```
+
 ## Development
 
 ```bash

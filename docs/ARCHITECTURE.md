@@ -27,6 +27,7 @@
 15. [Surrogate (v1.1, experimental)](#15-surrogate-v11-experimental)
 16. [Known gaps / discrepancies / limitations](#16-known-gaps-discrepancies-limitations)
 17. [Glossary](#17-glossary)
+18. [Web app (experimental)](#18-web-app-experimental)
 
 ---
 
@@ -2307,3 +2308,14 @@ Options and exit codes are in the [CLI guide](guides/cli.md). Settings are in th
 | $g$ | standard gravity 9.80665 (`G` in [metrics/vehicle.py](../src/suspkin/metrics/vehicle.py#L19)) | m/s² |
 | $J,\;I$ | polar moment of the tube section, second moment of area of an arm/blade/beam section | m⁴ |
 | $G,\;E$ | shear modulus, Young's modulus (the symbol $G$ is used only for the shear modulus in the ARB formulas; gravity is $g$) | Pa |
+
+
+---
+
+## 18. Web app (experimental)
+
+The branch `feat/webapp` adds a local web app: a FastAPI backend (`suspkin.app`, extra `app`)
+and a React/TypeScript frontend (`frontend/`). It rests on three contracts: the result bundle
+(`report/bundle.py`), the figure spec (`plotting/spec.py`) and the versioned `/api/v1`. The core
+solver is untouched. Usage is in the [web app guide](guides/app.md) and the decisions in
+[ADR 0001](adr/0001-webapp-architecture.md).

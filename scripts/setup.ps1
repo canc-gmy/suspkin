@@ -1,10 +1,11 @@
 <#
 One-command setup for suspkin (Windows PowerShell 5.1+).
-Usage: powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 [-Minimal] [-Test]
+Usage: powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 [-Minimal] [-Test] [-NoFrontend]
 #>
 param(
     [switch]$Minimal,
-    [switch]$Test
+    [switch]$Test,
+    [switch]$NoFrontend
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,11 +90,28 @@ if ((Test-Path '.git') -and (Test-Path '.pre-commit-config.yaml')) {
     Run ($uv + @('run', 'pre-commit', 'install')) 'pre-commit install'
 }
 
-# 5. Smoke check
+# 5. Frontend (optional, needs Node 22.12+)
+if ($NoFrontend) {
+    Step 'Skipping frontend build (-NoFrontend)'
+} elseif (-not (Test-Path 'frontend/package.json')) {
+    Write-Host 'No frontend/package.json, skipping frontend build'
+} elseif (-not ((Has 'node') -and (Has 'npm'))) {
+    Write-Host 'node/npm not found, skipping frontend build (the web app UI needs Node 22.12+)'
+} else {
+    Step 'Building the frontend'
+    Push-Location 'frontend'
+    try {
+        Run @('npm', 'ci') 'npm ci'
+        Run @('npm', 'run', 'build') 'npm run build'
+        Run @('npm', 'run', 'build:single') 'npm run build:single'
+    } finally { Pop-Location }
+}
+
+# 6. Smoke check
 Step 'Smoke check'
 Run ($uv + @('run', 'suspkin', 'version')) 'suspkin version'
 
-# 6. Tests
+# 7. Tests
 if ($Test) {
     Step 'Running tests'
     Run ($uv + @('run', 'pytest', '-q')) 'pytest'

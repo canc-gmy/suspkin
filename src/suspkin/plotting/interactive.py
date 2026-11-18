@@ -57,6 +57,30 @@ def interactive_view(
     ImportError
         If plotly (the ``viz`` extra) is not installed.
     """
+    fig = interactive_figure(vehicle, state)
+    out = Path(path)
+    fig.write_html(str(out), include_plotlyjs=True if inline else "cdn", full_html=True)
+    return out
+
+
+def interactive_figure(vehicle: Vehicle, state: VehicleState | None = None) -> Any:
+    """Plotly ``Figure`` of the vehicle (static or solved pose), not written anywhere.
+
+    Parameters
+    ----------
+    vehicle : Vehicle
+    state : VehicleState, optional
+        Solved pose; static geometry if omitted. Body frame fixed, ground moves.
+
+    Returns
+    -------
+    plotly.graph_objects.Figure
+
+    Raises
+    ------
+    ImportError
+        If plotly (the ``viz`` extra) is not installed.
+    """
     go = _import_plotly()
     scene = vehicle_segments(vehicle, state)
     traces: list[Any] = []
@@ -161,6 +185,4 @@ def interactive_view(
         },
         margin={"l": 0, "r": 0, "t": 40, "b": 0},
     )
-    out = Path(path)
-    fig.write_html(str(out), include_plotlyjs=True if inline else "cdn", full_html=True)
-    return out
+    return fig

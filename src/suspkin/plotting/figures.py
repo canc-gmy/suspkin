@@ -49,9 +49,9 @@ _KINDS: dict[str, tuple[float, str]] = {
     "deg": (180.0 / math.pi, "deg"),
     "N": (1.0, "N"),
     "N/mm": (1e-3, "N/mm"),
-    "1/m": (1.0, "1/m"),
+    "1/mm": (1e-3, "1/mm"),
     "pct": (1.0, "%"),
-    "ratio": (1.0, "-"),
+    "ratio": (1.0, ""),
     "raw": (1.0, ""),
 }
 _CORNER_IDS = ("FL", "FR", "RL", "RR")
@@ -62,6 +62,7 @@ class _Series:
     col: str
     label: str
     kind: str
+    side: str | None = None  # "left"/"right" or "front"/"rear" (informational, for the spec)
 
 
 @dataclass(frozen=True)
@@ -81,8 +82,8 @@ class _Item:
     xname: str
 
 
-def _s(col: str, label: str, kind: str) -> _Series:
-    return _Series(col, label, kind)
+def _s(col: str, label: str, kind: str, side: str | None = None) -> _Series:
+    return _Series(col, label, kind, side)
 
 
 def _check(datasets: Datasets, name: str, allow_empty: bool = False) -> None:
@@ -188,31 +189,18 @@ def _axle_name(axle: str) -> str:
     return axle.capitalize()
 
 
-# ------------------------------------------------------------------------------ corner sets
-def fig_corner_alignment(datasets: Datasets, axle: str = "front") -> Figure:
-    """Camber, toe (bump steer), caster, KPI, scrub radius, mechanical trail vs wheel travel.
-
-    ``datasets``: corner frames (one corner per frame; ``axle`` only labels the title).
-    """
-    _check(datasets, "datasets")
-    panels = [
+# --------------------------------------------------------------------------- panel layouts
+# Panel definitions are module-level so that ``plotting.spec`` mirrors them exactly.
+_PANELS: dict[str, list[_Panel]] = {
+    "fig_corner_alignment": [
         _Panel("Camber", (_s("camber", "camber", "deg"),)),
         _Panel("Toe (bump steer)", (_s("toe", "toe", "deg"),)),
         _Panel("Caster", (_s("caster", "caster", "deg"),)),
         _Panel("Kingpin inclination", (_s("kpi", "KPI", "deg"),)),
         _Panel("Scrub radius", (_s("scrub_radius", "scrub radius", "mm"),)),
         _Panel("Mechanical trail", (_s("mechanical_trail", "trail", "mm"),)),
-    ]
-    return _make(_corner_items(datasets, panels), 3, f"{_axle_name(axle)} corner: alignment")
-
-
-def fig_corner_position(datasets: Datasets, axle: str = "front") -> Figure:
-    """Half-track change, contact-patch shift, wheel-centre recession, wheelbase change.
-
-    ``datasets``: corner frames (one corner per frame).
-    """
-    _check(datasets, "datasets")
-    panels = [
+    ],
+    "fig_corner_position": [
         _Panel("Half-track change", (_s("half_track_change", "half-track", "mm"),)),
         _Panel(
             "Contact-patch shift",
@@ -226,18 +214,8 @@ def fig_corner_position(datasets: Datasets, axle: str = "front") -> Figure:
             "Wheelbase change (contribution)",
             (_s("wheelbase_change_contribution", "wheelbase", "mm"),),
         ),
-    ]
-    return _make(_corner_items(datasets, panels), 2, f"{_axle_name(axle)} corner: wheel position")
-
-
-def fig_corner_centres(datasets: Datasets, axle: str = "front") -> Figure:
-    """Roll-centre height, FVIC y/z, FVSA and side-view swing angles vs wheel travel.
-
-    ``datasets``: corner frames. Instant centres at infinity (nan/inf) are dropped and
-    annotated.
-    """
-    _check(datasets, "datasets")
-    panels = [
+    ],
+    "fig_corner_centres": [
         _Panel("Roll-centre height", (_s("rc_height", "RC height", "mm"),), ic=True),
         _Panel("FVIC lateral (y)", (_s("fvic_y", "FVIC y", "m"),), ic=True),
         _Panel("FVIC height (z)", (_s("fvic_z", "FVIC z", "mm"),), ic=True),
@@ -251,23 +229,12 @@ def fig_corner_centres(datasets: Datasets, axle: str = "front") -> Figure:
             ),
             ic=True,
         ),
-    ]
-    return _make(_corner_items(datasets, panels), 3, f"{_axle_name(axle)} corner: centres")
-
-
-def fig_actuation(datasets: Datasets, axle: str = "front") -> Figure:
-    """Coilover, motion ratios, wheel/ride rate, spring force, toggle margin, stroke left.
-
-    ``datasets``: corner frames after ``add_gradients`` (``mr_spring``, ``wheel_rate`` ...);
-    ``coilover_length`` and ``toggle_margin`` appear when the frame has them
-    (``states_to_frame`` columns merged in).
-    """
-    _check(datasets, "datasets")
-    panels = [
+    ],
+    "fig_actuation": [
         _Panel("Coilover compression", (_s("coilover_compression", "compression", "mm"),)),
         _Panel("Coilover length", (_s("coilover_length", "length", "mm"),)),
         _Panel("Spring motion ratio", (_s("mr_spring", "MR spring/wheel", "ratio"),)),
-        _Panel("MR progression", (_s("mr_progression", "d(MR)/dz", "1/m"),)),
+        _Panel("MR progression", (_s("mr_progression", "d(MR)/dz", "1/mm"),)),
         _Panel(
             "Wheel and ride rate",
             (_s("wheel_rate", "wheel rate", "N/mm"), _s("ride_rate", "ride rate", "N/mm")),
@@ -285,7 +252,51 @@ def fig_actuation(datasets: Datasets, axle: str = "front") -> Figure:
                 _s("droop_stroke_remaining", "droop", "mm"),
             ),
         ),
-    ]
+    ],
+}
+
+
+# ------------------------------------------------------------------------------ corner sets
+def fig_corner_alignment(datasets: Datasets, axle: str = "front") -> Figure:
+    """Camber, toe (bump steer), caster, KPI, scrub radius, mechanical trail vs wheel travel.
+
+    ``datasets``: corner frames (one corner per frame; ``axle`` only labels the title).
+    """
+    _check(datasets, "datasets")
+    panels = _PANELS["fig_corner_alignment"]
+    return _make(_corner_items(datasets, panels), 3, f"{_axle_name(axle)} corner: alignment")
+
+
+def fig_corner_position(datasets: Datasets, axle: str = "front") -> Figure:
+    """Half-track change, contact-patch shift, wheel-centre recession, wheelbase change.
+
+    ``datasets``: corner frames (one corner per frame).
+    """
+    _check(datasets, "datasets")
+    panels = _PANELS["fig_corner_position"]
+    return _make(_corner_items(datasets, panels), 2, f"{_axle_name(axle)} corner: wheel position")
+
+
+def fig_corner_centres(datasets: Datasets, axle: str = "front") -> Figure:
+    """Roll-centre height, FVIC y/z, FVSA and side-view swing angles vs wheel travel.
+
+    ``datasets``: corner frames. Instant centres at infinity (nan/inf) are dropped and
+    annotated.
+    """
+    _check(datasets, "datasets")
+    panels = _PANELS["fig_corner_centres"]
+    return _make(_corner_items(datasets, panels), 3, f"{_axle_name(axle)} corner: centres")
+
+
+def fig_actuation(datasets: Datasets, axle: str = "front") -> Figure:
+    """Coilover, motion ratios, wheel/ride rate, spring force, toggle margin, stroke left.
+
+    ``datasets``: corner frames after ``add_gradients`` (``mr_spring``, ``wheel_rate`` ...);
+    ``coilover_length`` and ``toggle_margin`` appear when the frame has them
+    (``states_to_frame`` columns merged in).
+    """
+    _check(datasets, "datasets")
+    panels = _PANELS["fig_actuation"]
     return _make(_corner_items(datasets, panels), 3, f"{_axle_name(axle)} corner: actuation")
 
 
@@ -336,6 +347,45 @@ def _steering_frame(
     return out
 
 
+# (panel, x column, x kind, x name) of the steering figure; the last panel is the steering
+# ratio when a c_factor is known, else the steer gain.
+_STEERING_PANELS: tuple[tuple[_Panel, str, str, str], ...] = (
+    (
+        _Panel(
+            "Steer angle",
+            (_s("d_left", "left", "deg", "left"), _s("d_right", "right", "deg", "right")),
+        ),
+        "rack",
+        "mm",
+        "rack travel",
+    ),
+    (
+        _Panel("Ackermann", (_s("ackermann", "Ackermann", "pct"),)),
+        "outer",
+        "deg",
+        "outer steer angle",
+    ),
+    (
+        _Panel("Toe", (_s("FL_toe", "left", "deg", "left"), _s("FR_toe", "right", "deg", "right"))),
+        "rack",
+        "mm",
+        "rack travel",
+    ),
+)
+_STEER_RATIO = (
+    _Panel("Steering ratio", (_s("ratio", "ratio", "ratio"),)),
+    "rack",
+    "mm",
+    "rack travel",
+)
+_STEER_GAIN = (
+    _Panel("Steer gain", (_s("gain", "mean steer gain", "raw"),), ylabel="[deg/mm]"),
+    "rack",
+    "mm",
+    "rack travel",
+)
+
+
 def fig_steering(
     datasets: Datasets,
     *,
@@ -359,40 +409,65 @@ def fig_steering(
     derived: list[tuple[str, pd.DataFrame]] = [
         (lab, _steering_frame(df, wheelbase, track, c_factor)) for lab, df in datasets
     ]
-    last = (
-        _Panel("Steering ratio", (_s("ratio", "ratio", "ratio"),))
-        if any("ratio" in d.columns for _, d in derived)
-        else _Panel("Steer gain", (_s("gain", "mean steer gain", "raw"),), ylabel="[deg/mm]")
-    )
+    last = _STEER_RATIO if any("ratio" in d.columns for _, d in derived) else _STEER_GAIN
     items = [
-        _Item(
-            _Panel("Steer angle", (_s("d_left", "left", "deg"), _s("d_right", "right", "deg"))),
-            derived,
-            "rack",
-            "mm",
-            "rack travel",
-        ),
-        _Item(
-            _Panel("Ackermann", (_s("ackermann", "Ackermann", "pct"),)),
-            derived,
-            "outer",
-            "deg",
-            "outer steer angle",
-        ),
-        _Item(
-            _Panel("Toe", (_s("FL_toe", "left", "deg"), _s("FR_toe", "right", "deg"))),
-            derived,
-            "rack",
-            "mm",
-            "rack travel",
-        ),
-        _Item(last, derived, "rack", "mm", "rack travel"),
+        _Item(panel, derived, xcol, xkind, xname)
+        for panel, xcol, xkind, xname in (*_STEERING_PANELS, last)
     ]
     return _make(items, 2, "Steering")
 
 
 def _corners(col: str, kind: str) -> tuple[_Series, ...]:
     return tuple(_s(f"{c}_{col}", c, kind) for c in _CORNER_IDS)
+
+
+_ROLL_PANELS = [
+    _Panel("Corner travel", _corners("travel", "mm")),
+    _Panel("Camber to ground", _corners("camber_ground", "deg")),
+    _Panel("Steer to ground", _corners("steer_ground", "deg")),
+    _Panel(
+        "Roll-centre height",
+        (_s("rc_front_z", "front", "mm", "front"), _s("rc_rear_z", "rear", "mm", "rear")),
+        ic=True,
+    ),
+    _Panel(
+        "Roll-centre lateral position",
+        (_s("rc_front_y", "front", "mm", "front"), _s("rc_rear_y", "rear", "mm", "rear")),
+        ic=True,
+    ),
+    _Panel(
+        "ARB elastic coordinate",
+        (
+            _s("arb_front_elastic", "front", "raw", "front"),
+            _s("arb_rear_elastic", "rear", "raw", "rear"),
+        ),
+        ylabel="[rad or m]",
+    ),
+]
+
+_HEAVE_PANELS = (
+    _Panel("Heave: corner travel", _corners("travel", "mm")),
+    _Panel(
+        "Heave: roll-centre height",
+        (_s("rc_front_z", "front", "mm", "front"), _s("rc_rear_z", "rear", "mm", "rear")),
+        ic=True,
+    ),
+)
+
+_PITCH_PANELS = (
+    _Panel(
+        "Pitch: axle travel",
+        (_s("FL_travel", "front (FL)", "mm", "front"), _s("RL_travel", "rear (RL)", "mm", "rear")),
+    ),
+    _Panel(
+        "Pitch: side-view swing angle",
+        (
+            _s("FL_sv_swing_angle", "front (FL)", "deg", "front"),
+            _s("RL_sv_swing_angle", "rear (RL)", "deg", "rear"),
+        ),
+        ic=True,
+    ),
+)
 
 
 def fig_roll(datasets: Datasets) -> Figure:
@@ -403,26 +478,7 @@ def fig_roll(datasets: Datasets) -> Figure:
     dashed = rear.
     """
     _check(datasets, "datasets")
-    panels = [
-        _Panel("Corner travel", _corners("travel", "mm")),
-        _Panel("Camber to ground", _corners("camber_ground", "deg")),
-        _Panel("Steer to ground", _corners("steer_ground", "deg")),
-        _Panel(
-            "Roll-centre height",
-            (_s("rc_front_z", "front", "mm"), _s("rc_rear_z", "rear", "mm")),
-            ic=True,
-        ),
-        _Panel(
-            "Roll-centre lateral position",
-            (_s("rc_front_y", "front", "mm"), _s("rc_rear_y", "rear", "mm")),
-            ic=True,
-        ),
-        _Panel(
-            "ARB elastic coordinate",
-            (_s("arb_front_elastic", "front", "raw"), _s("arb_rear_elastic", "rear", "raw")),
-            ylabel="[rad or m]",
-        ),
-    ]
+    panels = _ROLL_PANELS
     items = [_Item(p, datasets, "roll", "deg", "body roll") for p in panels]
     return _make(items, 3, "Roll sweep")
 
@@ -439,30 +495,10 @@ def fig_heave_pitch(datasets_heave: Datasets, datasets_pitch: Datasets) -> Figur
         raise ValueError("at least one of datasets_heave, datasets_pitch must be non-empty")
     items: list[_Item] = []
     if datasets_heave:
-        for p in (
-            _Panel("Heave: corner travel", _corners("travel", "mm")),
-            _Panel(
-                "Heave: roll-centre height",
-                (_s("rc_front_z", "front", "mm"), _s("rc_rear_z", "rear", "mm")),
-                ic=True,
-            ),
-        ):
+        for p in _HEAVE_PANELS:
             items.append(_Item(p, datasets_heave, "heave", "mm", "heave"))
     if datasets_pitch:
-        for p in (
-            _Panel(
-                "Pitch: axle travel",
-                (_s("FL_travel", "front (FL)", "mm"), _s("RL_travel", "rear (RL)", "mm")),
-            ),
-            _Panel(
-                "Pitch: side-view swing angle",
-                (
-                    _s("FL_sv_swing_angle", "front (FL)", "deg"),
-                    _s("RL_sv_swing_angle", "rear (RL)", "deg"),
-                ),
-                ic=True,
-            ),
-        ):
+        for p in _PITCH_PANELS:
             items.append(_Item(p, datasets_pitch, "pitch", "deg", "body pitch"))
     return _make(items, 2, "Heave and pitch sweeps")
 

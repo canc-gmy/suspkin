@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,14 @@ from suspkin.geometry import Vehicle, build_corners, load_vehicle
 from suspkin.geometry.corners import Corner, CornerId
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
+
+_ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def plain(text: str) -> str:
+    """CLI output without ANSI styling (Rich colours help text on CI runners)."""
+    return _ANSI.sub("", text)
+
 
 _NEAR_TOGGLE = {
     "rocker_pivot": (0.0, 0.18, 0.45),

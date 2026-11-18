@@ -22,6 +22,7 @@ dependencies = [
 [project.optional-dependencies]
 viz = ["plotly>=5.22"]
 opt = ["pymoo>=0.6.1"]
+app = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 surrogate = ["torch>=2.5,<2.7", "optuna>=4.0"]
 
 [dependency-groups]
@@ -34,6 +35,7 @@ dev = [
     "types-PyYAML",
     "pandas-stubs",
     "pytest-cov>=7.1.0",
+    "httpx>=0.27",
 ]
 docs = [
     "mkdocs-material>=9.5,<10",
@@ -61,6 +63,8 @@ explicit = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/suspkin"]
+# built frontend (git-ignored) must still ship in the wheel
+artifacts = ["src/suspkin/app/static/**", "src/suspkin/app/static_single/**"]
 
 [tool.ruff]
 line-length = 100

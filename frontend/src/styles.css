@@ -1,0 +1,618 @@
+/* Layout and components. Values come from tokens.css only (see frontend/DESIGN.md). */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--sheet);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-14);
+  font-weight: var(--weight-body);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.error {
+  color: var(--danger);
+  margin: var(--space-1) 0;
+}
+
+/* ---- shell ------------------------------------------------------------------------ */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--sheet);
+}
+
+.product {
+  font-family: var(--font-title);
+  font-weight: var(--weight-title);
+  font-size: var(--text-20);
+}
+
+.workspace {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.titleblock {
+  position: sticky;
+  top: var(--topbar-h, 49px);
+  align-self: flex-start;
+  height: calc(100vh - var(--topbar-h, 49px));
+  overflow-y: auto;
+  flex: 0 0 var(--sidebar-width);
+  width: var(--sidebar-width);
+  border-right: 1px solid var(--rule);
+  padding: var(--space-2);
+  font-family: var(--font-title);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.tab-panel {
+  padding-top: var(--space-2);
+}
+
+.drawer-toggle {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .drawer-toggle {
+    display: inline-block;
+  }
+  .workspace {
+    display: none;
+  }
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .body {
+    flex-direction: column;
+  }
+  .titleblock {
+    position: static;
+    height: auto;
+    flex: none;
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid var(--rule);
+    max-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    padding-bottom: 0;
+    visibility: hidden;
+    transition:
+      max-height var(--drawer-ms) ease-out,
+      padding var(--drawer-ms) ease-out,
+      visibility 0s linear var(--drawer-ms);
+  }
+  .titleblock.open {
+    max-height: 70vh;
+    overflow: auto;
+    padding-top: var(--space-2);
+    padding-bottom: var(--space-2);
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  .main {
+    padding: 0 var(--space-2) var(--space-2);
+  }
+}
+
+/* ---- buttons, controls ------------------------------------------------------------ */
+.btn {
+  border-radius: var(--radius);
+  padding: 4px var(--space-2);
+  cursor: pointer;
+  font-weight: var(--weight-label);
+  background: transparent;
+  border: 1px solid var(--ink);
+}
+
+.btn.primary {
+  background: var(--layout-blue);
+  border-color: var(--layout-blue);
+  color: var(--on-layout-blue);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn {
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: var(--text-17);
+  line-height: 1;
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--layout-blue);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: var(--text-12);
+}
+
+.link-btn:disabled {
+  color: var(--ink);
+  text-decoration: none;
+  cursor: default;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.seg {
+  background: transparent;
+  border: 0;
+  padding: 4px var(--space-2);
+  cursor: pointer;
+  font-weight: var(--weight-label);
+}
+
+.seg + .seg {
+  border-left: 1px solid var(--rule);
+}
+
+.seg.active {
+  background: var(--layout-blue);
+  color: var(--on-layout-blue);
+}
+
+.seg:focus-visible {
+  outline-offset: -2px;
+}
+
+input[type="text"],
+.inline-edit {
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+  width: 100%;
+}
+
+/* ---- tabs ------------------------------------------------------------------------- */
+.tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: var(--space-2) 0 var(--space-1);
+  font-family: var(--font-title);
+  font-size: var(--text-17);
+  font-weight: var(--weight-label);
+  color: var(--ink-muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--layout-blue);
+}
+
+/* ---- title block ------------------------------------------------------------------ */
+table.ruled {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.ruled th,
+.ruled td {
+  border-bottom: 1px solid var(--rule);
+  padding: var(--space-1) var(--space-1);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.ruled thead th {
+  font-family: var(--font-title);
+  font-weight: var(--weight-title);
+  border-bottom: 2px solid var(--ink);
+}
+
+.titleblock-table {
+  margin-bottom: var(--space-2);
+  border-top: 2px solid var(--ink);
+}
+
+.titleblock-table tbody tr {
+  cursor: pointer;
+}
+
+.titleblock-table tr.off {
+  opacity: 0.45;
+}
+
+.titleblock-table tr.is-ref .design-label {
+  color: var(--layout-blue);
+  font-weight: var(--weight-title);
+}
+
+.titleblock-table .ref {
+  text-align: center;
+  width: 40px;
+}
+
+.rev-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.rev-letter {
+  font-weight: var(--weight-title);
+  font-size: var(--text-17);
+  min-width: 1.2em;
+}
+
+.design-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1);
+}
+
+.design-label {
+  flex: 1 1 100%;
+  overflow-wrap: anywhere;
+}
+
+.legend-note {
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+  margin: var(--space-2) 0 0;
+}
+
+@keyframes fresh-row {
+  from {
+    background-color: color-mix(in srgb, var(--layout-blue) 12%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+tr.fresh {
+  animation: fresh-row var(--fresh-ms) ease-out 1;
+}
+
+/* ---- figures ---------------------------------------------------------------------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.view-title {
+  font-family: var(--font-title);
+  font-size: var(--text-20);
+  font-weight: var(--weight-title);
+  margin: 0;
+}
+
+.figure-title {
+  font-family: var(--font-title);
+  font-size: var(--text-17);
+  font-weight: var(--weight-label);
+  color: var(--ink-muted);
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3) var(--space-3);
+}
+
+@media (min-width: 1200px) {
+  .panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.panel-title {
+  font-family: var(--font-title);
+  font-size: var(--text-17);
+  font-weight: var(--weight-title);
+  margin: 0 0 var(--space-1);
+}
+
+.panel-note {
+  margin: 0 0 var(--space-1);
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+.chart {
+  width: 100%;
+}
+
+.js-plotly-plot text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- summary table ---------------------------------------------------------------- */
+.table-scroll {
+  overflow-x: auto;
+  margin-top: var(--space-2);
+}
+
+.summary {
+  background: var(--sheet-raised);
+}
+
+.summary thead th {
+  vertical-align: bottom;
+}
+
+.summary .num {
+  text-align: right;
+}
+
+.th-sub {
+  display: block;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-body);
+  font-size: var(--text-12);
+  color: var(--ink-muted);
+}
+
+.summary tbody th {
+  font-weight: var(--weight-body);
+}
+
+.summary .unit {
+  color: var(--ink-muted);
+}
+
+/* ---- empty state, dialog ---------------------------------------------------------- */
+.empty {
+  max-width: 36rem;
+  padding: var(--space-4) 0;
+}
+
+.empty-title {
+  font-family: var(--font-title);
+  font-size: var(--text-24);
+  font-weight: var(--weight-title);
+  line-height: 1.25;
+  margin: 0 0 var(--space-3);
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-4) var(--space-2);
+  z-index: 20;
+}
+
+.dialog {
+  background: var(--sheet);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  width: min(36rem, 100%);
+  max-height: calc(100vh - 2 * var(--space-4));
+  overflow: auto;
+  padding: var(--space-3);
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+.crumbs {
+  margin: var(--space-1) 0;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+
+.file-list {
+  list-style: none;
+  margin: var(--space-1) 0;
+  padding: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.file-list li {
+  border-bottom: 1px solid var(--rule);
+}
+
+.file-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-1);
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-row .file-name {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .titleblock,
+  .titleblock.open {
+    transition: none;
+  }
+  tr.fresh {
+    animation: none;
+  }
+}
+
+/* ---- 3D and optimization views ---------------------------------------------------- */
+.status {
+  padding: 0 var(--space-2);
+  min-height: 0;
+}
+
+.status:not(:empty) {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--rule);
+}
+
+.status .error {
+  margin: 0;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+select {
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.slider {
+  display: block;
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: var(--weight-label);
+}
+
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--layout-blue);
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+}

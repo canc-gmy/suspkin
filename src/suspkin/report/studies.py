@@ -6,7 +6,7 @@ Pure: it runs the solver and returns tidy tables (SI units), nothing is written.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -24,7 +24,9 @@ class StudyResults:
 
     ``rack`` is empty for a vehicle without steering. Corner frames are
     ``states_to_frame(metrics=True)`` plus gradients, so they carry the state columns
-    (``coilover_length``, ``toggle_margin``) next to the metrics.
+    (``coilover_length``, ``toggle_margin``) next to the metrics. ``params`` records the
+    arguments of :func:`run_standard_studies` (``travel``, ``rack``, ``roll_deg``, ``heave``,
+    ``pitch_deg``, ``steps``; ``rack`` is ``None`` for the full rack travel).
     """
 
     vehicle: Vehicle
@@ -35,6 +37,7 @@ class StudyResults:
     roll: pd.DataFrame
     pitch: pd.DataFrame
     summary: VehicleSummary
+    params: dict[str, float | int | None] = field(default_factory=dict)
 
     def tables(self) -> dict[str, pd.DataFrame]:
         """Non-empty tables by study name (file-name stems of the CSV export)."""
@@ -104,4 +107,12 @@ def run_standard_studies(
         roll=vehicle_frame(sweep_vehicle(vehicle, roll=np.linspace(-r, r, steps)), vehicle),
         pitch=vehicle_frame(sweep_vehicle(vehicle, pitch=np.linspace(-p, p, steps)), vehicle),
         summary=vehicle_summary(vehicle),
+        params={
+            "travel": travel,
+            "rack": rack,
+            "roll_deg": roll_deg,
+            "heave": heave,
+            "pitch_deg": pitch_deg,
+            "steps": steps,
+        },
     )

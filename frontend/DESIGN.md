@@ -1,0 +1,148 @@
+# suspkin web app: design system
+
+This file is the single source of truth for how the app looks. Code follows it. To change the look, edit this file first, then `src/theme/tokens.css` and `src/theme/plotlyTemplate.ts`. Components never hard-code a colour, font, size or spacing.
+
+## Subject, audience, job
+
+- **Subject:** suspension kinematics of a Formula Student car. Every result is a *design revision*: the reference car, a variant with a moved hardpoint, an optimizer's best point.
+- **Audience:** team engineers at a desk during design reviews. They read curves closely, compare small differences, and screenshot plots into reports.
+- **Primary job:** overlay several revisions on the same curves and show what changed and by how much.
+
+## Direction: the drawing office
+
+The vernacular comes from the place suspension geometry is born: the engineering drawing.
+- Light theme: **drafting film**. A cool, slightly blue-grey sheet, graphite ink, and plot grids like engineering graph paper.
+- Dark theme: **blueprint**. Deep Prussian-blue sheet with pale ink. This is a real artefact of the trade, not a generic dark mode.
+- **The memorable element is the title block.** The dataset sidebar is a drawing title block, a ruled table of revisions. Each opened dataset gets a **revision letter** (A, B, C ...) in open order. The letter is the compact name used everywhere: legends, hover labels, Δ columns ("B − A"), the summary table header. Rev A is the reference by default.
+
+Everything else stays quiet and disciplined: plots carry the information, and chrome stays out of the way.
+
+## Colour
+
+Light (drafting film):
+
+| Token | Hex | Use |
+|---|---|---|
+| `--sheet` | `#EDF1F3` | App background |
+| `--sheet-raised` | `#F8FAFB` | Plot area, table body, inputs |
+| `--ink` | `#1E2830` | Text, axes, rules |
+| `--ink-muted` | `#5B6873` | Secondary text, tick labels |
+| `--grid` | `#C9DCE4` | Plot major grid (graph-paper blue) |
+| `--grid-minor` | `#E0EBF0` | Plot minor grid |
+| `--rule` | `#B7C3CB` | Title-block and table rules |
+| `--layout-blue` | `#23468F` | The one UI accent: active tab, focus ring, selected revision, primary button. Named after machinists' layout fluid. |
+| `--danger` | `#A3341F` | Errors only |
+
+Dark (blueprint):
+
+| Token | Hex |
+|---|---|
+| `--sheet` | `#0F2A44` |
+| `--sheet-raised` | `#133352` |
+| `--ink` | `#E6EEF4` |
+| `--ink-muted` | `#9DB3C6` |
+| `--grid` | `#2A4D6E` |
+| `--grid-minor` | `#1D3C5A` |
+| `--rule` | `#3A5F82` |
+| `--layout-blue` | `#9CC3FF` |
+| `--danger` | `#FF9C85` |
+
+**Revision colours** use the Okabe-Ito order from `spec.palette`, so they match the matplotlib report. Per theme, `tokens.css` overrides the two entries that fail contrast:
+- Light: yellow `#F0E442` → `#B8A800`.
+- Dark: black `#000000` → `#FFFFFF`, and blue `#0072B2` → `#4DA3E0`.
+
+The index → hue mapping never changes between themes.
+
+## Line semantics (from `spec.linestyles`)
+
+- Solid = left / front, dashed = right / rear, dotted and dash-dot = third and fourth series of a panel.
+- Colour = revision.
+- The sidebar shows each revision's colour as a short drawn line sample, not a dot.
+- A legend appears only when a panel has more than one series.
+
+## Type
+
+- **Barlow** for UI and body text, **Barlow Semi Condensed** for panel titles, tab labels and the title block: one family in two widths. Barlow's slightly condensed, technical-signage forms suit dense engineering labels without looking like a default sans.
+- Numbers use `font-variant-numeric: tabular-nums` everywhere (tables, hover, ticks), so columns of values align. No monospace for data labels.
+- Fonts are bundled through `@fontsource/barlow` and `@fontsource/barlow-semi-condensed`, so the offline snapshot renders identically.
+- Scale on a 1.2 ratio from a 14 px base:
+  - 12: tick labels, captions
+  - 14: body, table
+  - 17: panel titles
+  - 20: view title
+  - 24: empty-state heading only
+- Weights: 400 body, 500 labels, 600 titles.
+- Sentence case everywhere. No all-caps labels, no letter-spaced eyebrows above headings.
+
+## Layout
+
+```
++---------------------------------------------------------------------------------+
+| suspkin   workspace: C:\...\veichle-dynamics             [Open files] [Export] ◐ |
++--------------------------+------------------------------------------------------+
+| Title block              | Alignment  Position  Centres  Actuation  Steering    |
+|--------------------------| Roll  Heave & pitch  |  Summary  3D  Optimization    |
+| Rev  Design         Ref  |------------------------------------------------------|
+| A  ── fs_reference   ●   | Front | Rear       Overlay | Δ to rev A              |
+| B  ── raised_lca         |------------------------------------------------------|
+| C  ── opt best           |  Camber [deg]          |  Toe [deg]                  |
+|                          |  (plot)                |  (plot)                     |
+| [+ Open files]           |------------------------+-----------------------------|
+|                          |  Caster [deg]          |  KPI [deg]                  |
+| Solid left/front,        |  (plot)                |  (plot)                     |
+| dashed right/rear        |                                                      |
++--------------------------+------------------------------------------------------+
+```
+
+- Left-aligned throughout. Title block fixed at 288 px; it collapses to a top drawer below 900 px.
+- Panels sit on a responsive grid: 2 columns at ≥1200 px, 1 below. Spacing comes from an 8 px base: 8, 16, 24, 32.
+- **No cards.** A panel is its title plus its plot area (`--sheet-raised`), separated by gutters. No shadows, no gradients, and a single 2 px radius used only on inputs and buttons.
+- Hover is linked within a figure: moving along x on one panel shows the same x on its siblings.
+- The summary table is a ruled table:
+  - one column per revision;
+  - Δ columns against the reference;
+  - unit in its own column;
+  - null shown as "-".
+
+  Δ cells are plain signed numbers, with no red/green colouring: a difference is not good or bad by itself.
+
+## Components (rules)
+
+- **Buttons:**
+  - Primary uses a `--layout-blue` fill and appears once per view at most.
+  - Secondary has a 1 px `--ink` outline.
+  - Labels say exactly what happens: "Open files", "Export snapshot", "Close".
+- **Tabs:** text only. The active tab has a 2 px `--layout-blue` underline and `--ink` text; inactive tabs use `--ink-muted`.
+- **Toggles** (Front/Rear, Overlay/Δ): a segmented control with a 1 px rule and the active segment filled `--layout-blue`.
+- **Focus:** a 2 px `--layout-blue` outline, offset 2 px, on every interactive element.
+- **Sliders** (3D pose): a native range input styled with tokens, the value shown in tabular numbers with its unit.
+- **Errors:** inline under the control that caused them, in `--danger`, saying what happened and what to do.
+  - Example: "Could not open raised_lca.yaml: the rack travel is outside the steering limits. Check `steering.rack_travel` in the file."
+- **Empty state:** the main area says "Open a vehicle YAML, a saved bundle or an optimizer run to start comparing", with one "Open files" button.
+
+## Plot template (`plotlyTemplate.ts`)
+
+- Background `--sheet-raised` and paper `--sheet`.
+- Major grid `--grid` 1 px, minor grid `--grid-minor` 1 px dotted. Axis lines `--ink` 1 px; no zero line except where x = 0 is the static pose (drawn in `--ink-muted`, 1 px).
+- Tick font Barlow 12 `--ink-muted` in tabular figures. Axis titles Barlow 14 `--ink` in the form "Camber [deg]".
+- Line width 1.75 px. The static-pose marker is a single small ring at x = 0 on the reference revision only.
+- Hover is unified on x, showing "A  −1.24 deg" per revision with the letter in its colour.
+- The modebar shows only download-PNG and reset-axes. Downloaded PNGs use the light theme at 2× scale, for reports.
+
+## Motion
+
+- No ambient or entrance animation.
+- Motion only answers an action: the title-block drawer opening (150 ms), and a newly opened revision row highlighting once (`--layout-blue` at 12% opacity fading out over 600 ms).
+- `prefers-reduced-motion` disables both.
+
+## Copy
+
+- Plain verbs, sentence case, no filler.
+- Name things the engineer's way: "revision", "reference", "front corner", "bump travel".
+- Never use internal names like "bundle schema" or "dataset id".
+- An action keeps its name through the flow: "Export snapshot" leads to "Snapshot exported to compare.html".
+
+## Review against the brief (generic-default check)
+
+- **Rejected:** a dark dashboard with a single neon accent, SaaS cards with shadows, Inter/system sans with mono data labels, all-caps eyebrows. These read the same for any analytics tool.
+- **Chosen:** drafting film and blueprint themes, the title-block sidebar with revision letters, graph-paper plot grids, and one condensed technical family. These come from engineering drawing practice and make "compare revisions" the visible organising idea.
