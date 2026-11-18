@@ -11,6 +11,7 @@ import builtins
 import hashlib
 import json
 import math
+import os
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -18,8 +19,11 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
+from pydantic import ValidationError
 
 from suspkin.geometry import Vehicle, VehicleConfigError, load_vehicle
+from suspkin.kinematics import KinematicsError
 from suspkin.optimize.history import read_history
 from suspkin.optimize.outputs import read_meta
 from suspkin.plotting.spec import derived_columns
@@ -31,11 +35,15 @@ __all__ = [
     "DatasetError",
     "DatasetManager",
     "DatasetNotFoundError",
+    "DatasetTooLargeError",
     "RunInfo",
     "WorkspaceError",
     "classify",
     "clean_json",
 ]
+
+
+MAX_VEHICLE_BYTES = 2_000_000
 
 
 class WorkspaceError(PermissionError):
@@ -44,6 +52,10 @@ class WorkspaceError(PermissionError):
 
 class DatasetError(ValueError):
     """A path that cannot be opened as a dataset."""
+
+
+class DatasetTooLargeError(DatasetError):
+    """A vehicle file above :data:`MAX_VEHICLE_BYTES`."""
 
 
 class DatasetNotFoundError(LookupError):
@@ -93,6 +105,25 @@ def clean_json(obj: Any) -> Any:
     if isinstance(obj, float):
         return obj if math.isfinite(obj) else None
     return obj
+
+
+def _stat_sig(*files: Path) -> str:
+    """Cheap change signature of files: name, size and mtime (missing files count as absent)."""
+    parts = []
+    for f in files:
+        try:
+            st = f.stat()
+            parts.append(f"{f.name}:{st.st_size}:{st.st_mtime_ns}")
+        except OSError:
+            parts.append(f"{f.name}:-")
+    return "|".join(parts)
+
+
+def _vehicle_from_bytes(data: bytes, where: str) -> Vehicle:
+    try:
+        return Vehicle.model_validate(yaml.safe_load(data.decode("utf-8")))
+    except (UnicodeDecodeError, yaml.YAMLError, ValidationError) as exc:
+        raise VehicleConfigError(f"{where}: {exc}") from exc
 
 
 def _short(*parts: str) -> str:
@@ -146,17 +177,47 @@ class DatasetManager:
         self._datasets: dict[str, Dataset] = {}
         self._runs: dict[str, RunInfo] = {}
         self._cache: dict[tuple[str, tuple[tuple[str, Any], ...]], _Solved] = {}
+        self._kinds: dict[tuple[str, int, int], str] = {}
 
     # ----------------------------------------------------------------------- paths
     def resolve(self, path: str | Path) -> Path:
-        """Resolve ``path`` (absolute or workspace-relative); it must be inside the workspace."""
+        """Resolve ``path`` (absolute or workspace-relative); it must be inside the workspace.
+
+        Network (UNC) paths and paths on another drive are rejected before anything touches
+        the file system, so no network access can happen.
+        """
+        raw = str(path)
+        if raw.startswith(("\\\\", "//")):
+            raise WorkspaceError(f"network paths are not allowed: {path}")
         p = Path(path)
+        ws_drive = os.path.normcase(os.path.splitdrive(str(self.workspace))[0])
+        if p.is_absolute() or p.drive:
+            drive = os.path.normcase(os.path.splitdrive(os.path.abspath(p))[0])
+            if drive != ws_drive:
+                raise WorkspaceError(f"path is outside the workspace: {path}")
         if not p.is_absolute():
             p = self.workspace / p
         p = p.resolve()
-        if not p.is_relative_to(self.workspace):
+        if not self._inside(p):
             raise WorkspaceError(f"path is outside the workspace: {path}")
         return p
+
+    def _inside(self, p: Path) -> bool:
+        try:
+            q = p.resolve()
+        except OSError:
+            return False
+        if q.is_relative_to(self.workspace):
+            return True
+        ws = os.path.normcase(str(self.workspace))
+        qq = os.path.normcase(str(q))
+        return qq == ws or qq.startswith(ws.rstrip(os.sep) + os.sep)
+
+    def _guard(self, *files: Path) -> None:
+        """Refuse existing files (e.g. symlinks) that resolve outside the workspace."""
+        for f in files:
+            if os.path.lexists(f) and not self._inside(f):
+                raise WorkspaceError(f"{f.name} points outside the workspace")
 
     def rel(self, p: Path) -> str:
         """Workspace-relative POSIX path ('' for the root)."""
@@ -171,31 +232,47 @@ class DatasetManager:
             raise FileNotFoundError(f"no such file or folder: {self.rel(p)}")
         if p.is_dir():
             if is_bundle(p):
-                return [self._open_bundle(p)]
+                return [self._register_bundle(*self._load_bundle(p))]
             if _is_run(p):
                 return self._open_run(p)
             if _is_report(p):
-                out = [
-                    self._open_bundle(b) for b in sorted((p / "bundles").iterdir()) if is_bundle(b)
+                bundles = [
+                    b for b in sorted((p / "bundles").iterdir()) if self._inside(b) and is_bundle(b)
                 ]
-                if not out:
+                if not bundles:
                     raise DatasetError(f"report folder has no bundles: {self.rel(p)}")
-                return out
+                loaded = [self._load_bundle(b) for b in bundles]  # all or nothing
+                return [self._register_bundle(*item) for item in loaded]
             raise DatasetError(f"not a bundle, report or optimizer run folder: {self.rel(p)}")
         return [self._open_vehicle(p)]
 
-    def _solve(self, vehicle_path: Path) -> _Solved:
-        data = vehicle_path.read_bytes()
-        key = (hashlib.sha256(data).hexdigest(), tuple(sorted(self.study_params.items())))
+    def _read_vehicle_file(self, path: Path) -> bytes:
+        self._guard(path)
+        try:
+            size = path.stat().st_size
+            if size > MAX_VEHICLE_BYTES:
+                raise DatasetTooLargeError(
+                    f"{self.rel(path)} is {size / 1e6:.1f} MB; vehicle files are limited to "
+                    f"{MAX_VEHICLE_BYTES / 1e6:.0f} MB"
+                )
+            return path.read_bytes()
+        except OSError as exc:
+            raise DatasetError(f"cannot read {self.rel(path)}: {exc}") from exc
+
+    def _solve(self, vehicle_path: Path, data: bytes, digest: str) -> _Solved:
+        key = (digest, tuple(sorted(self.study_params.items())))
         with self._lock:
             hit = self._cache.get(key)
         if hit is not None:
             return hit
         try:
-            veh = load_vehicle(vehicle_path)
+            veh = _vehicle_from_bytes(data, self.rel(vehicle_path))
         except VehicleConfigError as exc:
             raise DatasetError(f"{self.rel(vehicle_path)} is not a vehicle: {exc}") from exc
-        res = run_standard_studies(veh, **self.study_params)
+        try:
+            res = run_standard_studies(veh, **self.study_params)
+        except (KinematicsError, ValueError, ArithmeticError) as exc:
+            raise DatasetError(f"cannot solve {self.rel(vehicle_path)}: {exc}") from exc
         solved = _Solved(
             vehicle=veh,
             tables={k: derived_columns(k, v) for k, v in res.tables().items()},
@@ -245,16 +322,26 @@ class DatasetManager:
     def _open_vehicle(
         self, p: Path, *, label: str | None = None, kind: str = "vehicle", run_id: str | None = None
     ) -> Dataset:
-        solved = self._solve(p)
-        content = hashlib.sha256(p.read_bytes()).hexdigest()[:16]
+        data = self._read_vehicle_file(p)  # read once: the digest keys both cache and id
+        digest = hashlib.sha256(data).hexdigest()
+        solved = self._solve(p, data, digest)
         return self._register(
-            kind=kind, path=p, label=label or p.stem, solved=solved, run_id=run_id, content=content
+            kind=kind,
+            path=p,
+            label=label or p.stem,
+            solved=solved,
+            run_id=run_id,
+            content=digest[:16],
         )
 
-    def _open_bundle(self, p: Path) -> Dataset:
+    def _load_bundle(self, p: Path) -> tuple[Path, Any, _Solved, str]:
+        """Read a bundle (no registration): ``(path, bundle, solved, content signature)``."""
+        files = [p / "manifest.json", p / "vehicle.yaml", p / "summary.json"]
+        files += sorted((p / "tables").glob("*.csv")) if (p / "tables").is_dir() else []
+        self._guard(p, *files)
         try:
             b = load_bundle(p)
-        except (BundleError, OSError, ValueError, VehicleConfigError) as exc:
+        except (BundleError, OSError, ValueError, VehicleConfigError, yaml.YAMLError) as exc:
             raise DatasetError(f"cannot read bundle {self.rel(p)}: {exc}") from exc
         solved = _Solved(
             vehicle=b.vehicle,
@@ -262,19 +349,32 @@ class DatasetManager:
             summary=clean_json(b.summary),
             params=clean_json(dict(b.manifest.get("params") or {})),
         )
-        mtime = str((p / "manifest.json").stat().st_mtime_ns)
-        return self._register(kind="bundle", path=p, label=b.label, solved=solved, content=mtime)
+        return p, b, solved, _stat_sig(*files)
+
+    def _register_bundle(self, p: Path, b: Any, solved: _Solved, sig: str) -> Dataset:
+        return self._register(kind="bundle", path=p, label=b.label, solved=solved, content=sig)
 
     def _open_run(self, p: Path) -> list[Dataset]:
-        run_id = _short("run", str(p))
-        meta = read_meta(p)
+        self._guard(
+            p / "history.csv",
+            p / "meta.json",
+            p / "result.json",
+            p / "vehicle.yaml",
+            p / "best.yaml",
+        )
+        # the id changes when the history file changes, so a re-run never shows stale data
+        run_id = _short("run", str(p), _stat_sig(p / "history.csv"))
+        meta = clean_json(read_meta(p))
         try:
-            result = json.loads((p / "result.json").read_text(encoding="utf-8"))
+            result = clean_json(json.loads((p / "result.json").read_text(encoding="utf-8")))
         except (OSError, ValueError):
             result = {}
         if not isinstance(result, dict):
             result = {}
-        history = read_history(p / "history.csv")
+        try:
+            history = read_history(p / "history.csv")
+        except (OSError, ValueError, pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
+            raise DatasetError(f"cannot read the history of {self.rel(p)}: {exc}") from exc
         items: list[tuple[str, Path]] = []
         if (p / "vehicle.yaml").is_file():
             items.append(("baseline", p / "vehicle.yaml"))
@@ -285,27 +385,33 @@ class DatasetManager:
             items.append(("knee", knee))
         if not items:
             raise DatasetError(f"run folder has no vehicle.yaml/best.yaml: {self.rel(p)}")
-        with self._lock:
-            self._runs[run_id] = RunInfo(run_id, history, meta, result)
-        return [
+        datasets = [
             self._open_vehicle(q, label=f"{p.name} {lab}", kind="run", run_id=run_id)
             for lab, q in items
         ]
+        with self._lock:
+            self._runs[run_id] = RunInfo(run_id, history, meta, result)
+            for d in datasets:  # a re-opened run replaces its stale history
+                d.run_id = run_id
+            live = {d.run_id for d in self._datasets.values()}
+            for rid in [r for r in self._runs if r not in live]:
+                del self._runs[rid]
+        return datasets
 
-    @staticmethod
-    def _knee_path(p: Path, result: dict[str, Any]) -> Path | None:
+    def _knee_path(self, p: Path, result: dict[str, Any]) -> Path | None:
         if result.get("knee_eval_id") is None:
             return None
         tab = p / "pareto.csv"
         if not tab.is_file():
             return None
         try:
+            self._guard(tab)
             df = pd.read_csv(tab)
             k = int(df.loc[df["knee"].astype(bool), "k"].iloc[0])
-        except (OSError, ValueError, KeyError, IndexError):
+        except (OSError, ValueError, KeyError, IndexError, WorkspaceError):
             return None
         q = p / "pareto" / f"pareto_{k}.yaml"
-        return q if q.is_file() else None
+        return q if q.is_file() and self._inside(q) else None
 
     # ------------------------------------------------------------------- registry
     def list(self) -> list[Dataset]:
@@ -357,6 +463,24 @@ class DatasetManager:
                 raise DatasetNotFoundError(f"unknown run: {run_id}") from None
 
     # --------------------------------------------------------------------- browse
+    def _kind(self, q: Path) -> str:
+        """``classify(q)`` cached by (path, mtime, size): listing a folder stays cheap."""
+        try:
+            st = q.stat()
+        except OSError:
+            return "other"
+        key = (str(q), st.st_mtime_ns, st.st_size)
+        with self._lock:
+            hit = self._kinds.get(key)
+        if hit is not None:
+            return hit
+        kind = classify(q)
+        with self._lock:
+            if len(self._kinds) > 4096:
+                self._kinds.clear()
+            self._kinds[key] = kind
+        return kind
+
     def browse(self, directory: str | Path = "") -> tuple[str, builtins.list[tuple[str, str, str]]]:
         """List a workspace directory: ``(rel dir, [(name, rel path, kind)])``."""
         d = self.resolve(directory)
@@ -371,5 +495,5 @@ class DatasetManager:
             except OSError:  # pragma: no cover
                 continue
             if inside:
-                entries.append((q.name, self.rel(q), classify(q)))
+                entries.append((q.name, self.rel(q), self._kind(q)))
         return self.rel(d), entries

@@ -89,7 +89,12 @@ export function useOpenPath() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (path: string) => src.openPath(path),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+    // a re-opened run may have a new history: drop cached histories and the dataset list
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["datasets"] }),
+        qc.invalidateQueries({ queryKey: ["history"] }),
+      ]),
   });
 }
 
@@ -113,5 +118,7 @@ export function useCloseDataset() {
 
 export function useExportSnapshot() {
   const src = useSource();
-  return useMutation({ mutationFn: (out?: string) => src.exportSnapshot(out) });
+  return useMutation({
+    mutationFn: (a: { out?: string; overwrite?: boolean }) => src.exportSnapshot(a.out, a.overwrite),
+  });
 }

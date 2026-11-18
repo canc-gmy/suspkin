@@ -9,6 +9,7 @@ export type TableData = S["TableOut"];
 export type HistoryData = S["HistoryOut"];
 export type BrowseData = S["BrowseOut"];
 export type BrowseEntry = S["BrowseEntry"];
+export type PoseInput = S["PoseInput"];
 export type ExportResult = S["ExportOut"];
 export type DatasetKind = DatasetInfo["kind"];
 

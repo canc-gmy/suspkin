@@ -85,8 +85,8 @@ export class HttpSource implements DataSource {
   getHistory(runId: string): Ret<"getHistory"> {
     return this.request(`/runs/${encodeURIComponent(runId)}/history`);
   }
-  exportSnapshot(out?: string): Ret<"exportSnapshot"> {
-    return this.request("/export", this.json("POST", out ? { out } : {}));
+  exportSnapshot(out?: string, overwrite = false): Ret<"exportSnapshot"> {
+    return this.request("/export", this.json("POST", { ...(out ? { out } : {}), overwrite }));
   }
   browse(dir: string): Ret<"browse"> {
     return this.request(`/browse?dir=${encodeURIComponent(dir)}`);

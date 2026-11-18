@@ -294,6 +294,8 @@
             "required": false,
             "schema": {
               "type": "number",
+              "maximum": 0.2,
+              "minimum": -0.2,
               "default": 0.0,
               "title": "Heave"
             }
@@ -304,6 +306,8 @@
             "required": false,
             "schema": {
               "type": "number",
+              "maximum": 0.35,
+              "minimum": -0.35,
               "default": 0.0,
               "title": "Roll"
             }
@@ -314,6 +318,8 @@
             "required": false,
             "schema": {
               "type": "number",
+              "maximum": 0.35,
+              "minimum": -0.35,
               "default": 0.0,
               "title": "Pitch"
             }
@@ -324,6 +330,8 @@
             "required": false,
             "schema": {
               "type": "number",
+              "maximum": 0.2,
+              "minimum": -0.2,
               "default": 0.0,
               "title": "Rack"
             }
@@ -566,7 +574,6 @@
             "enum": [
               "vehicle",
               "bundle",
-              "report",
               "run"
             ],
             "title": "Kind"
@@ -683,6 +690,12 @@
             ],
             "title": "Out",
             "description": "Workspace-relative output file (default: timestamped name)."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "description": "Replace an existing snapshot file (never any other file).",
+            "default": false
           }
         },
         "type": "object",
@@ -717,6 +730,14 @@
             "type": "string",
             "title": "Workspace",
             "description": "Absolute path of the workspace root."
+          },
+          "pose": {
+            "items": {
+              "$ref": "#/components/schemas/PoseInput"
+            },
+            "type": "array",
+            "title": "Pose",
+            "description": "3D pose inputs."
           }
         },
         "type": "object",
@@ -844,6 +865,71 @@
         ],
         "title": "OpenRequest",
         "description": "Open a path (absolute, or relative to the workspace)."
+      },
+      "PoseInput": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "heave",
+              "roll",
+              "pitch",
+              "rack"
+            ],
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "si_unit": {
+            "type": "string",
+            "title": "Si Unit"
+          },
+          "display_unit": {
+            "type": "string",
+            "title": "Display Unit"
+          },
+          "factor": {
+            "type": "number",
+            "title": "Factor",
+            "description": "Display value = SI value x factor."
+          },
+          "param": {
+            "type": "string",
+            "title": "Param",
+            "description": "Dataset study parameter that sets the slider range."
+          },
+          "param_factor": {
+            "type": "number",
+            "title": "Param Factor",
+            "description": "Display value of the parameter = parameter x this."
+          },
+          "default_max": {
+            "type": "number",
+            "title": "Default Max",
+            "description": "Range (+-, display unit) when the parameter is unset."
+          },
+          "step": {
+            "type": "number",
+            "title": "Step",
+            "description": "Slider step in display units."
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label",
+          "si_unit",
+          "display_unit",
+          "factor",
+          "param",
+          "param_factor",
+          "default_max",
+          "step"
+        ],
+        "title": "PoseInput",
+        "description": "One body-pose input of the 3D view: SI unit, display unit and how to convert."
       },
       "TableOut": {
         "properties": {

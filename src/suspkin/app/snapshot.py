@@ -7,19 +7,40 @@ frontend needs inlined as ``window.__SUSPKIN_SNAPSHOT__`` (read by ``SnapshotSou
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from suspkin import __version__
 from suspkin.app.datasets import DatasetManager
-from suspkin.app.routes import _column, _dataset_out, history_out, scene_json
+from suspkin.app.routes import _column, _dataset_out, health_out, history_out, scene_json
 from suspkin.plotting.spec import spec_json
 
-__all__ = ["DEFAULT_SINGLE_DIR", "build_snapshot", "export_dataset_snapshot", "export_snapshot"]
+__all__ = [
+    "DEFAULT_SINGLE_DIR",
+    "SNAPSHOT_MARKER",
+    "WARN_BYTES",
+    "build_snapshot",
+    "export_dataset_snapshot",
+    "export_snapshot",
+    "is_snapshot_file",
+]
 
 DEFAULT_SINGLE_DIR = Path(__file__).parent / "static_single"
+SNAPSHOT_MARKER = '<meta name="suspkin-snapshot" content="1">'
+WARN_BYTES = 25_000_000
+log = logging.getLogger("suspkin.app")
+
+
+def is_snapshot_file(path: Path) -> bool:
+    """True if ``path`` is a page written by :func:`export_dataset_snapshot` (has the marker)."""
+    try:
+        with path.open("rb") as f:
+            head = f.read(8192)
+    except OSError:
+        return False
+    return SNAPSHOT_MARKER.encode("utf-8") in head
 
 
 def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> dict[str, Any]:
@@ -43,7 +64,8 @@ def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> di
         except ImportError:
             scenes = {}  # plotly is not installed: the 3D tab reports no scene
     return {
-        "health": {"status": "ok", "version": __version__, "workspace": manager.workspace.name},
+        "health": health_out(manager).model_dump(mode="json")
+        | {"workspace": manager.workspace.name},
         "figures": spec_json(),
         "datasets": [_dataset_out(d).model_dump(mode="json") for d in datasets],
         "tables": tables,
@@ -76,13 +98,22 @@ def export_dataset_snapshot(
     html = tpl.read_text(encoding="utf-8")
     data = _embed(build_snapshot(manager, include_scene=include_scene))
     script = f"<script>window.__SUSPKIN_SNAPSHOT__={data}</script>"
-    html, n = re.subn(r"<head[^>]*>", lambda m: m.group(0) + script, html, count=1)
+    html, n = re.subn(
+        r"<head[^>]*>", lambda m: m.group(0) + SNAPSHOT_MARKER + script, html, count=1
+    )
     if n != 1:
         raise ValueError(f"template has no <head>: {tpl}")
     out_html.parent.mkdir(parents=True, exist_ok=True)
     blob = html.encode("utf-8")
     with out_html.open("wb") as f:
         f.write(blob)
+    log.info("snapshot %s: %.1f MB", out_html, len(blob) / 1e6)
+    if len(blob) > WARN_BYTES:
+        log.warning(
+            "snapshot %s is %.0f MB; consider --no-scene or fewer revisions",
+            out_html,
+            len(blob) / 1e6,
+        )
     return len(blob)
 
 

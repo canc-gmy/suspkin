@@ -14,16 +14,32 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient as _TestClient
 from typer.testing import CliRunner
 
 import suspkin.app.snapshot as snap_mod
 from suspkin.app.datasets import DatasetManager
 from suspkin.app.routes import analyse_history
 from suspkin.app.server import create_app
-from suspkin.app.snapshot import build_snapshot, export_dataset_snapshot, export_snapshot
+from suspkin.app.snapshot import (
+    SNAPSHOT_MARKER,
+    build_snapshot,
+    export_dataset_snapshot,
+    export_snapshot,
+)
 from suspkin.cli import app as cli_app
 from tests.unit.helpers import FIXTURE
+
+
+class TestClient(_TestClient):
+    """TestClient that talks to ``localhost`` (the app rejects unknown Host headers)."""
+
+    __test__ = False
+
+    def __init__(self, app: Any, **kw: Any) -> None:
+        kw.setdefault("base_url", "http://localhost")
+        super().__init__(app, **kw)
+
 
 API = "/api/v1"
 PARAMS = {"steps": 5, "travel": 0.02, "roll_deg": 1.0}
@@ -125,7 +141,13 @@ def test_export_snapshot_embeds_only_given_paths(ws: Path) -> None:
     raw = out.read_bytes()
     assert size == len(raw) and b"\r\n" not in raw
     html = raw.decode("utf-8")
-    m = re.search(r"<head><script>window\.__SUSPKIN_SNAPSHOT__=(.*?)</script>", html, re.S)
+    m = re.search(
+        r"<head>"
+        + re.escape(SNAPSHOT_MARKER)
+        + r"<script>window\.__SUSPKIN_SNAPSHOT__=(.*?)</script>",
+        html,
+        re.S,
+    )
     assert m is not None
     data: dict[str, Any] = json.loads(m.group(1))
     assert [d["label"] for d in data["datasets"]] == ["car"]
@@ -181,3 +203,252 @@ def test_export_route(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert re.fullmatch(r"suspkin_snapshot_\d{8}_\d{6}\.html", default)
     assert c.post(f"{API}/export", json={"out": "../evil.html"}).status_code == 403
     assert c.post(f"{API}/export", json={"out": "notes.txt"}).status_code == 400
+
+
+# ------------------------------------------------------------------------------ hardening
+import os  # noqa: E402
+
+import suspkin.app.datasets as ds_mod  # noqa: E402
+from suspkin.app.datasets import WorkspaceError  # noqa: E402
+from suspkin.geometry import load_vehicle  # noqa: E402
+from suspkin.report import run_standard_studies, save_bundle  # noqa: E402
+
+
+def _client(ws: Path) -> TestClient:
+    return TestClient(create_app(ws, static_dir=ws / "none", study_params=PARAMS))
+
+
+def _run_folder(root: Path, name: str = "run1", *, result: str | None = None) -> Path:
+    run = root / name
+    run.mkdir()
+    shutil.copyfile(FIXTURE, run / "vehicle.yaml")
+    shutil.copyfile(FIXTURE, run / "best.yaml")
+    _history().to_csv(run / "history.csv", index=False)
+    (run / "meta.json").write_text(json.dumps({"mode": "weighted"}), encoding="utf-8")
+    (run / "result.json").write_text(result or json.dumps({"mode": "weighted"}), encoding="utf-8")
+    return run
+
+
+def test_unc_and_other_drive_paths_rejected(ws: Path) -> None:
+    mgr = DatasetManager(ws)
+    for bad in ("\\\\server\\share\\car.yaml", "//server/share/car.yaml"):
+        with pytest.raises(WorkspaceError, match="network"):
+            mgr.resolve(bad)
+    c = _client(ws)
+    assert c.post(f"{API}/datasets", json={"path": "//server/share/x"}).status_code == 403
+    assert c.get(f"{API}/browse", params={"dir": "\\\\server\\share"}).status_code == 403
+    if os.name == "nt":
+        own = os.path.splitdrive(str(ws))[0].upper()
+        other = next(f"{d}:" for d in "DEFGHZ" if f"{d}:" != own)
+        with pytest.raises(WorkspaceError):
+            mgr.resolve(f"{other}\\car.yaml")
+        with pytest.raises(WorkspaceError):
+            mgr.resolve(f"{other}car.yaml")  # drive-relative
+
+
+def test_dotdot_and_case_variants(ws: Path) -> None:
+    mgr = DatasetManager(ws)
+    with pytest.raises(WorkspaceError):
+        mgr.resolve("../outside.yaml")
+    with pytest.raises(WorkspaceError):
+        mgr.resolve(str(ws.parent / "outside.yaml"))
+    if os.name == "nt":  # case-insensitive file system: still inside the workspace
+        assert mgr.resolve(str(ws).swapcase() + "\\car.yaml").name.lower() == "car.yaml"
+        assert mgr.open(str(ws / "CAR.YAML"))
+
+
+def _symlink(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks are not available here")
+
+
+def test_symlinked_children_outside_workspace_denied(
+    ws: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    outside = tmp_path_factory.mktemp("outside")
+    secret = outside / "history.csv"
+    _history().to_csv(secret, index=False)
+    run = _run_folder(ws, "linked")
+    (run / "history.csv").unlink()
+    _symlink(run / "history.csv", secret)
+    c = _client(ws)
+    r = c.post(f"{API}/datasets", json={"path": "linked"})
+    assert r.status_code == 403 and "outside the workspace" in r.json()["detail"]
+    # a symlinked vehicle file is denied too
+    shutil.copyfile(FIXTURE, outside / "car.yaml")
+    _symlink(ws / "link.yaml", outside / "car.yaml")
+    assert c.post(f"{API}/datasets", json={"path": "link.yaml"}).status_code == 403
+
+
+def test_export_outside_and_overwrite_rules(
+    ws: Path, tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(snap_mod, "DEFAULT_SINGLE_DIR", ws / "tpl")
+    c = _client(ws)
+    c.post(f"{API}/datasets", json={"path": "car.yaml"})
+    outside = tmp_path_factory.mktemp("elsewhere") / "x.html"
+    assert c.post(f"{API}/export", json={"out": str(outside)}).status_code == 403
+    assert not outside.exists()
+    # a file that is not a snapshot is never replaced, even with overwrite
+    (ws / "notes.html").write_text("<html>mine</html>", encoding="utf-8")
+    for flag in (False, True):
+        r = c.post(f"{API}/export", json={"out": "notes.html", "overwrite": flag})
+        assert r.status_code == 400 and "not a suspkin snapshot" in r.json()["detail"]
+    assert (ws / "notes.html").read_text(encoding="utf-8") == "<html>mine</html>"
+    # a snapshot needs overwrite=true
+    assert c.post(f"{API}/export", json={"out": "s.html"}).status_code == 200
+    r = c.post(f"{API}/export", json={"out": "s.html"})
+    assert r.status_code == 409 and r.json()["detail"] == "already exists: s.html"
+    assert c.post(f"{API}/export", json={"out": "s.html", "overwrite": True}).status_code == 200
+    assert (ws / "s.html").read_text(encoding="utf-8").count(SNAPSHOT_MARKER) == 1
+    assert c.post(f"{API}/export", json={"out": "sub"}).status_code == 400  # not .html
+
+
+def test_file_changed_after_open_gets_new_id_and_solve(
+    ws: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[int] = []
+    real = ds_mod.run_standard_studies
+
+    def counting(*a: Any, **k: Any) -> Any:
+        calls.append(1)
+        return real(*a, **k)
+
+    monkeypatch.setattr(ds_mod, "run_standard_studies", counting)
+    mgr = DatasetManager(ws, study_params=PARAMS)
+    (a,) = mgr.open("car.yaml")
+    assert mgr.open("car.yaml")[0].id == a.id and len(calls) == 1
+    with (ws / "car.yaml").open("a", encoding="utf-8", newline="\n") as f:
+        f.write("\n# edited\n")
+    (b,) = mgr.open("car.yaml")
+    assert b.id != a.id and len(calls) == 2 and len(mgr.list()) == 2
+
+
+def test_oversize_and_unreadable_inputs(ws: Path) -> None:
+    c = _client(ws)
+    (ws / "big.yaml").write_text("# " + "x" * 2_100_000 + "\n", encoding="utf-8")
+    r = c.post(f"{API}/datasets", json={"path": "big.yaml"})
+    assert r.status_code == 413 and "limited" in r.json()["detail"]
+    run = _run_folder(ws, "badhist")
+    (run / "history.csv").write_bytes(b"\xff\xfe\x00\x00 not csv")
+    assert c.post(f"{API}/datasets", json={"path": "badhist"}).status_code == 400
+    (ws / "broken.yaml").write_text("a: [unclosed\n", encoding="utf-8")
+    assert c.post(f"{API}/datasets", json={"path": "broken.yaml"}).status_code == 400
+
+
+def test_run_id_follows_history_file(ws: Path) -> None:
+    run = _run_folder(ws)
+    mgr = DatasetManager(ws, study_params=PARAMS)
+    first = mgr.open("run1")[0].run_id
+    assert mgr.open("run1")[0].run_id == first
+    h = _history()
+    h.loc[0, "f_total"] = 99.0
+    h.to_csv(run / "history.csv", index=False)
+    os.utime(run / "history.csv", ns=(10**18, 10**18))
+    assert mgr.open("run1")[0].run_id != first
+
+
+def test_result_with_nan_and_knee_without_pareto_csv(ws: Path) -> None:
+    result = (
+        '{"mode": "weighted", "knee_eval_id": 1, '
+        '"baseline": {"f_total": NaN, "g": {"a": Infinity}}}'
+    )
+    _run_folder(ws, "nanrun", result=result)
+    c = _client(ws)
+    ds = c.post(f"{API}/datasets", json={"path": "nanrun"}).json()
+    assert [d["label"] for d in ds] == ["nanrun baseline", "nanrun best"]  # no pareto.csv: no knee
+    r = c.get(f"{API}/runs/{ds[0]['run_id']}/history")
+    assert r.status_code == 200 and "NaN" not in r.text and "Infinity" not in r.text
+    assert r.json()["result"]["baseline"]["f_total"] is None
+
+
+def test_report_folder_opens_all_or_nothing(ws: Path) -> None:
+    res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
+    (ws / "rep" / "bundles").mkdir(parents=True)
+    save_bundle(res, ws / "rep" / "bundles" / "a", label="a")
+    save_bundle(res, ws / "rep" / "bundles" / "b", label="b")
+    (ws / "rep" / "bundles" / "b" / "summary.json").unlink()
+    c = _client(ws)
+    assert c.post(f"{API}/datasets", json={"path": "rep"}).status_code == 400
+    assert c.get(f"{API}/datasets").json() == []
+
+
+def test_bundle_id_changes_with_files(ws: Path) -> None:
+    res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
+    save_bundle(res, ws / "b1", label="b1")
+    mgr = DatasetManager(ws)
+    a = mgr.open("b1")[0].id
+    assert mgr.open("b1")[0].id == a
+    tab = next((ws / "b1" / "tables").glob("*.csv"))
+    tab.write_text(tab.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+    assert mgr.open("b1")[0].id != a
+
+
+def test_host_header_guard(ws: Path) -> None:
+    c = _client(ws)
+    assert c.get(f"{API}/health", headers={"Host": "evil.example"}).status_code == 400
+    assert c.get(f"{API}/health", headers={"Host": "evil.example:8765"}).status_code == 400
+    for good in ("localhost:8765", "127.0.0.1:8765", "[::1]:8765", "LOCALHOST"):
+        assert c.get(f"{API}/health", headers={"Host": good}).status_code == 200, good
+    custom = TestClient(
+        create_app(ws, static_dir=ws / "none", allowed_hosts=["mybox"]), base_url="http://mybox"
+    )
+    assert custom.get(f"{API}/health").status_code == 200
+    anyhost = TestClient(
+        create_app(ws, static_dir=ws / "none", allowed_hosts=["*"]), base_url="http://whatever"
+    )
+    assert anyhost.get(f"{API}/health").status_code == 200
+
+
+def test_scene_rejects_non_finite_and_out_of_range(ws: Path) -> None:
+    c = _client(ws)
+    (d,) = c.post(f"{API}/datasets", json={"path": "car.yaml"}).json()
+    base = f"{API}/datasets/{d['id']}/scene"
+    for q in ("heave=nan", "roll=inf", "pitch=-inf", "rack=nan", "heave=0.5", "roll=1.0"):
+        assert c.get(f"{base}?{q}").status_code == 422, q
+
+
+def test_health_has_pose_metadata_and_kinds(ws: Path) -> None:
+    c = _client(ws)
+    pose = {p["name"]: p for p in c.get(f"{API}/health").json()["pose"]}
+    assert set(pose) == {"heave", "roll", "pitch", "rack"}
+    assert pose["heave"]["display_unit"] == "mm" and pose["heave"]["factor"] == pytest.approx(1000)
+    assert pose["roll"]["factor"] == pytest.approx(180 / 3.141592653589793)
+    schema = c.get("/openapi.json").json()["components"]["schemas"]
+    assert "report" not in schema["DatasetOut"]["properties"]["kind"]["enum"]
+    assert "report" in schema["BrowseEntry"]["properties"]["kind"]["enum"]
+
+
+def test_browse_kind_cache(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    real = ds_mod.classify
+
+    def spy(p: Path) -> str:
+        calls.append(p.name)
+        return real(p)
+
+    monkeypatch.setattr(ds_mod, "classify", spy)
+    c = _client(ws)
+    c.get(f"{API}/browse")
+    n = len(calls)
+    assert n >= 2
+    c.get(f"{API}/browse")
+    assert len(calls) == n  # unchanged entries are not classified again
+
+
+def test_run_warns_for_non_loopback_host(
+    ws: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import uvicorn
+
+    from suspkin.app.server import run
+
+    served: list[Any] = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: served.append(kw))
+    run(ws, host="127.0.0.1", open_browser=False)
+    assert "WARNING" not in capsys.readouterr().err
+    run(ws, host="0.0.0.0", open_browser=False)
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "0.0.0.0" in err and len(served) == 2

@@ -28,7 +28,7 @@ export interface DataSource {
   getHistory(runId: string): Promise<HistoryData>;
   browse(dir: string): Promise<BrowseData>;
   /** Write a snapshot of the open revisions into the workspace. */
-  exportSnapshot(out?: string): Promise<ExportResult>;
+  exportSnapshot(out?: string, overwrite?: boolean): Promise<ExportResult>;
 }
 
 /** An API failure with a message that is safe to show under the control that caused it. */

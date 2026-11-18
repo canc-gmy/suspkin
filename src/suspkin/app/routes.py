@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any
+from typing import Annotated, Any
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from suspkin import __version__
-from suspkin.app.datasets import Dataset, DatasetManager, RunInfo
+from suspkin.app.datasets import Dataset, DatasetManager, RunInfo, clean_json
 from suspkin.app.models import (
     BrowseEntry,
     BrowseOut,
@@ -22,11 +22,13 @@ from suspkin.app.models import (
     HealthOut,
     HistoryOut,
     OpenRequest,
+    PoseInput,
     TableOut,
 )
 from suspkin.kinematics import KinematicsError, solve_vehicle
 from suspkin.plotting.optimization import best_so_far, knee_index, pareto_mask
 from suspkin.plotting.spec import spec_json
+from suspkin.units import display_factor, display_unit
 
 __all__ = ["make_router"]
 
@@ -89,14 +91,36 @@ def analyse_history(
     return objs, best_out, [bool(v) for v in mask], pairs, knee
 
 
+def pose_inputs() -> list[PoseInput]:
+    """Pose input metadata: names, units and conversions come from ``suspkin.units``."""
+    length = display_factor("length")
+    angle = display_factor("angle")
+    lu, au = display_unit("length"), display_unit("angle")
+    return [
+        PoseInput(name="heave", label="Heave", si_unit="m", display_unit=lu, factor=length,
+                  param="heave", param_factor=length, default_max=25.0, step=0.5),
+        PoseInput(name="roll", label="Roll", si_unit="rad", display_unit=au, factor=angle,
+                  param="roll_deg", param_factor=1.0, default_max=2.0, step=0.1),
+        PoseInput(name="pitch", label="Pitch", si_unit="rad", display_unit=au, factor=angle,
+                  param="pitch_deg", param_factor=1.0, default_max=1.5, step=0.1),
+        PoseInput(name="rack", label="Rack", si_unit="m", display_unit=lu, factor=length,
+                  param="rack", param_factor=length, default_max=30.0, step=0.5),
+    ]  # fmt: skip
+
+
+def health_out(manager: DatasetManager) -> HealthOut:
+    """The ``/health`` payload (also embedded in snapshots)."""
+    return HealthOut(version=__version__, workspace=str(manager.workspace), pose=pose_inputs())
+
+
 def history_out(run: RunInfo) -> HistoryOut:
     """The history response of an opened optimizer run (columns plus the analysis)."""
     objectives, best, front, pairs, knee = analyse_history(run.history)
     return HistoryOut(
         run_id=run.run_id,
         columns={str(c): _column(run.history[c]) for c in run.history.columns},
-        meta=run.meta,
-        result=run.result,
+        meta=clean_json(run.meta),
+        result=clean_json(run.result),
         objectives=objectives,
         best_so_far=best,
         pareto_all=front,
@@ -119,7 +143,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
 
     @r.get("/health", response_model=HealthOut)
     def health() -> HealthOut:
-        return HealthOut(version=__version__, workspace=str(manager.workspace))
+        return health_out(manager)
 
     @r.get("/figures", response_model=dict[str, Any])
     def figures() -> dict[str, Any]:
@@ -161,10 +185,10 @@ def make_router(manager: DatasetManager) -> APIRouter:
     @r.get("/datasets/{dataset_id}/scene", response_model=dict[str, Any])
     def scene(
         dataset_id: str,
-        heave: float = 0.0,
-        roll: float = 0.0,
-        pitch: float = 0.0,
-        rack: float = 0.0,
+        heave: Annotated[float, Query(ge=-0.2, le=0.2, allow_inf_nan=False)] = 0.0,
+        roll: Annotated[float, Query(ge=-0.35, le=0.35, allow_inf_nan=False)] = 0.0,
+        pitch: Annotated[float, Query(ge=-0.35, le=0.35, allow_inf_nan=False)] = 0.0,
+        rack: Annotated[float, Query(ge=-0.2, le=0.2, allow_inf_nan=False)] = 0.0,
     ) -> dict[str, Any]:
         """Plotly 3D figure at the solved body pose (SI: m, rad; rotations about the CG)."""
         from suspkin.plotting.interactive import interactive_figure
@@ -174,7 +198,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
         if any((heave, roll, pitch, rack)):
             try:
                 state = solve_vehicle(ds.vehicle, heave=heave, roll=roll, pitch=pitch, rack=rack)
-            except KinematicsError as exc:
+            except (KinematicsError, ValueError, ArithmeticError) as exc:
                 raise HTTPException(422, f"pose not solvable: {exc}") from exc
         try:
             fig = interactive_figure(ds.vehicle, state)
@@ -192,7 +216,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
         """Write a snapshot of the open datasets into the workspace."""
         import time
 
-        from suspkin.app.snapshot import export_dataset_snapshot
+        from suspkin.app.snapshot import export_dataset_snapshot, is_snapshot_file
 
         out = (req.out if req else None) or time.strftime("suspkin_snapshot_%Y%m%d_%H%M%S.html")
         target = manager.resolve(out)
@@ -200,6 +224,15 @@ def make_router(manager: DatasetManager) -> APIRouter:
             raise HTTPException(400, "the snapshot file name must end in .html")
         if not manager.list():
             raise HTTPException(400, "open at least one revision before exporting")
+        if target.exists():
+            if not target.is_file() or not is_snapshot_file(target):
+                raise HTTPException(
+                    400,
+                    f"{manager.rel(target)} exists and is not a suspkin snapshot; "
+                    "choose another file name",
+                )
+            if not (req and req.overwrite):
+                raise HTTPException(409, f"already exists: {manager.rel(target)}")
         size = export_dataset_snapshot(manager, target)
         return ExportOut(path=manager.rel(target), size=size)
 

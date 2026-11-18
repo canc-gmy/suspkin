@@ -232,7 +232,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "vehicle" | "bundle" | "report" | "run";
+            kind: "vehicle" | "bundle" | "run";
             /**
              * Source
              * @description Workspace-relative path of the opened file or folder.
@@ -294,6 +294,12 @@ export interface components {
              * @description Workspace-relative output file (default: timestamped name).
              */
             out?: string | null;
+            /**
+             * Overwrite
+             * @description Replace an existing snapshot file (never any other file).
+             * @default false
+             */
+            overwrite: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -317,6 +323,11 @@ export interface components {
              * @description Absolute path of the workspace root.
              */
             workspace: string;
+            /**
+             * Pose
+             * @description 3D pose inputs.
+             */
+            pose?: components["schemas"]["PoseInput"][];
         };
         /**
          * HistoryOut
@@ -372,6 +383,48 @@ export interface components {
         OpenRequest: {
             /** Path */
             path: string;
+        };
+        /**
+         * PoseInput
+         * @description One body-pose input of the 3D view: SI unit, display unit and how to convert.
+         */
+        PoseInput: {
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "heave" | "roll" | "pitch" | "rack";
+            /** Label */
+            label: string;
+            /** Si Unit */
+            si_unit: string;
+            /** Display Unit */
+            display_unit: string;
+            /**
+             * Factor
+             * @description Display value = SI value x factor.
+             */
+            factor: number;
+            /**
+             * Param
+             * @description Dataset study parameter that sets the slider range.
+             */
+            param: string;
+            /**
+             * Param Factor
+             * @description Display value of the parameter = parameter x this.
+             */
+            param_factor: number;
+            /**
+             * Default Max
+             * @description Range (+-, display unit) when the parameter is unset.
+             */
+            default_max: number;
+            /**
+             * Step
+             * @description Slider step in display units.
+             */
+            step: number;
         };
         /**
          * TableOut

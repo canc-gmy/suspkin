@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DatasetInfo } from "../api";
-import { useScene, useSource } from "../api/hooks";
+import type { DatasetInfo, PoseInput } from "../api";
+import { useHealth, useScene, useSource } from "../api/hooks";
 import { PlotlyChart } from "../components/PlotlyChart";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
 import { readTokens, themeScene } from "../theme/plotlyTemplate";
 import type { Theme } from "../theme/revisions";
 
+const NO_POSE: PoseInput[] = [];
 const SCENE_BUTTONS = ["resetCameraDefault3d"];
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -21,6 +22,7 @@ function useDebounced<T>(value: T, ms: number): T {
 /** 3D view of one revision at an adjustable body pose. */
 export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
   const readOnly = useSource().readOnly;
+  const poseInputs = useHealth().data?.pose ?? NO_POSE;
   const letters = useUi((s) => s.letters);
   const reference = useUi((s) => s.reference);
   const [selected, setSelected] = useState<string | null>(null);
@@ -32,10 +34,10 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
     datasets[0]?.id ??
     null;
   const ds = datasets.find((d) => d.id === id);
-  const axes = poseAxes((ds?.params ?? {}) as Record<string, unknown>);
+  const axes = poseAxes((ds?.params ?? {}) as Record<string, unknown>, poseInputs);
 
   const debounced = useDebounced(pose, 150);
-  const scene = useScene(id, poseToSi(readOnly ? ZERO_POSE : debounced));
+  const scene = useScene(id, poseToSi(readOnly ? ZERO_POSE : debounced, poseInputs));
 
   // keep the last figure that solved, so an unsolvable pose does not blank the view
   const last = useRef<Record<string, unknown> | null>(null);

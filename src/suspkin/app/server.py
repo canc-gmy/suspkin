@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import webbrowser
 from collections.abc import Mapping, Sequence
@@ -19,6 +20,7 @@ from suspkin.app.datasets import (
     DatasetError,
     DatasetManager,
     DatasetNotFoundError,
+    DatasetTooLargeError,
     WorkspaceError,
 )
 from suspkin.app.routes import make_router
@@ -28,6 +30,18 @@ __all__ = ["DEFAULT_STATIC_DIR", "create_app", "run"]
 log = logging.getLogger("suspkin.app")
 
 DEFAULT_STATIC_DIR = Path(__file__).parent / "static"
+_LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
+_WILDCARD_HOSTS = ("0.0.0.0", "::", "")
+
+
+def _host_name(header: str) -> str:
+    """Host name of a ``Host`` header value (port and IPv6 brackets removed, lower case)."""
+    h = header.strip().lower()
+    if h.startswith("["):
+        return h[1 : h.find("]")] if "]" in h else h
+    return h.rsplit(":", 1)[0] if h.count(":") == 1 else h
+
+
 _VITE_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 _NO_FRONTEND = """<!doctype html>
@@ -48,6 +62,7 @@ def create_app(
     static_dir: Path | None = None,
     preload: Sequence[Path] = (),
     study_params: Mapping[str, Any] | None = None,
+    allowed_hosts: Sequence[str] = (),
 ) -> FastAPI:
     """Create the app: ``/api/v1`` plus the built frontend (or a hint page) at ``/``.
 
@@ -61,10 +76,22 @@ def create_app(
         Paths opened at start-up; failures are logged and skipped.
     study_params : mapping, optional
         Overrides for ``run_standard_studies`` (e.g. ``{"steps": 7}``).
+    allowed_hosts : sequence of str
+        Extra ``Host`` header names accepted besides localhost (DNS-rebinding guard); ``"*"``
+        disables the check.
     """
     app = FastAPI(title="suspkin app (experimental)", version=__version__)
     manager = DatasetManager(workspace, study_params=study_params)
     app.state.manager = manager
+
+    hosts = {h.lower() for h in (*_LOCAL_HOSTS, *allowed_hosts)}
+
+    @app.middleware("http")
+    async def host_guard(request: Request, call_next: Any) -> Response:
+        if "*" not in hosts and _host_name(request.headers.get("host", "")) not in hosts:
+            return JSONResponse({"detail": "invalid Host header"}, status_code=400)
+        response: Response = await call_next(request)
+        return response
 
     app.add_middleware(
         CORSMiddleware,
@@ -82,6 +109,7 @@ def create_app(
     app.add_exception_handler(WorkspaceError, _err(403))
     app.add_exception_handler(FileNotFoundError, _err(404))
     app.add_exception_handler(DatasetNotFoundError, _err(404))
+    app.add_exception_handler(DatasetTooLargeError, _err(413))
     app.add_exception_handler(DatasetError, _err(400))
 
     app.include_router(make_router(manager))
@@ -137,7 +165,15 @@ def run(
         open_browser = False
         print(f"API on http://{host}:{port}/api/v1 (docs: /docs)")
         print("Frontend dev server: cd frontend && npm run dev, then open http://localhost:5173/")
-    app = create_app(workspace, static_dir=static_dir, preload=preload)
+    loopback = host in ("localhost", "127.0.0.1", "::1")
+    if not loopback:
+        print(
+            f"WARNING: binding to {host!r}: anyone who can reach this machine can read every file "
+            f"under {workspace}. Use the default 127.0.0.1 unless you trust the network.",
+            file=sys.stderr,
+        )
+    allowed = ["*"] if host in _WILDCARD_HOSTS else [host]
+    app = create_app(workspace, static_dir=static_dir, preload=preload, allowed_hosts=allowed)
     if open_browser:
         shown = "localhost" if host in ("0.0.0.0", "::") else host
         threading.Timer(1.0, webbrowser.open, args=(f"http://{shown}:{port}/",)).start()

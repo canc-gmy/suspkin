@@ -12,7 +12,7 @@ import pytest
 pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient as _TestClient
 from typer.testing import CliRunner
 
 import suspkin.app.datasets as ds_mod
@@ -25,6 +25,18 @@ from suspkin.report import build_report, run_standard_studies, save_bundle
 from tests.unit.helpers import FIXTURE
 
 PARAMS = {"steps": 5, "travel": 0.02, "roll_deg": 1.0}
+
+
+class TestClient(_TestClient):
+    """TestClient that talks to ``localhost`` (the app rejects unknown Host headers)."""
+
+    __test__ = False
+
+    def __init__(self, app: Any, **kw: Any) -> None:
+        kw.setdefault("base_url", "http://localhost")
+        super().__init__(app, **kw)
+
+
 API = "/api/v1"
 
 

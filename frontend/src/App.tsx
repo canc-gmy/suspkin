@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { ApiError } from "./api";
 import { useDatasets, useExportSnapshot, useFigures, useHealth, useSource } from "./api/hooks";
 import { OpenDialog } from "./components/OpenDialog";
 import { SummaryTable } from "./components/SummaryTable";
@@ -31,6 +32,17 @@ export function App() {
   const readOnly = useSource().readOnly;
   const exportSnapshot = useExportSnapshot();
   const health = useHealth();
+  const runExport = async () => {
+    try {
+      await exportSnapshot.mutateAsync({});
+    } catch (e) {
+      // an existing snapshot is only replaced after the user agrees
+      const m = e instanceof ApiError && e.status === 409 ? /^already exists: (.+)$/.exec(e.message) : null;
+      if (m && window.confirm(`Replace ${m[1]}?`)) {
+        await exportSnapshot.mutateAsync({ overwrite: true }).catch(() => undefined);
+      }
+    }
+  };
   const figures = useFigures();
   const datasets = useDatasets();
   const theme = useUi((s) => s.theme);
@@ -109,7 +121,7 @@ export function App() {
             type="button"
             className="btn secondary"
             disabled={readOnly || empty || exportSnapshot.isPending}
-            onClick={() => exportSnapshot.mutate(undefined)}
+            onClick={() => void runExport()}
           >
             Export snapshot
           </button>

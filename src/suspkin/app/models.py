@@ -6,8 +6,22 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DatasetKind = Literal["vehicle", "bundle", "report", "run"]
+DatasetKind = Literal["vehicle", "bundle", "run"]
 EntryKind = Literal["dir", "vehicle", "bundle", "report", "run", "other"]
+
+
+class PoseInput(BaseModel):
+    """One body-pose input of the 3D view: SI unit, display unit and how to convert."""
+
+    name: Literal["heave", "roll", "pitch", "rack"]
+    label: str
+    si_unit: str
+    display_unit: str
+    factor: float = Field(description="Display value = SI value x factor.")
+    param: str = Field(description="Dataset study parameter that sets the slider range.")
+    param_factor: float = Field(description="Display value of the parameter = parameter x this.")
+    default_max: float = Field(description="Range (+-, display unit) when the parameter is unset.")
+    step: float = Field(description="Slider step in display units.")
 
 
 class HealthOut(BaseModel):
@@ -16,6 +30,7 @@ class HealthOut(BaseModel):
     status: str = "ok"
     version: str
     workspace: str = Field(description="Absolute path of the workspace root.")
+    pose: list[PoseInput] = Field(default_factory=list, description="3D pose inputs.")
 
 
 class DatasetOut(BaseModel):
@@ -81,6 +96,9 @@ class ExportRequest(BaseModel):
 
     out: str | None = Field(
         default=None, description="Workspace-relative output file (default: timestamped name)."
+    )
+    overwrite: bool = Field(
+        default=False, description="Replace an existing snapshot file (never any other file)."
     )
 
 
