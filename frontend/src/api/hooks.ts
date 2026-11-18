@@ -84,6 +84,18 @@ export function useScene(id: string | null, pose: ScenePose) {
   });
 }
 
+/** Study regions of a revision; pass null to skip (no study, or no region overlay ticked). */
+export function useRegions(id: string | null) {
+  const src = useSource();
+  return useQuery({
+    queryKey: ["regions", id],
+    queryFn: () => src.getRegions(id as string),
+    enabled: id !== null,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 /** Hardpoints (SI) per revision; a revision that cannot be read comes back as an error entry. */
 export function useHardpoints(ids: string[]) {
   const src = useSource();

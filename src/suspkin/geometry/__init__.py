@@ -1,7 +1,7 @@
 """Hardpoint models, YAML I/O and left/right mirroring."""
 
 from suspkin.geometry.corners import Corner, CornerId, arb_points, build_corners
-from suspkin.geometry.io import VehicleConfigError, load_vehicle, save_vehicle
+from suspkin.geometry.io import VehicleConfigError, load_vehicle, save_vehicle, vehicle_yaml
 from suspkin.geometry.models import (
     HARDPOINT_NAMES,
     Axle,
@@ -37,4 +37,5 @@ __all__ = [
     "build_corners",
     "load_vehicle",
     "save_vehicle",
+    "vehicle_yaml",
 ]

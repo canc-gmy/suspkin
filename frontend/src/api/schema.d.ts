@@ -74,6 +74,46 @@ export interface paths {
         patch: operations["patch_dataset_api_v1_datasets__dataset_id__patch"];
         trace?: never;
     };
+    "/api/v1/datasets/{dataset_id}/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Derive Dataset
+         * @description New ``edited`` revision: the source's vehicle with hardpoint edits (SI), solved.
+         */
+        post: operations["derive_dataset_api_v1_datasets__dataset_id__derive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{dataset_id}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Dataset
+         * @description Write the vehicle of a revision to a workspace YAML file (schema 1, LF).
+         */
+        post: operations["save_dataset_api_v1_datasets__dataset_id__save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/datasets/{dataset_id}/tables/{study}": {
         parameters: {
             query?: never;
@@ -140,6 +180,26 @@ export interface paths {
          * @description Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set).
          */
         get: operations["hardpoints_api_v1_datasets__dataset_id__hardpoints_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{dataset_id}/regions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Regions
+         * @description Variable domains and constraint regions of the attached study (404 without one).
+         */
+        get: operations["regions_api_v1_datasets__dataset_id__regions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -222,7 +282,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "dir" | "vehicle" | "bundle" | "report" | "run" | "other";
+            kind: "dir" | "vehicle" | "study" | "bundle" | "report" | "run" | "other";
         };
         /**
          * BrowseOut
@@ -252,7 +312,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "vehicle" | "bundle" | "run";
+            kind: "vehicle" | "bundle" | "run" | "edited";
             /**
              * Source
              * @description Workspace-relative path of the opened file or folder.
@@ -289,6 +349,22 @@ export interface components {
              * @default true
              */
             resolution_fixed: boolean;
+            /**
+             * Parent Id
+             * @description Revision an edited revision was derived from.
+             */
+            parent_id?: string | null;
+            /**
+             * Edits
+             * @description Hardpoint edits of an edited revision.
+             */
+            edits?: components["schemas"]["HardpointEdit"][];
+            /**
+             * Has Study
+             * @description True when an optimization study is attached: ``/regions`` has content.
+             * @default false
+             */
+            has_study: boolean;
         };
         /**
          * DatasetPatch
@@ -302,6 +378,24 @@ export interface components {
             /**
              * Steps
              * @description Re-solve with this many points per sweep (vehicle files only).
+             */
+            steps?: number | null;
+        };
+        /**
+         * DeriveRequest
+         * @description Derive an edited revision from a vehicle-backed one.
+         */
+        DeriveRequest: {
+            /** Edits */
+            edits: components["schemas"]["HardpointEdit"][];
+            /**
+             * Label
+             * @description Default: '<source label> edited'.
+             */
+            label?: string | null;
+            /**
+             * Steps
+             * @description Points per sweep (default: the source's).
              */
             steps?: number | null;
         };
@@ -342,6 +436,40 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HardpointEdit
+         * @description Move one hardpoint (SI). Missing coordinates keep their current value.
+         */
+        HardpointEdit: {
+            /**
+             * Axle
+             * @enum {string}
+             */
+            axle: "front" | "rear";
+            /** Point */
+            point: string;
+            /**
+             * Side
+             * @description Left point (right mirrors it, a right override is kept), right point only (written to right_overrides, right-side coordinates), or both (mirrored; a right override of the point is dropped).
+             * @enum {string}
+             */
+            side: "left" | "right" | "both";
+            /**
+             * X
+             * @description Metres.
+             */
+            x?: number | null;
+            /**
+             * Y
+             * @description Metres.
+             */
+            y?: number | null;
+            /**
+             * Z
+             * @description Metres.
+             */
+            z?: number | null;
         };
         /**
          * HardpointOut
@@ -501,6 +629,95 @@ export interface components {
              * @description Slider step in display units.
              */
             step: number;
+        };
+        /**
+         * RegionOut
+         * @description One optimization region as wireframe polylines (SI, body frame of the 3D scene).
+         *
+         *     Domains are the variable domains (a symmetric variable gives the left one and a
+         *     ``mirrored`` right copy); ``inside`` / ``outside`` are constraint regions, given in the
+         *     vehicle frame and not mirrored. Regions do not move with the body pose.
+         */
+        RegionOut: {
+            /**
+             * Name
+             * @description Variable point or constraint name.
+             */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "domain" | "inside" | "outside";
+            /**
+             * Point
+             * @description Hardpoint reference, e.g. ``front.uca_front``.
+             */
+            point: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "left" | "right";
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "hexahedron" | "box" | "offset" | "sphere" | "cylinder";
+            /**
+             * Mirrored
+             * @description Right copy of a symmetric domain.
+             * @default false
+             */
+            mirrored: boolean;
+            /**
+             * Lines
+             * @description Wireframe polylines.
+             */
+            lines: [
+                number,
+                number,
+                number
+            ][][];
+            /**
+             * Over
+             * @description Sweep a constraint is evaluated over.
+             */
+            over?: string | null;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * SaveOut
+         * @description Result of saving a vehicle YAML.
+         */
+        SaveOut: {
+            /**
+             * Path
+             * @description Workspace-relative path of the written file.
+             */
+            path: string;
+            /**
+             * Size
+             * @description File size in bytes.
+             */
+            size: number;
+        };
+        /**
+         * SaveRequest
+         * @description Write a revision's vehicle to a workspace YAML file.
+         */
+        SaveRequest: {
+            /**
+             * Path
+             * @description Workspace-relative file name ending in .yaml or .yml.
+             */
+            path: string;
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite: boolean;
         };
         /**
          * TableOut
@@ -693,6 +910,76 @@ export interface operations {
             };
         };
     };
+    derive_dataset_api_v1_datasets__dataset_id__derive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeriveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_dataset_api_v1_datasets__dataset_id__save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     table_api_v1_datasets__dataset_id__tables__study__get: {
         parameters: {
             query?: never;
@@ -814,6 +1101,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HardpointOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regions_api_v1_datasets__dataset_id__regions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegionOut"][];
                 };
             };
             /** @description Validation Error */

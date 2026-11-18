@@ -11,6 +11,9 @@ const T: Tokens = {
   rule: "#bbb",
   layoutBlue: "#00f",
   danger: "#f00",
+  regionDomain: "#0a0",
+  regionRequired: "#0aa",
+  regionKeepout: "#a05",
   fontUi: "Barlow",
   rev: {},
 };

@@ -703,6 +703,45 @@ input.readout-input[aria-invalid="true"] {
   z-index: 1;
 }
 
+/* editing: number inputs in the edited revision's columns */
+.edit-bar {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.edit-title {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+}
+
+.save-line {
+  margin-top: 0;
+}
+
+input.cell-input {
+  width: 6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.hardpoint-table td.cell-changed {
+  border-left: 2px solid var(--layout-blue);
+}
+
+.hardpoint-table .hp-rightonly {
+  display: flex;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+.hardpoint-table .hp-reset {
+  white-space: nowrap;
+}
+
 /* ---- empty state, dialog ---------------------------------------------------------- */
 .empty {
   max-width: 36rem;

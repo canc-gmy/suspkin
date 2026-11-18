@@ -1,6 +1,16 @@
 import { ApiError, type DataSource } from "./source";
 import type { SpecDoc } from "./spec";
-import type { DatasetInfo, ExportResult, Hardpoint, Health, HistoryData, Summary, TableData } from "./types";
+import type {
+  DatasetInfo,
+  ExportResult,
+  Hardpoint,
+  Health,
+  Region,
+  HistoryData,
+  SaveResult,
+  Summary,
+  TableData,
+} from "./types";
 
 /** Shape of the data embedded by the snapshot export (full support arrives with the export). */
 export interface Snapshot {
@@ -12,6 +22,7 @@ export interface Snapshot {
   histories?: Record<string, HistoryData>;
   scenes?: Record<string, Record<string, unknown>>;
   hardpoints?: Record<string, Hardpoint[]>;
+  regions?: Record<string, Region[]>;
 }
 
 declare global {
@@ -52,6 +63,12 @@ export class SnapshotSource implements DataSource {
   async closeDataset(): Promise<void> {
     throw new ApiError(READ_ONLY, 405);
   }
+  async deriveDataset(): Promise<DatasetInfo> {
+    throw new ApiError(READ_ONLY, 405);
+  }
+  async saveDataset(): Promise<SaveResult> {
+    throw new ApiError(READ_ONLY, 405);
+  }
   async getTable(id: string, study: string): Promise<TableData> {
     const t = this.snap.tables[id]?.[study];
     if (!t) throw new ApiError(`The snapshot has no ${study} table for this revision.`, 404);
@@ -70,6 +87,11 @@ export class SnapshotSource implements DataSource {
     const h = this.snap.hardpoints?.[id];
     if (!h) throw new ApiError("The snapshot has no hardpoints for this revision.", 404);
     return h;
+  }
+  async getRegions(id: string): Promise<Region[]> {
+    const r = this.snap.regions?.[id];
+    if (!r) throw new ApiError("The snapshot has no study regions for this revision.", 404);
+    return r;
   }
   async getHistory(runId: string): Promise<HistoryData> {
     const h = this.snap.histories?.[runId];

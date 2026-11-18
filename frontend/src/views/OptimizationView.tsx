@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import type { DatasetInfo } from "../api";
 import { useHistory } from "../api/hooks";
 import { PlotlyChart } from "../components/PlotlyChart";
+import { Segmented } from "../components/Segmented";
+import { OptimizationStats } from "./OptimizationStats";
 import {
   convergenceTraces,
   marginRows,
@@ -159,6 +161,7 @@ export function OptimizationView({ datasets }: { datasets: DatasetInfo[] }) {
     return [...seen].map(([runId, name]) => ({ runId, name }));
   }, [datasets]);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [sub, setSub] = useState<"history" | "statistics">("history");
   const runId = runs.find((r) => r.runId === chosen)?.runId ?? runs[0]?.runId ?? null;
   const history = useHistory(runId);
   const view = useMemo(() => (history.data ? mapHistory(history.data) : null), [history.data]);
@@ -191,6 +194,15 @@ export function OptimizationView({ datasets }: { datasets: DatasetInfo[] }) {
             </select>
           </label>
         )}
+        <Segmented
+          label="Optimization view"
+          value={sub}
+          options={[
+            { value: "history", label: "History" },
+            { value: "statistics", label: "Statistics" },
+          ]}
+          onChange={setSub}
+        />
       </div>
       {history.isError && (
         <p className="error" role="alert">
@@ -198,7 +210,8 @@ export function OptimizationView({ datasets }: { datasets: DatasetInfo[] }) {
         </p>
       )}
       {history.isPending && <p className="muted">Loading history.</p>}
-      {history.data && view && (
+      {history.data && sub === "statistics" && <OptimizationStats history={history.data} />}
+      {history.data && view && sub === "history" && (
         <div className="panel-grid">
           <section className="panel" aria-label="Convergence">
             <h3 className="panel-title">Convergence</h3>

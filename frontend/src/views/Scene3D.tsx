@@ -1,20 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlotlyHTMLElement } from "plotly.js-dist-min";
 import type { DatasetInfo, PoseInput } from "../api";
-import { useHardpoints, useHealth, useScene, useSource } from "../api/hooks";
+import { useHardpoints, useHealth, useRegions, useScene, useSource } from "../api/hooks";
+import { OverlaysMenu } from "../components/OverlaysMenu";
+import { loadCentreKinds, loadRegionRoles, saveCentreKinds, saveRegionRoles } from "../lib/centresMenu";
 import { changedSceneNames } from "../lib/hardpoints";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
 import { readTokens } from "../theme/plotlyTemplate";
 import {
+  buildCentreTraces,
+  buildRegionTraces,
   buildSceneFigure,
   cameraForLayout,
   cameraFromRelayout,
   DEFAULT_CAMERA,
+  frameBox,
+  parseCentres,
   posedHardpoints,
   sceneBounds,
   sceneFrame,
   type Camera,
+  type CentreKind,
+  type RegionRole,
 } from "../theme/scene3d";
 import "./Scene3D.css";
 
@@ -96,7 +104,27 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
       .filter((p): p is NonNullable<typeof p> => p !== undefined);
   }, [compare, figure, mineHp, refHp]);
 
+  // rotation centres: clipped to the fixed scene box, so they never move the ranges or the camera
+  const [centreKinds, setCentreKinds] = useState<Set<CentreKind>>(loadCentreKinds);
   const theme = useUi((s) => s.theme);
+  // study regions: static in the body frame (like the chassis points), clipped to the same box
+  const [regionRoles, setRegionRoles] = useState<Set<RegionRole>>(loadRegionRoles);
+  const hasStudy = Boolean(ds?.has_study);
+  const regionsQuery = useRegions(hasStudy && regionRoles.size > 0 ? id : null);
+  const regionTraces = useMemo(
+    () => buildRegionTraces(regionsQuery.data, regionRoles, frameBox(frame), readTokens(theme)),
+    [regionsQuery.data, regionRoles, frame, theme],
+  );
+  const centres = useMemo(
+    () =>
+      buildCentreTraces(
+        parseCentres(figure as { centres?: unknown } | null),
+        centreKinds,
+        frameBox(frame),
+        readTokens(theme),
+      ),
+    [figure, centreKinds, frame, theme],
+  );
   const host = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const rendered = useRef(false);
@@ -115,6 +143,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         tokens: readTokens(theme),
         frame,
         highlight,
+        centres: [...regionTraces, ...centres.traces],
         camera: cameraForLayout({ reset: false, saved: savedCamera.current }),
       });
       const gd = await P.react(el, fig.data, fig.layout, {
@@ -133,7 +162,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
     return () => {
       cancelled = true;
     };
-  }, [figure, ghostFigure, frame, theme, highlight]);
+  }, [figure, ghostFigure, frame, theme, highlight, centres, regionTraces]);
 
   const resetView = () => {
     const el = host.current;
@@ -215,6 +244,19 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <button type="button" className="btn secondary" onClick={resetView}>
           Reset view
         </button>
+        <OverlaysMenu
+          centres={centreKinds}
+          onCentres={(next) => {
+            setCentreKinds(next);
+            saveCentreKinds(next);
+          }}
+          regions={regionRoles}
+          onRegions={(next) => {
+            setRegionRoles(next);
+            saveRegionRoles(next);
+          }}
+          hasStudy={hasStudy}
+        />
         <label className="field">
           <input type="checkbox" checked={ghostOn} onChange={(e) => setGhostOn(e.target.checked)} />
           <span>Show reference ghost</span>
@@ -245,6 +287,13 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
           </label>
         ))}
       </div>
+      {centres.notes.length > 0 && (
+        <ul className="centres-notes" aria-label="Centres outside the view">
+          {centres.notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
       {readOnly && <p className="muted">Static pose in snapshots.</p>}
       {error && (
         <p className="error" role="alert">

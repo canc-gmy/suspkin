@@ -5,6 +5,7 @@ import { useUi } from "../state/store";
 
 const KIND_LABEL: Record<string, string> = {
   vehicle: "Vehicle",
+  study: "Study",
   bundle: "Saved bundle",
   report: "Report",
   run: "Optimizer run",

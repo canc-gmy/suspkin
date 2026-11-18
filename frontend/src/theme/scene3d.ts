@@ -128,6 +128,8 @@ export interface SceneFigureInput {
   camera: Camera;
   /** Posed positions (m, scene frame) of the hardpoints to ring; empty or absent: no rings. */
   highlight?: readonly Vec3[];
+  /** Rotation-centre traces from `buildCentreTraces`, drawn last. */
+  centres?: readonly PlotlyObject[];
 }
 
 export const RING_SIZE = 6;
@@ -181,7 +183,358 @@ export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; l
   scene["camera"] = i.camera;
   const ghost = i.ghost ? ghostTraces((i.ghost.data as PlotlyObject[] | undefined) ?? [], t) : [];
   return {
-    data: [...ghost, ...themed.data, ...(i.highlight && i.highlight.length > 0 ? [ringTrace(i.highlight, t)] : [])],
+    data: [
+      ...ghost,
+      ...themed.data,
+      ...(i.highlight && i.highlight.length > 0 ? [ringTrace(i.highlight, t)] : []),
+      ...(i.centres ?? []),
+    ],
     layout: { ...themed.layout, uirevision: SCENE_UIREVISION, autosize: true, paper_bgcolor: t.sheetRaised, scene },
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Rotation centres
+
+export type CentreKind = "roll" | "fv" | "sv" | "pitch";
+export const CENTRE_KINDS: readonly CentreKind[] = ["roll", "fv", "sv", "pitch"];
+export const CENTRE_LABELS: Record<CentreKind, string> = {
+  roll: "Roll centres and roll axis",
+  fv: "Front-view instant centres",
+  sv: "Side-view instant centres",
+  pitch: "Pitch centre",
+};
+
+type ColourKey = "layoutBlue" | "ink" | "inkMuted";
+/** Marker symbol, token colour and legend name of each kind of centre. */
+export const CENTRE_STYLE: Record<CentreKind, { symbol: string; colour: ColourKey; legend: string; size: number }> = {
+  roll: { symbol: "diamond", colour: "layoutBlue", legend: "Roll centres", size: 5 },
+  fv: { symbol: "x", colour: "ink", legend: "Front-view ICs", size: 4 },
+  sv: { symbol: "cross", colour: "inkMuted", legend: "Side-view ICs", size: 4 },
+  pitch: { symbol: "diamond-open", colour: "ink", legend: "Pitch centre", size: 5 },
+};
+export const CENTRE_LINE_WIDTH = 1;
+export const CENTRE_AXIS_WIDTH = 2;
+export const CENTRE_EDGE_SYMBOL = "square-open";
+const CORNER_IDS = ["FL", "FR", "RL", "RR"] as const;
+
+type Pt = Vec3 | null;
+export interface Centres {
+  roll: { front: Pt; rear: Pt };
+  fv_ic: Record<string, Pt>;
+  sv_ic: Record<string, Pt>;
+  contact: Record<string, Pt>;
+  pitch: Pt;
+}
+
+function vec3(v: unknown): Pt {
+  return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n))
+    ? [v[0] as number, v[1] as number, v[2] as number]
+    : null;
+}
+
+function pointMap(raw: unknown): Record<string, Pt> {
+  const out: Record<string, Pt> = {};
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  for (const id of CORNER_IDS) out[id] = vec3(o[id]);
+  return out;
+}
+
+/** The `centres` block of a scene response (null when it has none, e.g. an old snapshot). */
+export function parseCentres(fig: { centres?: unknown } | null | undefined): Centres | null {
+  const raw = fig?.centres;
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Record<string, unknown>;
+  const roll = (c["roll"] ?? {}) as Record<string, unknown>;
+  return {
+    roll: { front: vec3(roll["front"]), rear: vec3(roll["rear"]) },
+    fv_ic: pointMap(c["fv_ic"]),
+    sv_ic: pointMap(c["sv_ic"]),
+    contact: pointMap(c["contact"]),
+    pitch: vec3(c["pitch"]),
+  };
+}
+
+const EPS = 1e-9;
+
+export function inBox(p: Vec3, box: Bounds): boolean {
+  return p.every((v, i) => v >= box.min[i]! - EPS && v <= box.max[i]! + EPS);
+}
+
+export interface ClippedSegment {
+  a: Vec3;
+  b: Vec3;
+  /** True when that end was moved onto the box (the original end is outside). */
+  aClipped: boolean;
+  bClipped: boolean;
+}
+
+/** Part of the segment a-b inside the box (Liang-Barsky); null when none of it is inside. */
+export function clipSegmentToBox(a: Vec3, b: Vec3, box: Bounds): ClippedSegment | null {
+  let t0 = 0;
+  let t1 = 1;
+  for (let i = 0; i < 3; i++) {
+    const d = b[i]! - a[i]!;
+    const lo = box.min[i]! - a[i]!;
+    const hi = box.max[i]! - a[i]!;
+    if (Math.abs(d) < 1e-15) {
+      if (lo > EPS || hi < -EPS) return null; // parallel to this slab and outside it
+      continue;
+    }
+    let ta = lo / d;
+    let tb = hi / d;
+    if (ta > tb) [ta, tb] = [tb, ta];
+    t0 = Math.max(t0, ta);
+    t1 = Math.min(t1, tb);
+    if (t0 > t1) return null;
+  }
+  const at = (t: number): Vec3 => [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
+  return { a: at(t0), b: at(t1), aClipped: t0 > 0, bClipped: t1 < 1 };
+}
+
+export interface CentreTraces {
+  traces: PlotlyObject[];
+  /** One line per instant centre outside the scene box, plus out-of-view roll and pitch centres. */
+  notes: string[];
+}
+
+function markerTrace(kind: CentreKind, pts: readonly Vec3[], t: Tokens): PlotlyObject {
+  const st = CENTRE_STYLE[kind];
+  return {
+    type: "scatter3d",
+    mode: "markers",
+    x: pts.map((p) => p[0]),
+    y: pts.map((p) => p[1]),
+    z: pts.map((p) => p[2]),
+    name: st.legend,
+    legendgroup: kind,
+    showlegend: true,
+    marker: { symbol: st.symbol, size: st.size, color: t[st.colour], line: { color: t[st.colour], width: 1 } },
+    hoverinfo: "skip",
+  };
+}
+
+function lineTrace(
+  kind: CentreKind,
+  segs: readonly (readonly [Vec3, Vec3])[],
+  t: Tokens,
+  width: number,
+  dash: string,
+  legend = false,
+): PlotlyObject {
+  const x: (number | null)[] = [];
+  const y: (number | null)[] = [];
+  const z: (number | null)[] = [];
+  for (const [a, b] of segs) {
+    x.push(a[0], b[0], null);
+    y.push(a[1], b[1], null);
+    z.push(a[2], b[2], null);
+  }
+  return {
+    type: "scatter3d",
+    mode: "lines",
+    x,
+    y,
+    z,
+    name: CENTRE_STYLE[kind].legend,
+    legendgroup: kind,
+    showlegend: legend,
+    line: { color: t[CENTRE_STYLE[kind].colour], width, dash },
+    hoverinfo: "skip",
+  };
+}
+
+function edgeTrace(kind: CentreKind, pts: readonly Vec3[], t: Tokens): PlotlyObject {
+  const c = t[CENTRE_STYLE[kind].colour];
+  return {
+    type: "scatter3d",
+    mode: "markers",
+    x: pts.map((p) => p[0]),
+    y: pts.map((p) => p[1]),
+    z: pts.map((p) => p[2]),
+    legendgroup: kind,
+    showlegend: false,
+    marker: { symbol: CENTRE_EDGE_SYMBOL, size: 4, color: c, line: { color: c, width: 1 } },
+    hoverinfo: "skip",
+  };
+}
+
+/** Distance and direction word of an instant centre against its contact patch, for the note. */
+function icNote(id: string, view: "fv" | "sv", ic: Vec3, cp: Vec3): string {
+  if (view === "fv") {
+    const d = ic[1] - cp[1];
+    const outboard = id.endsWith("L") ? d > 0 : d < 0;
+    return `${id} front-view IC ${Math.abs(d).toFixed(2)} m ${outboard ? "outboard" : "inboard"}`;
+  }
+  const d = ic[0] - cp[0];
+  return `${id} side-view IC ${Math.abs(d).toFixed(2)} m ${d > 0 ? "forward" : "rearward"}`;
+}
+
+/**
+ * Markers and construction lines of the ticked kinds, clipped to `box` (the fixed scene box), so
+ * they never change the axis ranges. Undefined (null) centres are skipped.
+ */
+export function buildCentreTraces(
+  centres: Centres | null,
+  kinds: ReadonlySet<CentreKind>,
+  box: Bounds | null,
+  t: Tokens,
+): CentreTraces {
+  const out: CentreTraces = { traces: [], notes: [] };
+  if (!centres || !box) return out;
+
+  if (kinds.has("roll")) {
+    const named: [string, Pt][] = [
+      ["Front", centres.roll.front],
+      ["Rear", centres.roll.rear],
+    ];
+    const shown: Vec3[] = [];
+    for (const [name, p] of named) {
+      if (!p) continue;
+      if (inBox(p, box)) shown.push(p);
+      else out.notes.push(`${name} roll centre outside the view`);
+    }
+    const { front, rear } = centres.roll;
+    const seg = front && rear ? clipSegmentToBox(front, rear, box) : null;
+    if (seg) out.traces.push(lineTrace("roll", [[seg.a, seg.b]], t, CENTRE_AXIS_WIDTH, "solid", shown.length === 0));
+    if (shown.length > 0) out.traces.push(markerTrace("roll", shown, t));
+  }
+
+  for (const [kind, ics] of [
+    ["fv", centres.fv_ic],
+    ["sv", centres.sv_ic],
+  ] as const) {
+    if (!kinds.has(kind)) continue;
+    const segs: [Vec3, Vec3][] = [];
+    const inside: Vec3[] = [];
+    const edge: Vec3[] = [];
+    const any = CORNER_IDS.some((id) => ics[id] && centres.contact[id]);
+    for (const id of CORNER_IDS) {
+      const ic = ics[id];
+      const cp = centres.contact[id];
+      if (!ic || !cp) continue;
+      const seg = clipSegmentToBox(cp, ic, box);
+      if (seg) {
+        segs.push([seg.a, seg.b]);
+        if (seg.bClipped) edge.push(seg.b);
+      }
+      if (inBox(ic, box)) inside.push(ic);
+      else out.notes.push(icNote(id, kind, ic, cp));
+    }
+    if (!any) continue;
+    // Plotly lists no legend entry for an empty trace: with every IC off the box, the line carries it
+    if (segs.length > 0) out.traces.push(lineTrace(kind, segs, t, CENTRE_LINE_WIDTH, "dash", inside.length === 0));
+    if (edge.length > 0) out.traces.push(edgeTrace(kind, edge, t));
+    if (inside.length > 0) out.traces.push(markerTrace(kind, inside, t));
+  }
+
+  if (kinds.has("pitch") && centres.pitch) {
+    if (inBox(centres.pitch, box)) out.traces.push(markerTrace("pitch", [centres.pitch], t));
+    else out.notes.push("Pitch centre outside the view");
+  }
+  return out;
+}
+
+/** The scene box (the fixed axis ranges) as bounds, or null before the frame is known. */
+export function frameBox(frame: SceneFrame | null): Bounds | null {
+  if (!frame) return null;
+  const r = frame.ranges;
+  return { min: [r[0]![0], r[1]![0], r[2]![0]], max: [r[0]![1], r[1]![1], r[2]![1]] };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Constraint regions
+
+export type RegionRole = "domain" | "inside" | "outside";
+export const REGION_ROLES: readonly RegionRole[] = ["domain", "inside", "outside"];
+export const REGION_LABELS: Record<RegionRole, string> = {
+  domain: "Design domains",
+  inside: "Requirements (inside)",
+  outside: "Keep-outs (outside)",
+};
+type RegionColourKey = "regionDomain" | "regionRequired" | "regionKeepout";
+/** Colour token, dash and legend name of each role; line style repeats what colour says. */
+export const REGION_STYLE: Record<RegionRole, { colour: RegionColourKey; dash: string }> = {
+  domain: { colour: "regionDomain", dash: "solid" },
+  inside: { colour: "regionRequired", dash: "dot" },
+  outside: { colour: "regionKeepout", dash: "dash" },
+};
+export const REGION_LINE_WIDTH = 1;
+/** The right copy of a symmetric domain is drawn fainter than the variable's own domain. */
+export const REGION_MIRROR_OPACITY = 0.5;
+
+/** The part of a region the 3D view needs (the API row, minus its descriptive fields). */
+export interface RegionLike {
+  role: RegionRole;
+  mirrored?: boolean;
+  lines: readonly (readonly (readonly number[])[])[];
+}
+
+function regionLine(
+  rs: readonly RegionLike[],
+  role: RegionRole,
+  box: Bounds,
+  t: Tokens,
+  mirrored: boolean,
+): PlotlyObject | null {
+  const x: (number | null)[] = [];
+  const y: (number | null)[] = [];
+  const z: (number | null)[] = [];
+  for (const r of rs) {
+    for (const ln of r.lines) {
+      for (let i = 0; i + 1 < ln.length; i++) {
+        const p = ln[i]!;
+        const q = ln[i + 1]!;
+        const seg = clipSegmentToBox([p[0]!, p[1]!, p[2]!], [q[0]!, q[1]!, q[2]!], box);
+        if (!seg) continue;
+        x.push(seg.a[0], seg.b[0], null);
+        y.push(seg.a[1], seg.b[1], null);
+        z.push(seg.a[2], seg.b[2], null);
+      }
+    }
+  }
+  if (x.length === 0) return null;
+  const st = REGION_STYLE[role];
+  return {
+    type: "scatter3d",
+    mode: "lines",
+    x,
+    y,
+    z,
+    name: REGION_LABELS[role],
+    legendgroup: `region-${role}`,
+    showlegend: !mirrored,
+    opacity: mirrored ? REGION_MIRROR_OPACITY : 1,
+    line: { color: t[st.colour], width: REGION_LINE_WIDTH, dash: st.dash },
+    hoverinfo: "skip",
+  };
+}
+
+/**
+ * Wireframes of the ticked roles, clipped to the scene box so they never change the axis ranges.
+ * Regions are fixed in the body frame, like the chassis points, so the pose does not touch them.
+ */
+export function buildRegionTraces(
+  regions: readonly RegionLike[] | null | undefined,
+  roles: ReadonlySet<RegionRole>,
+  box: Bounds | null,
+  t: Tokens,
+): PlotlyObject[] {
+  if (!regions || !box) return [];
+  const out: PlotlyObject[] = [];
+  for (const role of REGION_ROLES) {
+    if (!roles.has(role)) continue;
+    const mine = regions.filter((r) => r.role === role);
+    for (const mirrored of [false, true]) {
+      const tr = regionLine(
+        mine.filter((r) => Boolean(r.mirrored) === mirrored),
+        role,
+        box,
+        t,
+        mirrored,
+      );
+      if (tr) out.push(tr);
+    }
+  }
+  return out;
 }

@@ -177,6 +177,7 @@ def test_snapshot_scene_and_errors(ws: Path) -> None:
     (ds,) = mgr.open("car.yaml")
     snap = build_snapshot(mgr, include_scene=True)
     assert "data" in snap["scenes"][ds.id]
+    assert set(snap["scenes"][ds.id]["centres"]) >= {"roll", "fv_ic", "sv_ic", "contact", "pitch"}
     with pytest.raises(FileNotFoundError, match="build:single"):
         export_dataset_snapshot(mgr, ws / "o.html", template=ws / "missing.html")
     with pytest.raises(ValueError, match="nothing to export"):

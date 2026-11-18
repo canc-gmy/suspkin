@@ -6,8 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-DatasetKind = Literal["vehicle", "bundle", "run"]
-EntryKind = Literal["dir", "vehicle", "bundle", "report", "run", "other"]
+DatasetKind = Literal["vehicle", "bundle", "run", "edited"]
+EntryKind = Literal["dir", "vehicle", "study", "bundle", "report", "run", "other"]
 
 
 class PoseInput(BaseModel):
@@ -33,6 +33,21 @@ class HealthOut(BaseModel):
     pose: list[PoseInput] = Field(default_factory=list, description="3D pose inputs.")
 
 
+class HardpointEdit(BaseModel):
+    """Move one hardpoint (SI). Missing coordinates keep their current value."""
+
+    axle: Literal["front", "rear"]
+    point: str
+    side: Literal["left", "right", "both"] = Field(
+        description="Left point (right mirrors it, a right override is kept), right point "
+        "only (written to right_overrides, right-side coordinates), or both (mirrored; a "
+        "right override of the point is dropped)."
+    )
+    x: float | None = Field(default=None, allow_inf_nan=False, description="Metres.")
+    y: float | None = Field(default=None, allow_inf_nan=False, description="Metres.")
+    z: float | None = Field(default=None, allow_inf_nan=False, description="Metres.")
+
+
 class DatasetOut(BaseModel):
     """Summary metadata of one open dataset (no tables)."""
 
@@ -49,6 +64,16 @@ class DatasetOut(BaseModel):
         default=True,
         description="True for bundles and runs: the stored resolution cannot be changed.",
     )
+    parent_id: str | None = Field(
+        default=None, description="Revision an edited revision was derived from."
+    )
+    edits: list[HardpointEdit] = Field(
+        default_factory=list, description="Hardpoint edits of an edited revision."
+    )
+    has_study: bool = Field(
+        default=False,
+        description="True when an optimization study is attached: ``/regions`` has content.",
+    )
 
 
 class HardpointOut(BaseModel):
@@ -63,6 +88,81 @@ class HardpointOut(BaseModel):
     overridden: bool = Field(
         default=False, description="True for a right point taken from ``right_overrides``."
     )
+
+
+Vec3 = tuple[float, float, float]
+
+
+class AxleCentres(BaseModel):
+    """A point per axle (SI, scene frame); ``None`` when undefined."""
+
+    front: Vec3 | None
+    rear: Vec3 | None
+
+
+class AxleHeights(BaseModel):
+    """A ground height per axle in metres; ``None`` when undefined."""
+
+    front: float | None
+    rear: float | None
+
+
+class CornerCentres(BaseModel):
+    """A point per corner (SI, scene frame); ``None`` when undefined (centre at infinity)."""
+
+    FL: Vec3 | None
+    FR: Vec3 | None
+    RL: Vec3 | None
+    RR: Vec3 | None
+
+
+class CornerLengths(BaseModel):
+    """A length per corner in metres; ``None`` when undefined."""
+
+    FL: float | None
+    FR: float | None
+    RL: float | None
+    RR: float | None
+
+
+class SceneCentres(BaseModel):
+    """Rotation centres at the scene pose, in the plotted (body) frame, SI.
+
+    Instant centres are ``None`` when at infinity. ``fvsa`` / ``svsa`` are the finite
+    distances from the contact patch to the front / side-view instant centre.
+    """
+
+    roll: AxleCentres = Field(description="Front-view roll centre per axle (x = mean patch x).")
+    roll_height: AxleHeights = Field(description="Ground height of the roll centres.")
+    fv_ic: CornerCentres = Field(
+        description="Front-view instant centres (in the plane x = patch x)."
+    )
+    sv_ic: CornerCentres = Field(
+        description="Side-view instant centres (in the plane y = patch y)."
+    )
+    contact: CornerCentres = Field(description="Contact patches, equal to the scene markers.")
+    fvsa: CornerLengths
+    svsa: CornerLengths
+    pitch: Vec3 | None = Field(description="Pitch centre on the centreline (y = 0).")
+
+
+class RegionOut(BaseModel):
+    """One optimization region as wireframe polylines (SI, body frame of the 3D scene).
+
+    Domains are the variable domains (a symmetric variable gives the left one and a
+    ``mirrored`` right copy); ``inside`` / ``outside`` are constraint regions, given in the
+    vehicle frame and not mirrored. Regions do not move with the body pose.
+    """
+
+    name: str = Field(description="Variable point or constraint name.")
+    role: Literal["domain", "inside", "outside"]
+    point: str = Field(description="Hardpoint reference, e.g. ``front.uca_front``.")
+    side: Literal["left", "right"]
+    shape: Literal["hexahedron", "box", "offset", "sphere", "cylinder"]
+    mirrored: bool = Field(default=False, description="Right copy of a symmetric domain.")
+    lines: list[list[Vec3]] = Field(description="Wireframe polylines.")
+    over: str | None = Field(default=None, description="Sweep a constraint is evaluated over.")
+    note: str | None = None
 
 
 class OpenRequest(BaseModel):
@@ -82,6 +182,30 @@ class DatasetPatch(BaseModel):
         le=401,
         description="Re-solve with this many points per sweep (vehicle files only).",
     )
+
+
+class DeriveRequest(BaseModel):
+    """Derive an edited revision from a vehicle-backed one."""
+
+    edits: list[HardpointEdit] = Field(min_length=1)
+    label: str | None = Field(default=None, description="Default: '<source label> edited'.")
+    steps: int | None = Field(
+        default=None, ge=3, le=401, description="Points per sweep (default: the source's)."
+    )
+
+
+class SaveRequest(BaseModel):
+    """Write a revision's vehicle to a workspace YAML file."""
+
+    path: str = Field(description="Workspace-relative file name ending in .yaml or .yml.")
+    overwrite: bool = False
+
+
+class SaveOut(BaseModel):
+    """Result of saving a vehicle YAML."""
+
+    path: str = Field(description="Workspace-relative path of the written file.")
+    size: int = Field(description="File size in bytes.")
 
 
 class TableOut(BaseModel):

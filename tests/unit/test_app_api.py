@@ -277,6 +277,8 @@ def test_scene(client: TestClient) -> None:
     r2 = client.get(f"{API}/datasets/{d['id']}/scene", params={"heave": 0.01, "roll": 0.01})
     assert r2.status_code == 200 and len(r2.json()["data"]) > 0
     assert r2.json() != r.json()
+    c0, c1 = r.json()["centres"], r2.json()["centres"]
+    assert set(c0["contact"]) == {"FL", "FR", "RL", "RR"} and c0["contact"] != c1["contact"]
 
 
 def test_browse_kinds(client: TestClient, ws: Path) -> None:

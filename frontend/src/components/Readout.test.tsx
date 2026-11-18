@@ -74,6 +74,7 @@ const ds = (id: string, steps: number, fixed: boolean): DatasetInfo => ({
   params: {},
   steps,
   resolution_fixed: fixed,
+  has_study: false,
 });
 
 function src(readOnly: boolean): DataSource {

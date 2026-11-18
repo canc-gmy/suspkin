@@ -32,6 +32,9 @@ Light (drafting film):
 | `--rule` | `#B7C3CB` | Title-block and table rules |
 | `--layout-blue` | `#23468F` | The one UI accent: active tab, focus ring, selected revision, primary button. Named after machinists' layout fluid. |
 | `--danger` | `#A3341F` | Errors only |
+| `--region-domain` | `#2E7D32` | 3D view: variable domains |
+| `--region-required` | `#00838F` | 3D view: `inside` regions |
+| `--region-keepout` | `#C2185B` | 3D view: `outside` regions |
 
 Dark (blueprint):
 
@@ -46,6 +49,9 @@ Dark (blueprint):
 | `--rule` | `#3A5F82` |
 | `--layout-blue` | `#9CC3FF` |
 | `--danger` | `#FF9C85` |
+| `--region-domain` | `#8BD17C` |
+| `--region-required` | `#5CC8D6` |
+| `--region-keepout` | `#FF7FA8` |
 
 **Revision colours** use the Okabe-Ito order from `spec.palette`, so they match the matplotlib report. Per theme, `tokens.css` overrides the two entries that fail contrast:
 - Light: yellow `#F0E442` → `#B8A800`.
@@ -153,10 +159,43 @@ It replaces floating hover labels, which covered the curves. It lives in the fig
 ### 3D view (iteration 2)
 
 - The canvas fills all the space below the 3D toolbar: full width of the main area, height to the bottom of the viewport. No inner card or padding. The Plotly paper, the scene background, the axis walls and the container below the toolbar are all `--sheet-raised` (the plot surface), so the canvas is one surface edge to edge with no visible box or seam, in both themes. The legend sits inside the canvas at the top left, so it is never clipped at any width.
-- The toolbar holds the revision picker, pose sliders, "Reset pose", "Reset view" and "Show reference ghost".
+- The toolbar holds the revision picker, pose sliders, "Reset pose", "Reset view", "Overlays" and "Show reference ghost".
 - The camera belongs to the user. Pose changes never move the camera, zoom or pan, and the axis ranges and aspect ratio stay fixed from the static pose. Only "Reset view" restores the default camera.
 - The reference ghost is drawn in 1 px `--ink-muted` lines at 40% opacity. Hardpoints that differ from the reference by more than 0.1 mm get a 6 px ring in `--layout-blue`.
 - The rings have their own checkbox, "Highlight changes", next to "Show reference ghost". It is on by default and disabled (with a "Same as the reference" title) while the selected revision is the reference. The ring sits on the posed position of the point, so it follows the pose sliders. It uses the same 0.1 mm threshold as the Hardpoints tab.
+
+#### Overlays menu and rotation centres
+
+An "Overlays" button in the 3D toolbar (after "Reset view") opens a small panel under it with two groups: "Rotation centres" (four checkboxes, below) and "Study regions" (three checkboxes, see Constraint regions). All are off by default. The button reads "Overlays (3)" with the number of ticked boxes. The button is a secondary button with `aria-expanded`; the panel is a 1 px `--rule` box on `--sheet-raised`, opens on Enter or Space, closes on Esc (focus returns to the button) and on a click outside. The ticked boxes are kept for the session in localStorage (centres and regions under separate keys).
+
+| Checkbox | Draws | Marker, colour |
+|---|---|---|
+| Roll centres and roll axis | front and rear roll centre at the pose, 2 px solid line through them | diamond, `--layout-blue` |
+| Front-view instant centres | per corner, the IC in the plane through the contact patch, with a 1 px dashed line from the patch | x, `--ink` |
+| Side-view instant centres | the same in the side-view plane | cross, `--ink-muted` |
+| Pitch centre | the vehicle pitch centre on the centreline | open diamond, `--ink` |
+
+- Positions are in the plotted (body) frame, so the contact patches coincide with the scene's contact markers. The roll centre is the intersection of the two patch-to-IC lines; the pitch centre is the intersection of the front and rear side-view lines.
+- A centre at infinity (parallel wishbones) is not drawn and not listed. Nothing here changes the axis ranges, the aspect or the camera: those stay fixed from the static pose.
+- Lines are clipped to the scene box. An IC outside the box is shown by its clipped line ending in a small open square at the box edge, and by a note under the toolbar in `--ink-muted`, one line per IC, sentence case, no middle dots: "FL front-view IC 4.21 m outboard", "RL side-view IC 3.10 m rearward". The distance is the swing-arm length (patch to IC). A roll or pitch centre outside the box is not drawn and gets a note too ("Front roll centre outside the view").
+- Each ticked kind has one legend entry named like the checkbox ("Roll centres", "Front-view ICs", "Side-view ICs", "Pitch centre"). Colours are the existing tokens only; the revision colours keep their meaning.
+- The wishbone-plane construction lines are not drawn: the 3D wishbones already show them.
+
+#### Constraint regions
+
+The second group of the Overlays menu, "Study regions", draws the variable domains and constraint regions of an optimization study. It is enabled only for a revision with a study attached: a revision of an optimizer run (the run folder's `study.yaml`), or a study YAML opened from the file picker (listed as "Study"; it opens the study's vehicle as a revision labelled with the study file name). Otherwise the three checkboxes are disabled, with the title "No optimization study attached to this revision".
+
+| Checkbox | Draws | Colour token, line |
+|---|---|---|
+| Design domains | the domain of each variable (symmetric variables also as a right-side copy at 50% opacity) | `--region-domain`, solid |
+| Requirements (inside) | `inside` constraint regions | `--region-required`, dotted |
+| Keep-outs (outside) | `outside` constraint regions | `--region-keepout`, dashed |
+
+- Wireframes only, 1 px: box and hexahedron edges, three great circles for a sphere, two end circles and four rails for a cylinder. Geometry comes from the same helpers as the static study figure.
+- Tokens: light `#2E7D32`, `#00838F`, `#C2185B`; dark `#8BD17C`, `#5CC8D6`, `#FF7FA8`. They sit away from the Okabe-Ito revision hues and from `--danger` (errors only), and the line style repeats the role, so colour is never the only cue.
+- Regions are fixed in the body frame, like the chassis points: they stay put while the wheels move under the pose sliders. A constraint checked `over` a sweep (a moving point) is still drawn in the body frame; the API row carries the note "Checked over sweep ...".
+- Same rule as the centres: lines are clipped to the scene box, so the axis ranges and the camera never change. Legend: one entry per ticked role, named like the checkbox.
+- Constraint regions are in vehicle-frame coordinates and are not mirrored; only symmetric variable domains get a right copy.
 
 ### Hardpoints tab (iteration 2)
 
@@ -211,6 +250,48 @@ A tab after Summary. It answers "what did I move, and by how much" for every har
 - In Δ mode the rows are the reference's solved x, and the columns are "B-A camber [deg]" for every visible revision except the reference.
 - Copy puts tab-separated text on the clipboard so it pastes into a spreadsheet; the download is a CSV named `<figure>_<panel>.csv` (UTF-8 with a byte-order mark so Excel reads the Δ and unit text). Both work in snapshots because they use only the loaded tables.
 - If the clipboard is not available, a hidden-textarea fallback is tried; if that fails too, the status reads "Could not copy, use Download CSV" in `--danger`.
+
+### Hardpoint editing (iteration 2)
+
+Editing lives in the Hardpoints tab, because the table already shows every point in mm. An edit never changes a revision: it makes a new one.
+
+```
+| Edit revision [ B  opt best v ]  [ Edit as new revision ]        Save as YAML           |
+|-------------------------------------------------------------------------------------------|
+| Editing B opt best. A left point also moves its right twin unless "Right side only" is set. |
+| [ Solve ]  [ Discard edits ]   [x] Auto-solve    2 points changed    Solving…             |
+|-------------------------------------------------------------------------------------------|
+| Point        Side            | B  opt best                  | Δ B − A |                   |
+|                              |  x       y        z          |         |                   |
+| lca_outer    left            | [ 0.0 ] [ 580.0 ] |[ 142.0 ] |  12.00  |  Reset point      |
+| lca_outer    right           | [ 0.0 ] [-580.0 ] |[ 142.0 ] |  12.00  |  Reset point      |
+|              [ ] Right side only                              |         |                   |
+| Could not solve: invalid geometry after editing front.lca_outer: ... Change the marked      |
+| values and solve again.                                                                     |
+```
+
+- **Enter and leave:** "Edit as new revision" sits in the table toolbar next to a revision picker. It works on any revision that has a vehicle: files, bundles, runs and earlier edits. While editing, the button is replaced by "Discard edits". In a snapshot all editing buttons are disabled with the title "Read-only snapshot".
+- **Cells:** in the edited revision's x, y, z columns the numbers become inputs, in mm, step 0.1, one decimal, tabular, right-aligned. The other revisions stay plain numbers, so the edit can be read against them.
+- **Changed cells** carry a 2 px `--layout-blue` rule on their left edge, and nothing else (no fill, no bold). A value typed back to the original is no longer an edit.
+- **Mirroring:** a right row follows its left row, shown as plain muted numbers, until "Right side only" is ticked on it. With it ticked the right row's inputs are live (right-side coordinates, y is negative) and the left row stops moving it. A point that already has a right override starts ticked. Unticking it re-mirrors the right point from the left one.
+- **Reset point** is a text button at the end of a row that has edits. It clears both rows of that point.
+- **Solve** is the one primary button of the view. It is disabled with nothing to solve and while a solve runs. On success the edits become a new revision in the title block ("B edited", next free letter), the edit mode closes and the status says "Created B edited".
+- **Auto-solve** is a checkbox. With it on, the view solves 600 ms after the last edit and shows "Solving…" in place of the changed count. An answer to an older edit is dropped. Auto-solve keeps one revision: each new result closes the previous auto-solved one. Switching Auto-solve off keeps the last result as an ordinary revision.
+- **Errors** are inline under the table, in `--danger`, and name the point and the reason: "Could not solve: invalid geometry after editing front.lca_outer: ... Change the marked values and solve again." A solver failure names the sweep. The inputs and edits stay as they were.
+- **Save as YAML** is a text button next to the revision picker; it is available for edited revisions. It opens one line: a file name input (default: the revision label as a file name, ending in .yaml) with "Save" and "Cancel". If the file exists the app asks "Replace <name>?" and only then overwrites. Success reads "Saved to <path>" in the status line. Files are written inside the workspace only.
+
+### Optimization statistics (iteration 2)
+
+The Optimization tab has a segmented control "History / Statistics" under its title. History is the existing charts; Statistics answers "how did all the tested samples score, and where do good designs sit". It reads the history table only, so it works in snapshots.
+
+- **Definitions** (stated once under the controls, in `--ink-muted` 12 px): a failed evaluation is one whose status is not "ok" or whose f_total is the 1e3 failure penalty; it is counted but never enters a mean, a quantile or an axis range. Feasible means every enabled g is 0 or below. "Top 10 %" is the best 10 % of the feasible samples by f_total, at least 5 samples, and is "-" when fewer than 5 are feasible. Standard deviations are sample deviations (n - 1) and are "-" for fewer than 2 samples. f is the normalised objective as stored. In pareto mode f_total is still the stored sum of the objectives; the optimizer ranks by the objective vector, and the note says so.
+- **Layout:** panels on the usual grid (2 columns from 1200 px). Tables are ruled like the Summary table (2 px `--ink` rule under the header, 1 px `--rule` between rows, left-aligned text, right-aligned tabular numbers), with no card around them.
+- **Panels, in order:** Summary (counts by status and by phase, feasible share, f_total best, median, mean and standard deviation for feasible and for all ok samples, time per evaluation); Score distribution; Objectives (box plot of the feasible samples plus a mean ± std, min, median and best-design table); Design parameters; Constraints; Evolution.
+- **Score distribution:** histogram of f_total on shared bins, feasible in `--layout-blue`, infeasible in `--ink-muted`, overlaid. Best, median and mean are vertical lines named in the legend (no labels over the data). A muted line states how many failed evaluations are not shown ("12 failed evaluations not shown").
+- **Design parameters:** physical hardpoint coordinates in mm (`p_` columns); unit-cube variables when those are absent. The table gives mean ± std for all feasible and for the top 10 %, the best design and the baseline. The chart shows, per parameter, mean ± std for all feasible and for the top 10 % as dots with whiskers and the best design as a marker, each normalised to the explored range of that parameter (0 to 1) so all fit one axis; the table carries the real values. The baseline is found as the history row whose f_total equals the stored baseline f_total, and is "-" when none matches.
+- **Constraints:** pass rate (share of ok samples with g at or below 0), mean g and max g, for all ok samples and for the top 10 %. A horizontal bar chart in `--layout-blue` shows the pass rate.
+- **Evolution:** mean ± std band (a `--layout-blue` line with a 15 % fill) of f_total per window of max(10, n/20) evaluations, feasible samples only, with the best-so-far step line in `--ink` on top.
+- **No feasible sample:** the feasible-only panels say "No feasible evaluation yet, so there are no statistics to show." The counts and the failed and infeasible histogram still appear.
 
 ## Plot template (`plotlyTemplate.ts`)
 

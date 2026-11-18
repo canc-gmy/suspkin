@@ -11,6 +11,9 @@ export interface Tokens {
   rule: string;
   layoutBlue: string;
   danger: string;
+  regionDomain: string;
+  regionRequired: string;
+  regionKeepout: string;
   fontUi: string;
   /** Palette-index colour overrides present on this theme (`--rev-N`). */
   rev: Record<number, string>;
@@ -42,6 +45,9 @@ export function readTokens(theme: Theme): Tokens {
     rule: get("--rule"),
     layoutBlue: get("--layout-blue"),
     danger: get("--danger"),
+    regionDomain: get("--region-domain"),
+    regionRequired: get("--region-required"),
+    regionKeepout: get("--region-keepout"),
     fontUi: get("--font-ui") || "Barlow, sans-serif",
     rev,
   };

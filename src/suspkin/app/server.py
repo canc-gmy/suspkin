@@ -17,10 +17,12 @@ from fastapi.staticfiles import StaticFiles
 
 from suspkin import __version__
 from suspkin.app.datasets import (
+    AlreadyExistsError,
     DatasetError,
     DatasetManager,
     DatasetNotFoundError,
     DatasetTooLargeError,
+    SolveFailedError,
     WorkspaceError,
 )
 from suspkin.app.routes import make_router
@@ -111,6 +113,8 @@ def create_app(
     app.add_exception_handler(DatasetNotFoundError, _err(404))
     app.add_exception_handler(DatasetTooLargeError, _err(413))
     app.add_exception_handler(DatasetError, _err(400))
+    app.add_exception_handler(SolveFailedError, _err(422))
+    app.add_exception_handler(AlreadyExistsError, _err(409))
 
     app.include_router(make_router(manager))
 
