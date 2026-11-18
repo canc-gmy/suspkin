@@ -15,10 +15,32 @@ constraint specification.
 
 ## Setup
 
+Prerequisites: git and Python 3.11+ (uv is optional, the script installs it if missing).
+
 ```bash
-uv sync
+git clone https://github.com/canc-gmy/suspkin.git && cd suspkin
+```
+
+Then one command:
+
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
+```
+
+```bash
+# Linux / macOS / Git Bash
+bash scripts/setup.sh
+```
+
+Flags: `-Minimal` / `--minimal` skips the `viz` and `opt` extras; `-Test` / `--test` also runs the test suite.
+
+Manual equivalent (use `python -m uv` instead of `uv` when uv is not on PATH):
+
+```bash
+uv sync --all-extras
+uv run pre-commit install
 uv run suspkin version
-uv run pytest
 ```
 
 ## Usage

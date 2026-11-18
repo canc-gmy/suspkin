@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- One-command setup scripts `scripts/setup.ps1` and `scripts/setup.sh` (Python check, uv bootstrap,
+  `uv sync --all-extras`, pre-commit hooks, smoke check; `-Minimal` and `-Test` flags).
+
 ## [0.8.0] - 2026-11-18
 
 ### Added

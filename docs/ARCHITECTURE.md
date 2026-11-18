@@ -87,9 +87,20 @@ flowchart LR
     FIG --> REP["report folder<br/>HTML, Markdown, figures, CSV, JSON"]
     G3D --> REP
     CSV --> REP
-    REP --> CLI["suspkin CLI<br/>show, animate, sweep, summary, vehicle, vsweep, report"]
+    REP --> CLI["suspkin CLI<br/>show, animate, sweep, summary, vehicle, vsweep, report, check, optimize"]
     CSV --> CLI
+    SY["study YAML<br/>variables, sweeps, constraints, objectives, optimizer"] --> DS["load_study + DesignSpace<br/>unit-cube vector -> Vehicle"]
+    L --> DS
+    DS --> EV["evaluate<br/>sweeps run once -> g, f, f_total"]
+    EV --> PR["Problem<br/>cache, process pool, budget"]
+    PR --> DR["drivers<br/>nsga2, de, slsqp, trust-constr, de+slsqp"]
+    DR --> RUN["run folder<br/>history.csv, best.yaml or pareto/, figures, report"]
+    EV --> CLI
+    RUN --> CLI
 ```
+
+The lower branch (study YAML to run folder, added in v0.7 and v0.8) reuses the same solvers and metric
+functions through `evaluate` and is described in [section 14](#14-optimization-v07v08).
 
 The same chain written as a call graph (what actually calls what):
 
@@ -99,6 +110,20 @@ flowchart TD
     cli --> report
     cli --> sweeps
     cli --> plotting
+    cli --> optimize.drivers
+    optimize.drivers --> optimize.problem
+    optimize.drivers --> optimize.outputs
+    optimize.problem --> optimize.evaluate
+    optimize.problem --> optimize.history
+    optimize.evaluate --> optimize.design
+    optimize.evaluate --> metrics.joints
+    optimize.evaluate --> sweeps.vehicle_sweeps
+    optimize.evaluate --> kinematics.corner
+    optimize.design --> optimize.spec
+    optimize.design --> optimize.regions
+    optimize.spec --> geometry.io
+    optimize.outputs --> report
+    optimize.outputs --> plotting
     report.studies --> sweeps
     report.studies --> metrics.vehicle_summary
     report.builder --> plotting.figures
@@ -233,14 +258,17 @@ veichle-dynamics/
 │   ├── vehicles/fs_reference.yaml reference Formula Student car (the main worked example)
 │   ├── vehicles/.gitkeep
 │   └── studies/                   fs_reference_constraints.yaml (v0.7), fs_reference_optimize.yaml (v0.8 demo)
+├── scripts/
+│   ├── setup.ps1                  one-shot setup (Windows): installs uv if missing, `uv sync --all-extras`
+│   └── setup.sh                   same for Linux and macOS
 ├── docs/
 │   ├── DESIGN_PLAN.md             design intent, milestones, decisions log (D1-D9, O1-O8)
 │   ├── ARCHITECTURE.md            this document
 │   └── images/fs_reference.png    static 3D render used by the README
 ├── src/suspkin/
-│   ├── __init__.py                __version__ = "0.6.0"
-│   ├── units.py                   display unit converters
-│   ├── cli.py                     typer CLI (8 commands)
+│   ├── __init__.py                __version__ = "0.8.0"
+│   ├── units.py                   display converters; parse_quantity, format_quantity, dimension table (study YAML)
+│   ├── cli.py                     typer CLI (10 commands)
 │   ├── geom_math/                 pure geometry helpers
 │   │   ├── vectors.py             mirror_y, unit, distance, wheel_spin_axis
 │   │   ├── rotations.py           axis_angle_matrix, rotate_about_line, rotation_between
@@ -261,7 +289,8 @@ veichle-dynamics/
 │   │   ├── arb.py                 ARB metrics, motion ratios, ARB wheel rates
 │   │   ├── table.py               metrics_frame, add_gradients, static_summary
 │   │   ├── vehicle.py             anti-features, roll stiffness/gradient, load transfer, steering, pitch centre
-│   │   └── vehicle_summary.py     the static vehicle summary (VehicleSummary)
+│   │   ├── vehicle_summary.py     the static vehicle summary (VehicleSummary)
+│   │   └── joints.py              body rotations (Kabsch), rod-end and ball-joint misalignment angles (v0.7)
 │   ├── sweeps/
 │   │   ├── corner_sweeps.py       states_to_frame
 │   │   └── vehicle_sweeps.py      sweep_vehicle, vehicle_frame
@@ -271,6 +300,7 @@ veichle-dynamics/
 │   │   ├── geometry3d.py          scene builder (VehicleScene) + matplotlib 3D drawing
 │   │   ├── animation.py           GIF / MP4 sweep animation
 │   │   ├── interactive.py         plotly HTML (optional `viz` extra)
+│   │   ├── regions.py             plot_study_3d: variable domains and keep-outs of a study (v0.7)
 │   │   └── optimization.py        convergence, Pareto front, parallel coordinates, constraint margins (v0.8)
 │   ├── report/
 │   │   ├── studies.py             run_standard_studies -> StudyResults
@@ -287,7 +317,7 @@ veichle-dynamics/
 │       └── outputs.py             run folder: best / Pareto YAML, result.json, meta.json, figures, report
 └── tests/
     ├── fixtures/minimal_vehicle.yaml   minimal test car (see 4.6)
-    ├── unit/                      26 test modules + helpers.py
+    ├── unit/                      41 test modules + helpers.py
     ├── property/                  hypothesis invariants for the corner solver
     └── regression/                reference-car sweeps (ARB, corners, vehicle)
 ```
@@ -302,11 +332,16 @@ abbreviated to the parameters that matter.
 
 #### 3.2.1 `suspkin/__init__.py` and `units.py`
 
-* [\_\_init\_\_.py:3](../src/suspkin/__init__.py#L3): `__version__ = "0.6.0"`; a smoke test asserts it
+* [\_\_init\_\_.py:3](../src/suspkin/__init__.py#L3): `__version__ = "0.8.0"`; a smoke test asserts it
   equals `pyproject.toml`'s version.
 * [units.py:9-26](../src/suspkin/units.py#L9): `m_to_mm`, `mm_to_m`, `rad_to_deg`, `deg_to_rad` (thin `numpy` wrappers
   accepting scalars or arrays). Used by the CLI display layer ([cli.py:236](../src/suspkin/cli.py#L236)).
   Core math never imports it.
+* v0.7 added quantities with units for the study YAML. A dimension is a product of base atoms with integer exponents
+  (`Dim` = canonical name such as `length`, `angle/length`, `1/length`, `force*length/angle`; `ratio` is dimensionless; `percent`, `gload` and `accel` are separate atoms).
+  `parse_quantity(v, dim)` ([units.py:150](../src/suspkin/units.py#L150)) turns `"30 mm"`, `"-1.5 deg"`, `"34 N/mm"`, `"50 %"` or a plain number (already SI) into an SI float and raises `ValueError`
+  naming the expected dimension on a wrong unit. `normalize_dim`, `slope_dim(metric_dim, input_dim)`, `display_unit`, `display_factor` and `format_quantity` serve the evaluator, the CLI tables and the plots. The module
+  stays free of the solvers.
 
 #### 3.2.2 `geom_math/vectors.py`
 
@@ -415,6 +450,15 @@ static) -> dict` ([alignment.py:164](../src/suspkin/metrics/alignment.py#L164)).
 `svsa_length`, `fv_swing_angle`, `sv_swing_angle`, `sv_wc_angle`, `roll_centre_symmetric`, `roll_centre_pair`, `centre_metrics`.
 Math in [7.2](#72-instant-centres-swing-arms-and-roll-centre).
 
+#### 3.2.14a `metrics/joints.py`
+
+Joint misalignment angles (v0.7), used by the `joint_angle` constraint. `body_rotations(state, static, corner)` ([joints.py:81](../src/suspkin/metrics/joints.py#L81)) fits a rotation to each body's hardpoint set against the static pose
+(Kabsch, SVD with a determinant fix; the chassis is the identity). `joint_angle(state, static, corner, joint, axis=None)` ([joints.py:115](../src/suspkin/metrics/joints.py#L115)) returns the angle $\operatorname{atan2}(\lVert a	imes b
+Vert, a\cdot b)$ in rad
+for one of `JOINTS` (`tie_inner`, `tie_outer`, `pushrod_outer`, `pushrod_inner`, `spring_chassis`, `rocker_spring`, `uca_outer`, `lca_outer`): rod ends compare the current link direction with the static one carried by the housing body, ball joints compare the stud axis
+(static `lca_outer -> uca_outer`) carried by the upright with the same axis carried by the wishbone. `axis` overrides the stud/bore axis (approximate for rod ends). `joint_angles_frame(states, corner)` gives columns `joint_<name>` over a sweep.
+Evaluated, not enforced by the solver ([section 15](#15-known-gaps--discrepancies--limitations)).
+
 #### 3.2.14 `metrics/actuation.py` and `metrics/arb.py`
 
 Per-state actuation metrics, `MotionRatios`, `motion_ratios(corner, travel, rack, h=1e-5, guess)`, `wheel_load_spring`,
@@ -440,11 +484,22 @@ into `VehicleSummary` ([vehicle_summary.py:206](../src/suspkin/metrics/vehicle_s
 
 #### 3.2.18 `plotting/*`, `report/*`, `cli.py`
 
-See [section 9](#9-plotting-and-reports) and [section 10](#10-cli-reference).
+See [section 9](#9-plotting-and-reports) and [section 10](#10-cli-reference). Plotting additions: `plotting/regions.py` (`plot_study_3d`, variable domains and keep-outs of a study, v0.7)
+and `plotting/optimization.py` (`plot_convergence`, `plot_pareto`, `plot_parallel_coordinates`, `plot_constraint_margins`, `pareto_mask`, `knee_index`, v0.8); both read tables or the spec only ([14.1](#141-file-roles), [14.7](#147-run-folder-and-outputs)).
 
-#### 3.2.19 `optimize/__init__.py`
+#### 3.2.19 `optimize/*`
 
-The study layer (v0.7: spec, regions, metric registry, design space, evaluator) and the optimizer (v0.8: objectives, problem, history, drivers, outputs). See [section 14](#14-optimization-v07v08).
+The study layer (v0.7) and the optimizer (v0.8). `optimize/__init__.py` re-exports the public names (`DesignSpace`, `evaluate`, ...). Roles, one line each; details and line references in [section 14.1](#141-file-roles).
+
+* `spec.py`: frozen pydantic study models and `load_study` -> `(Study, Vehicle)` ([14.2](#142-study-yaml-schema)).
+* `metric_registry.py`: metric name -> dimension, for validation and display units.
+* `regions.py`: pure geometry, trilinear hexahedron map, Newton inverse, signed distances ([14.3](#143-math)).
+* `design.py`: `DesignSpace`, the unit-cube vector <-> `Vehicle` map.
+* `evaluate.py`: `evaluate(space, x)` -> `Evaluation` (constraint `g`, objective `f`, `f_total`; one solve per sweep).
+* `problem.py`: `Problem`, cached, budgeted, pooled batch evaluation and forward-difference Jacobian ([14.5](#145-problem-cache-pool-and-budget)).
+* `history.py`: `history.csv` writer and reader, `EvalCache`, resume.
+* `drivers.py`: `run_optimization` and the method drivers ([14.6](#146-drivers)).
+* `outputs.py`: run folder writer ([14.7](#147-run-folder-and-outputs)).
 
 
 ---
@@ -697,20 +752,30 @@ real suspension the wheel-centre height is a regular coordinate on the solution 
 
 ### 5.5 Solver choice, tolerances, continuation, staging
 
-* **Solver**: `scipy.optimize.root(..., method="hybr", tol=1e-14)` ([corner.py:170-176](../src/suspkin/kinematics/corner.py#L170)), the MINPACK modified-Powell hybrid method. **No analytic Jacobian is supplied**, so scipy builds
-  a finite-difference Jacobian itself (the design plan mentions an analytic Jacobian "where practical": not implemented, see [15](#15-known-gaps--discrepancies--limitations)). The system is tiny (3 x 3), so this is cheap.
-* **Acceptance tolerance**: after the solve, the maximum absolute residual must be $\le$ `_RESIDUAL_TOL` = 1e-9 m ([corner.py:34](../src/suspkin/kinematics/corner.py#L34), [corner.py:180-184](../src/suspkin/kinematics/corner.py#L180)), otherwise `KinematicsError`.
-  Non-finite `x` also raises. `CornerState.max_residual` stores the worst of the three residuals and the pushrod-length error ([corner.py:227-232](../src/suspkin/kinematics/corner.py#L227)).
+* **Solver** (v0.7): an own **damped Newton** on the 3 x 3 closing system with the **analytic Jacobian** ([_newton](../src/suspkin/kinematics/corner.py#L284), [_jacobian](../src/suspkin/kinematics/corner.py#L262)); a scalar fast path
+  (plain floats and tuples, no numpy calls on 3-vectors) is used inside the iteration. At most `_NEWTON_MAX_ITER` = 30 iterations; the step is halved up to `_MAX_BACKTRACKS` = 10 times until the squared residual decreases;
+  converged when every residual is below `_NEWTON_F_TOL` = 1e-12 m (a stalled step below `_NEWTON_X_TOL` = 1e-14 is accepted if the residual is below 1e-10). Results agree with the former solver within 1e-9 ([CHANGELOG.md](../CHANGELOG.md) 0.7.0).
+  If Newton does not converge from any start, `_hybr` ([corner.py:321](../src/suspkin/kinematics/corner.py#L321)) falls back to `scipy.optimize.root(method="hybr", tol=1e-14)` **with the same analytic Jacobian**.
+* **Per-sweep context**: `_Ctx` ([corner.py:121](../src/suspkin/kinematics/corner.py#L121)) holds the static data of a corner as plain floats and tuples; one `_Ctx` is built per sweep (or per `solve_corner` call), not per point.
+* **Acceptance tolerance**: after the solve, the maximum absolute residual must be $\le$ `_RESIDUAL_TOL` = 1e-9 m ([corner.py:35](../src/suspkin/kinematics/corner.py#L35)), otherwise `KinematicsError`.
+  Non-finite `x` also raises. `CornerState.max_residual` stores the worst of the three residuals and the pushrod-length error.
 * **Starting point**: $\mathbf x_0=\mathbf 0$ is exactly the static pose ($R_{\min}=I$, $\psi=0$), so a solve at $z=r=0$ starts on the root and returns immediately. With a `guess` state, $\mathbf x_0$ is the neighbour's
-  $(\theta_U,\theta_L,\psi)$ and the rocker angle seeds the rocker root choice.
-* **Tiny-guess fix**: if $\lVert\mathbf x_0\rVert<10^{-4}$ it is replaced by exactly zero ([corner.py:165-168](../src/suspkin/kinematics/corner.py#L165)). `hybr` bounds its first step by a factor of $\lVert\mathbf x_0\rVert$; a tiny non-zero start would stall
+  $(	heta_U,	heta_L,\psi)$ and the rocker angle seeds the rocker root choice. In a continuation the **linear predictor** is tried first: the angles extrapolated from the two previous states (`_Advance._predict`, skipped if the extrapolation ratio exceeds 4), then the plain neighbour.
+* **Tiny-guess fix** (fallback only): in `_hybr`, if $\lVert\mathbf x_0
+Vert<10^{-4}$ it is replaced by exactly zero. `hybr` bounds its first step by a factor of $\lVert\mathbf x_0
+Vert$; a tiny non-zero start would stall
   the solver, while an exact zero makes it fall back to a default step bound.
-* **Continuation** ([_continuation](../src/suspkin/kinematics/corner.py#L302)): a sweep solves the value nearest 0 first, then walks outward in both directions, each solve starting from the previous state. This keeps the solution on the **same branch**
-  (the equations have multiple roots: e.g. mirrored kingpin spins, or the two rocker roots). If a solve fails, `_reach` ([corner.py:269](../src/suspkin/kinematics/corner.py#L269)) bisects the step recursively, at most `_MAX_HALVINGS` = 6 times
+* **Branch-jump guard** (v0.7): a guided solve whose angles $(	heta_U,	heta_L,\psi)$ differ from the guess by more than `_MAX_ANGLE_STEP` = 0.05 rad ([corner.py:39](../src/suspkin/kinematics/corner.py#L39)) is rejected with `KinematicsError` ("branch jump"), so the solver
+  cannot silently land on another root of the multi-root system (mirrored kingpin spins, the two rocker roots). The rejection triggers the step halving below.
+* **Continuation** ([_continuation](../src/suspkin/kinematics/corner.py#L586)): a sweep solves the value nearest 0 first, then walks outward in both directions, each solve starting from the previous state. This keeps the solution on the **same branch**.
+  If a solve fails (no convergence or a branch jump), `_reach` ([corner.py:544](../src/suspkin/kinematics/corner.py#L544)) bisects the step recursively, at most `_MAX_HALVINGS` = 6 times
   (so a step is subdivided into at most 64 pieces) before re-raising.
-* **Cold-start staging**: `solve_corner` without a guess and with $\lvert z\rvert>5$ mm or $\lvert r\rvert>5$ mm (`_COLD_LIMIT`) does not solve directly: `_staged` ([corner.py:289](../src/suspkin/kinematics/corner.py#L289)) solves the static pose, walks travel to the
-  target in steps of at most `_STAGE_STEP` = 5 mm at rack 0, then walks rack at the final travel ([_walk, corner.py:280](../src/suspkin/kinematics/corner.py#L280)). A cold solve therefore lands on the same branch as a sweep (test `test_cold_solve_matches_sweep_branch`).
-* `sweep_rack` with a non-zero travel first reaches that travel by the same walk, then continues in rack ([corner.py:340-350](../src/suspkin/kinematics/corner.py#L340)).
+* **Staged continuation**: `solve_corner` without a guess and with $\lvert z
+vert>5$ mm or $\lvert r
+vert>5$ mm (`_COLD_LIMIT`) does not solve directly: `_staged` ([corner.py:573](../src/suspkin/kinematics/corner.py#L573)) solves the static pose, walks travel to the
+  target in steps of at most `_STAGE_STEP` = 5 mm at rack 0, then walks rack at the final travel (`_walk`, [corner.py:562](../src/suspkin/kinematics/corner.py#L562)). A cold solve therefore lands on the same branch as a sweep (test `test_cold_solve_matches_sweep_branch`).
+  Since v0.7 the same staging applies to a **far guess**: if the direct solve from `guess` fails or jumps branch, `solve_corner` walks from the guess to the target in guarded steps (travel at the guess's rack, then rack).
+* `sweep_rack` with a non-zero travel first reaches that travel by the same walk, then continues in rack.
 
 ### 5.6 Pushrod mounts
 
@@ -1396,7 +1461,7 @@ de-duplicates clashes with `_2`, `_3`, ... suffixes ([cli.py:490-498](../src/sus
 ## 10. CLI reference
 
 Entry point `suspkin = suspkin.cli:app` (typer; `no_args_is_help=True`) ([cli.py:11](../src/suspkin/cli.py#L11), [pyproject.toml](../pyproject.toml)). **User-facing inputs are mm and deg; written CSV/JSON files are SI.** `--help` on any command lists its options. Run via `uv run suspkin ...`
-(or `python -m uv run suspkin ...` where `uv` is not on PATH). Exit codes: 0 ok; **1** load/solve error (message on stderr); **2** usage error (wrong option combination, unknown corner, empty `--formats`).
+(or `python -m uv run suspkin ...` where `uv` is not on PATH). Exit codes: 0 ok; **1** load/solve error (message on stderr); **2** usage error (wrong option combination, unknown corner, empty `--formats`). `check` and `optimize` use **2** for a study-file, argument or output error and **1** for an infeasible result (below).
 
 | Command | Purpose |
 |---|---|
@@ -1430,20 +1495,30 @@ CSV = `vehicle_frame` (SI). Example: `suspkin vsweep fs.yaml --roll -2 2 --out r
 **`report VEHICLE_YAML --out DIR`** ([cli.py:463](../src/suspkin/cli.py#L463)): `--compare OTHER.yaml` (repeatable) overlays more designs on the same figures; `--no-3d`; `--formats png,svg` (comma separated); `--steps N` (31, >= 3). Prints the path of `report.html`.
 Example: `suspkin report fs.yaml --compare other.yaml --out report/`.
 
+**`check STUDY_YAML`** ([cli.py:532](../src/suspkin/cli.py#L532), v0.7): evaluates the baseline vehicle against every constraint (and objective, if the study has them) and prints one row per constraint in display units with `g` and status `PASS`, `FAIL`, `UNSOLVED`, `INFEASIBLE` or `OFF` (disabled), then `f_total`.
+Options: `--csv PATH` constraint table (SI); `--plot PATH` 3D region view image; `--strict` exit 1 if the baseline is not feasible or lies outside a variable domain. Exit codes: 0 ok; **2** study-file or output error; **1** only with `--strict`. Details: [14.4](#144-the-check-command).
+Example: `suspkin check configs/studies/fs_reference_constraints.yaml --strict`.
+
+**`optimize STUDY_YAML`** ([cli.py:644](../src/suspkin/cli.py#L644), v0.8): runs the study's optimizer. Options: `--out DIR` (default `results/opt/<study>_<timestamp>`), `--resume` (continue `--out` from its `history.csv`), `--workers N|auto`, `--evaluations N`, `--time "30 min"` (budget overrides),
+`--method nsga2|de|slsqp|trust-constr|de+slsqp`, `--no-report`; command-line values override the study's `optimizer` block. Prints objective and constraint tables (baseline vs best) and the run folder. Exit codes: 0 ok; **2** study, argument or I/O error; **1** no feasible design found (the folder is still written). Details: [14.8](#148-the-optimize-command).
+Example: `suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo`.
+
 ---
 
 ## 11. Testing and verification strategy
 
 ### 11.1 Layout
 
-250 test functions (before parametrisation) in `tests/`:
+436 test functions (before parametrisation) in `tests/`; the full run is 710 tests passed with all extras installed (an earlier run recorded 707 passed, 3 skipped: tests that need an optional dependency or tool are skipped when it is absent):
 
 | Directory | Content |
 |---|---|
-| `tests/unit/` (26 modules + `helpers.py`) | one module per source module or concept: geometry models/IO/corners, rotations/vectors/lines, rocker, corner solver, corner sweeps, ARB, actuation, alignment, centres, metrics table, vehicle metrics/solver/sweeps/summary, figures, 3D, animation, interactive, report, CLI, reference vehicle, smoke |
+| `tests/unit/` (41 modules + `helpers.py`) | one module per source module or concept: geometry models/IO/corners, rotations/vectors/lines, rocker, corner solver and Jacobian (`test_corner_jacobian.py`), corner sweeps, ARB, actuation, alignment, centres, metrics table, vehicle metrics/solver/sweeps/summary, figures, 3D, animation, interactive, report, CLI, reference vehicle, smoke; v0.7: `test_units_parse.py`, `test_regions.py`, `test_study_spec.py`, `test_design_space.py`, `test_evaluate.py`, `test_joints.py`, `test_plot_regions.py`, `test_cli_check.py`; v0.8: `test_objectives.py`, `test_problem.py`, `test_history.py`, `test_drivers.py`, `test_plot_optimization.py`, `test_cli_optimize.py` |
 | `tests/property/test_corner_invariants.py` | hypothesis: random travel/rack on the fixture |
 | `tests/regression/` | reference-car sweeps (`test_reference_sweeps.py`, `test_reference_arb.py`, `test_reference_vehicle_sweeps.py`) |
 | `tests/fixtures/minimal_vehicle.yaml` | the fixture car ([4.6](#46-the-reference-car-and-the-test-fixture)) |
+
+**`perf` marker** ([pyproject.toml](../pyproject.toml)): wall-clock performance guards (machine dependent, generous limits), currently one in `test_corner_sweeps.py` and one in `test_reference_vehicle_sweeps.py`. Other timing tests use machine-independent work-count budgets since v0.7. Deselect with `-m "not perf"`.
 
 Shared helpers ([helpers.py](../tests/unit/helpers.py)): `fixture_vehicle`, `fixture_corners`, `near_toggle_corners` (front rocker re-placed in memory so the pushrod is nearly collinear with the lever) and `max_invariant_error`.
 
@@ -1511,8 +1586,9 @@ python -m uv run mypy src && python -m uv run ruff check && python -m uv run ruf
 ### 12.1 Environment and dependencies
 
 * **Python >= 3.11** ([pyproject.toml](../pyproject.toml)); build backend `hatchling`, wheel package `src/suspkin`.
-* Runtime: `numpy>=2.0`, `scipy>=1.13`, `pandas>=2.2`, `pydantic>=2.7`, `pyyaml>=6.0`, `matplotlib>=3.9`, `typer>=0.12`. Extras: `viz` (`plotly>=5.22`), `opt` (`pymoo>=0.6.1`, unused so far). Dev group: `pytest>=8`, `hypothesis>=6.100`, `ruff>=0.6`, `mypy>=1.11`, `pre-commit>=3.7`, `types-PyYAML`, `pandas-stubs`.
+* Runtime: `numpy>=2.0`, `scipy>=1.13`, `pandas>=2.2`, `pydantic>=2.7`, `pyyaml>=6.0`, `matplotlib>=3.9`, `typer>=0.12`. Extras: `viz` (`plotly>=5.22`, interactive HTML) and `opt` (`pymoo>=0.6.1`, the NSGA-II driver; the scipy drivers need no extra). Dev group: `pytest>=8`, `hypothesis>=6.100`, `ruff>=0.6`, `mypy>=1.11`, `pre-commit>=3.7`, `types-PyYAML`, `pandas-stubs`.
 * **uv**: `uv sync` creates the environment, `uv run <cmd>` runs inside it. On the development PC `uv` may not be on PATH: call it as **`python -m uv`** (e.g. `python -m uv run pytest -q`) ([CLAUDE.md](../CLAUDE.md)). The pre-commit hooks also use `python -m uv run`.
+* **Install everything**: `uv sync --all-extras` (dev group, `viz` and `opt`; CI does the same). The one-shot setup scripts [scripts/setup.ps1](../scripts/setup.ps1) (Windows) and [scripts/setup.sh](../scripts/setup.sh) (Linux, macOS) install `uv` if it is missing and then run `uv sync --all-extras`.
 
 ### 12.2 Quality gate
 
@@ -1593,7 +1669,7 @@ General rules that keep the architecture intact ([CLAUDE.md](../CLAUDE.md)): cor
 ### 13.4 Add a CLI command
 
 Add a function decorated `@app.command()` in [cli.py](../src/suspkin/cli.py): `typer.Argument`/`Option` with `Annotated`; **convert mm/deg to SI at the top** (reuse `_pose_kwargs`, [cli.py:25](../src/suspkin/cli.py#L25)); import heavy modules inside the function; catch `VehicleConfigError` and `KinematicsError`/`ValueError`, print to stderr and `raise typer.Exit(code=1)`
-(code 2 for usage errors); write files in SI. Test with `typer.testing.CliRunner` ([test_cli.py](../tests/unit/test_cli.py)). Document it in the README and section 10.
+(code 2 for usage errors); write files in SI. Test with `typer.testing.CliRunner` ([test_cli.py](../tests/unit/test_cli.py)). Document it in the README and section 10. Commands that read a study (`check`, `optimize`) import `suspkin.optimize` inside the function and use exit code 2 for study-file and argument errors.
 
 ### 13.5 Where future phases plug in
 
@@ -1602,8 +1678,8 @@ Add a function decorated `@app.command()` in [cli.py](../src/suspkin/cli.py): `t
 | **Optimizer** (delivered in v0.8, [DESIGN_PLAN section 7](DESIGN_PLAN.md)) | `suspkin/optimize/` (study spec, evaluator, objectives, drivers and resume exist, section 14), `opt` extra (`pymoo`) | `solve_corner`/`solve_vehicle` are pure; `Vehicle` is a frozen model, so a design point is a `model_copy(update=...)` of the hardpoints (see `near_toggle_corners` in `tests/unit/helpers.py`); objectives read `metrics_frame`/`static_summary`/`vehicle_summary`;
   constraints map to existing signals: link lengths (validators), `toggle_margin`, `coilover_in_range`/stroke remaining, packaging regions (`inside`/`outside`). Joint angles are evaluated as constraints, not enforced in the solver. Cost note: sweeps are sequential Python (no vectorisation); the roll regression test budgets 3 s for 41 poses |
 | **Forces** (v1.x) | new `forces/` consuming `CornerState`/`VehicleState` | virtual work is already used for wheel and ARB rates; motion ratios, pushrod/rocker geometry and instant centres give the load paths; link loads need tyre load cases per axle (load-transfer formulas exist) |
-| **FEM** (v2.x) | new module fed by link loads | solved hardpoint positions per pose (every `CornerState.points`) provide geometry for member models |
-| **NN surrogate** (v3.x) | behind the same objective interface as the optimizer | tidy frames and CSV export make dataset generation (Sobol/LHS over hardpoints) a loop over `run_standard_studies` |
+| **FEM** (next after forces) | new module fed by link loads | solved hardpoint positions per pose (every `CornerState.points`) provide geometry for member models |
+| **NN surrogate** (after FEM) | behind the same `evaluate`/`Problem` interface as the optimizer | `history.csv` of an optimization run is ready-made training data: unit-cube `x_*`, hardpoint coordinates `p_*`, objectives `f_*`, constraints `g_*` and `status` per evaluation ([14.7](#147-run-folder-and-outputs)); tidy frames and CSV export also allow Sobol/LHS dataset generation as a loop over `run_standard_studies` |
 
 ---
 
@@ -1631,13 +1707,12 @@ run folders, optimization plots and the `suspkin optimize` command. The design d
 | [optimize/drivers.py](../src/suspkin/optimize/drivers.py) | `run_optimization` ([drivers.py:393](../src/suspkin/optimize/drivers.py#L393)) returns `RunResult`. Method drivers: `_run_nsga2` ([drivers.py:141](../src/suspkin/optimize/drivers.py#L141)), `_run_de` ([drivers.py:188](../src/suspkin/optimize/drivers.py#L188)), `_run_local` for SLSQP and trust-constr ([drivers.py:269](../src/suspkin/optimize/drivers.py#L269)), `_run_de_slsqp` ([drivers.py:349](../src/suspkin/optimize/drivers.py#L349)). Warm start `_initial_population` ([drivers.py:110](../src/suspkin/optimize/drivers.py#L110)); progress echo `_install_progress` ([drivers.py:368](../src/suspkin/optimize/drivers.py#L368)); `RunError` for invalid arguments |
 | [optimize/outputs.py](../src/suspkin/optimize/outputs.py) | Run folder writer `write_outputs` ([outputs.py:124](../src/suspkin/optimize/outputs.py#L124)), `copy_inputs` ([outputs.py:220](../src/suspkin/optimize/outputs.py#L220)), `make_meta` ([outputs.py:232](../src/suspkin/optimize/outputs.py#L232)), `best_row` ([outputs.py:49](../src/suspkin/optimize/outputs.py#L49)), `pareto_rows` ([outputs.py:56](../src/suspkin/optimize/outputs.py#L56)), `ranked_rows` ([outputs.py:40](../src/suspkin/optimize/outputs.py#L40)), `git_hash` ([outputs.py:73](../src/suspkin/optimize/outputs.py#L73)) |
 | [plotting/optimization.py](../src/suspkin/plotting/optimization.py) | `plot_convergence` ([optimization.py:118](../src/suspkin/plotting/optimization.py#L118)), `plot_pareto` ([optimization.py:162](../src/suspkin/plotting/optimization.py#L162)), `plot_parallel_coordinates` ([optimization.py:273](../src/suspkin/plotting/optimization.py#L273)), `plot_constraint_margins` ([optimization.py:322](../src/suspkin/plotting/optimization.py#L322)); helpers `pareto_mask` and `knee_index`. Reads the `history.csv` table and `Evaluation` frames only |
-| [cli.py](../src/suspkin/cli.py) | The `check` command ([cli.py:517](../src/suspkin/cli.py#L517)) and the `optimize` command ([cli.py:644](../src/suspkin/cli.py#L644)) |
+| [cli.py](../src/suspkin/cli.py) | The `check` command ([cli.py:532](../src/suspkin/cli.py#L532)) and the `optimize` command ([cli.py:644](../src/suspkin/cli.py#L644)) |
 | [tests/unit/](../tests/unit/) | Tests of the v0.8 modules: `test_objectives.py`, `test_problem.py`, `test_history.py`, `test_drivers.py` (tiny budgets; pymoo tests use `importorskip`), `test_plot_optimization.py` (synthetic history), `test_cli_optimize.py` |
 | [configs/studies/fs_reference_optimize.yaml](../configs/studies/fs_reference_optimize.yaml) | Demo optimisation study for [fs_reference.yaml](../configs/vehicles/fs_reference.yaml): the variables and sweeps of the constraints study, 12 constraints, 4 objectives, `weighted` mode, `de+slsqp`, seed 1, `workers: auto`, budget 300 evaluations or 15 min |
 | [metrics/joints.py](../src/suspkin/metrics/joints.py) | Body rotations by Kabsch fit and the `joint_angle` of a joint over a corner sweep |
 | [plotting/regions.py](../src/suspkin/plotting/regions.py) | `plot_study_3d`: vehicle plus variable domains (green) and keep-outs (red). Reads the spec and the design space only |
 | [units.py](../src/suspkin/units.py) | `parse_quantity(v, dim)` and `format_quantity`; a small unit table, no external units library |
-| [cli.py](../src/suspkin/cli.py) | The `check` command ([cli.py:517](../src/suspkin/cli.py#L517)) |
 | [configs/studies/fs_reference_constraints.yaml](../configs/studies/fs_reference_constraints.yaml) | Reference study for [fs_reference.yaml](../configs/vehicles/fs_reference.yaml). It uses every region, sweep and constraint type, and the baseline passes |
 
 ### 14.2 Study YAML schema
@@ -1933,11 +2008,11 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 
 | # | Plan statement | What the code does |
 |---|---|---|
-| 1 | Section 4.2: `scipy.optimize.root` "with an analytic Jacobian where practical" | `root(method="hybr", tol=1e-14)` with **no** Jacobian: scipy finite-differences it ([corner.py:170-176](../src/suspkin/kinematics/corner.py#L170)) |
-| 2 | Section 4.2: core is "vectorizable over sweeps" | solves are scalar; sweeps are sequential continuation loops ([corner.py:302](../src/suspkin/kinematics/corner.py#L302), [vehicle_sweeps.py:47](../src/suspkin/sweeps/vehicle_sweeps.py#L47)) |
-| 3 | Section 4.2: health checks after each step: link-length invariance, rocker toggle, **joint angle limits**, coilover stroke | in the solver only the residual gate (3 equations and pushrod length, 1e-9 m) and `KinematicsError`; toggle margin and `coilover_in_range` are **reported, not enforced**; joint-angle limits are **not implemented**; full link-length invariance is checked in tests only |
+| 1 | Section 4.2: `scipy.optimize.root` "with an analytic Jacobian where practical" | resolved in v0.7: own damped Newton with an analytic Jacobian, `root(method="hybr")` with the same Jacobian as fallback ([5.5](#55-solver-choice-tolerances-continuation-staging)) |
+| 2 | Section 4.2: core is "vectorizable over sweeps" | solves are scalar; sweeps are sequential continuation loops ([corner.py:586](../src/suspkin/kinematics/corner.py#L586), [vehicle_sweeps.py:47](../src/suspkin/sweeps/vehicle_sweeps.py#L47)) |
+| 3 | Section 4.2: health checks after each step: link-length invariance, rocker toggle, **joint angle limits**, coilover stroke | in the solver only the residual gate (3 equations and pushrod length, 1e-9 m) and `KinematicsError`; toggle margin and `coilover_in_range` are **reported, not enforced**; joint-angle limits are **not enforced** (since v0.7 `joint_angle` exists as a study constraint, evaluated after the solve, [3.2.14a](#3214a-metricsjointspy)); full link-length invariance is checked in tests only |
 | 4 | Section 6: data export "CSV / Parquet" | CSV and JSON only (`.gitignore` lists `*.parquet`, nothing writes it) |
-| 5 | Section 8: `math/` package; `configs/studies/{heave,roll,steer,optimize}.yaml`; CLI `suspkin run\|plot\|report\|optimize`; report under `plotting/` | the package is `geom_math/` (avoids shadowing the stdlib `math`); `configs/studies/` holds only the v0.7 constraint example `fs_reference_constraints.yaml` (the heave, roll, steer and optimize studies are not written); commands are `version, show, animate, sweep, summary, vehicle, vsweep, report, check`; the report lives in `report/` |
+| 5 | Section 8: `math/` package; `configs/studies/{heave,roll,steer,optimize}.yaml`; CLI `suspkin run\|plot\|report\|optimize`; report under `plotting/` | the package is `geom_math/` (avoids shadowing the stdlib `math`); `configs/studies/` holds `fs_reference_constraints.yaml` (v0.7) and `fs_reference_optimize.yaml` (v0.8); the heave, roll and steer study files are not written; commands are `version, show, animate, sweep, summary, vehicle, vsweep, report, check, optimize` (no `run` or `plot`); the report lives in `report/` |
 | 6 | Section 5.4: anti-features "as % vs travel" | `anti_*` are **static scalars** in `VehicleSummary`; vs-travel curves only exist as the swing-angle columns (`*_sv_swing_angle`, `*_sv_wc_angle`) the user can convert with $\tan\theta\,b\,L/h$ |
 | 7 | Section 5.5: wheel rate "k MR^2 from virtual work" | code and CHANGELOG use the complete virtual-work rate $kMR^2+F_s\,dMR/dz$ ([actuation.py:161](../src/suspkin/metrics/actuation.py#L161)); `k MR^2` is kept as `wheel_rate_linear` |
 | 8 | Section 9: "Regression: golden CSVs for the reference FS geometry" | regression tests assert **ranges and signs** on the reference car ([11.6](#116-regression-values-reference-car)); no golden CSVs are stored |
@@ -1974,6 +2049,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 * **Instant-centre degeneracy** returns `nan`/`inf` rather than raising; downstream tables and figures must tolerate them (the plots do, [9.1](#91-style-rules)).
 * **Relative wheel-position metrics in vehicle frames** compare the tilted-ground contact point with the **body-frame static** contact point ([7.1](#71-wheel-alignment-and-wheel-position)).
 * **Not implemented**: forces, FEM, surrogate, elasto-kinematics, Parquet export, joint-angle limits in the solver, loaded tyre radius, rear steer. Objectives and optimizers are in v0.8.0 ([section 14](#14-optimization-v07v08)).
+* **Optimizer (v0.8)**: constraint scaling, `start` handling, unreliable finite-difference gradients near the failure cliff, parallelism across designs only and the smoke-size demo budget are listed in [14.9](#149-limitations-of-v08).
 * **Local-only artefacts**: `results/` and `.hypothesis/` are generated, git-ignored folders; the sample report in `results/` is not part of the repository.
 
 ---
@@ -1994,6 +2070,14 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 | Closed-loop mechanism | linkage whose members form loops; solved through constraint equations |
 | Continuation | solving a sweep by starting each solve from the previous solution (keeps the branch) |
 | Corner | one wheel station (FL, FR, RL, RR) |
+| Study | a YAML file (schema 1) with design variables, sweeps, constraints and, from v0.8, objectives and an optimizer block, bound to one vehicle YAML ([14.2](#142-study-yaml-schema)) |
+| Design variable | a hardpoint position that the optimizer may move inside its domain; the optimizer sees it as a coordinate in the unit cube $[0,1]$ ([14.2](#142-study-yaml-schema)) |
+| Hexahedron domain | variable domain given by 8 vertices and mapped trilinearly from the unit cube; also used for `inside`/`outside` packaging regions when convex ([14.3](#143-math)) |
+| `g` / feasible | normalised constraint value, $g\le0$ satisfied; a design is feasible when every enabled $g\le0$ ([14.3](#143-math)) |
+| `f` / `f_total` | normalised objective ($f=\text{raw}/\text{scale}$, negated for `maximize`); `f_total` is the weighted sum in weighted mode |
+| `G_FAIL` / `F_FAIL` | penalty values $10^3$ given to `g` and `f` when a design is unsolved or infeasible (`evaluate.py`) |
+| Pareto front | the set of feasible, non-dominated designs of a multi-objective (`pareto` mode) run |
+| Knee point | the Pareto-front point closest to the ideal point after normalising each objective to $[0,1]$ over the front |
 | FVIC / SVIC | front-view / side-view instant centre |
 | FVSA / SVSA | front-view / side-view swing-arm length (patch to IC) |
 | Hardpoint | a fixed pivot or joint position given in the YAML |
