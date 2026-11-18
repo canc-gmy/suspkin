@@ -24,6 +24,7 @@ from suspkin.plotting.figures import (
     format_value,
     save_figure,
 )
+from suspkin.report.bundle import save_bundle
 from suspkin.report.studies import StudyResults
 
 Designs = Sequence[tuple[str, StudyResults]]
@@ -168,6 +169,7 @@ def build_report(
     """Write the report folder and return the path of ``report.html``.
 
     Layout: ``data/<design>_<study>.csv`` (SI), ``summary.json`` (SI, per design),
+    ``bundles/<design>/`` (one result bundle per design, see ``report.bundle``),
     ``figures/*`` (all ``FIGURE_SET`` figures, designs overlaid, in ``formats``; with
     ``include_3d`` also the static 3D view and a GIF of the roll sweep of
     ``vehicle_for_3d``, default the first design), ``report.html`` (self-contained,
@@ -189,6 +191,8 @@ def build_report(
             df.to_csv(data_dir / f"{_slug(lab)}_{name}.csv", index=False)
     summary = {lab: _clean(res.summary.to_dict()) for lab, res in designs}
     (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    for lab, res in designs:
+        save_bundle(res, out / "bundles" / _slug(lab), label=lab)
 
     sections: list[_Section] = []
     for stem, title, fig in _make_figures(designs):

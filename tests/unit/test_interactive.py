@@ -7,7 +7,7 @@ import pytest
 
 from suspkin.geometry import load_vehicle
 from suspkin.kinematics import solve_vehicle
-from suspkin.plotting.interactive import interactive_view
+from suspkin.plotting.interactive import interactive_figure, interactive_view
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
 
@@ -36,3 +36,11 @@ def test_html_inline_is_larger(tmp_path: Path) -> None:
     cdn = interactive_view(veh, None, tmp_path / "c.html")
     inline = interactive_view(veh, None, tmp_path / "i.html", inline=True)
     assert inline.stat().st_size > cdn.stat().st_size + 100_000
+
+
+def test_interactive_figure_has_traces() -> None:
+    pytest.importorskip("plotly")
+    veh = load_vehicle(FIXTURE)
+    fig = interactive_figure(veh, solve_vehicle(veh, roll=0.03))
+    assert len(fig.data) > 5
+    assert fig.layout.title.text == veh.vehicle.name

@@ -113,7 +113,7 @@ A frontend redesign touches only `frontend/`. A new graph means adding one spec 
 | Slice | Content | Status |
 |---|---|---|
 | 0 | Sync main, branch `feat/webapp`, this plan | done |
-| W1 | Result bundle, figure spec, `interactive_figure` split, units fix | todo |
+| W1 | Result bundle, figure spec, `interactive_figure` split, units fix | done |
 | W2 | FastAPI backend, `suspkin app` CLI, `app` extra | todo |
 | W3 | Frontend scaffold, design system (`frontend/DESIGN.md`), figure tabs, summary | todo |
 | W4 | 3D tab, optimization tab, snapshot export, OpenAPI types | todo |
