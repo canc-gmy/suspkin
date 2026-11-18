@@ -9,10 +9,9 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
-from suspkin.kinematics.corner import CornerState, solve_corner
+from suspkin.kinematics.corner import CornerState
 from suspkin.metrics import actuation
-from suspkin.metrics.alignment import alignment_metrics
-from suspkin.metrics.centres import centre_metrics
+from suspkin.metrics.batch import corner_metric_arrays
 
 # metric column -> gradient column, per sweep variable
 GRADIENTS: dict[str, dict[str, str]] = {
@@ -33,21 +32,9 @@ def metrics_frame(states: Sequence[CornerState], corner: Corner) -> pd.DataFrame
     The constant columns ``spring_rate`` and ``tyre_stiffness`` carry the rates that
     :func:`add_gradients` needs for the wheel and ride rate.
     """
-    static = solve_corner(corner, 0.0)
-    cfg = corner.axle_cfg
-    consts = {
-        "spring_rate": cfg.coilover.spring_rate,
-        "tyre_stiffness": cfg.wheel.tyre_vertical_stiffness,
-    }
-    rows: list[dict[str, float]] = []
-    for s in states:
-        row = {"travel": float(s.travel), "rack": float(s.rack)}
-        row.update(alignment_metrics(s, corner, static))
-        row.update(centre_metrics(s, corner))
-        row.update(actuation.actuation_metrics(s, corner, static))
-        row.update(consts)
-        rows.append(row)
-    return pd.DataFrame(rows)
+    if len(states) == 0:
+        return pd.DataFrame()
+    return pd.DataFrame(corner_metric_arrays(states, corner))
 
 
 def _check_axis(df: pd.DataFrame, x: str) -> NDArray[np.float64]:

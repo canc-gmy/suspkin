@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import numpy as np
 import pandas as pd
 
 from suspkin.geometry.corners import Corner
@@ -32,19 +33,32 @@ def states_to_frame(
     With ``metrics=True`` and a ``corner``, the alignment and centre metric columns of
     :func:`suspkin.metrics.metrics_frame` are appended (existing columns are kept).
     """
-    rows: list[dict[str, object]] = []
-    for s in states:
-        row: dict[str, object] = {"corner": s.corner_id}
-        for name in _SCALARS:
-            row[name] = float(getattr(s, name))
-        for axis, v in zip("xyz", s.spin_axis, strict=True):
-            row[f"spin_{axis}"] = float(v)
-        for pname, p in s.points.items():
-            for axis, v in zip("xyz", p, strict=True):
-                row[f"{pname}_{axis}"] = float(v)
-        row["coilover_in_range"] = bool(s.coilover_in_range)
-        rows.append(row)
-    df = pd.DataFrame(rows)
+    cols: dict[str, object] = {"corner": [s.corner_id for s in states]}
+    for name in _SCALARS:
+        cols[name] = np.array([float(getattr(s, name)) for s in states], dtype=np.float64)
+    if states:
+        spin = np.array([s.spin_axis for s in states], dtype=np.float64).reshape(-1, 3)
+        for i, axis in enumerate("xyz"):
+            cols[f"spin_{axis}"] = spin[:, i]
+        keys = list(states[0].points)
+        # states of one corner share their point names; mixed lists fall back to the union
+        for s in states[1:]:
+            if s.points.keys() != states[0].points.keys():
+                keys = list(dict.fromkeys(k for st in states for k in st.points))
+                break
+        for pname in keys:
+            if all(pname in s.points for s in states):
+                arr = np.array([s.points[pname] for s in states], dtype=np.float64)
+                for i, axis in enumerate("xyz"):
+                    cols[f"{pname}_{axis}"] = arr[:, i]
+            else:  # point missing in some states: NaN there, as pandas fills missing keys
+                for i, axis in enumerate("xyz"):
+                    cols[f"{pname}_{axis}"] = [
+                        float(s.points[pname][i]) if pname in s.points else float("nan")
+                        for s in states
+                    ]
+        cols["coilover_in_range"] = np.array([bool(s.coilover_in_range) for s in states])
+    df = pd.DataFrame(cols) if states else pd.DataFrame()
     if metrics and corner is not None:
         from suspkin.metrics.table import metrics_frame
 

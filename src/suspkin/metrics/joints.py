@@ -27,7 +27,7 @@ from numpy.typing import ArrayLike, NDArray
 from suspkin.geom_math.rotations import rotation_between
 from suspkin.geom_math.vectors import unit
 from suspkin.geometry.corners import Corner
-from suspkin.kinematics.corner import CornerState, solve_corner
+from suspkin.kinematics.corner import CornerState
 
 Vec = NDArray[np.float64]
 
@@ -154,12 +154,9 @@ def joint_angles_frame(states: Sequence[CornerState], corner: Corner) -> pd.Data
     The static pose is the state with ``travel ~ 0`` and ``rack ~ 0`` if present,
     else it is solved with ``solve_corner``.
     """
-    static = next((s for s in states if abs(s.travel) < 1e-12 and abs(s.rack) < 1e-12), None)
-    if static is None:
-        static = solve_corner(corner, 0.0)
+    from suspkin.metrics.batch import joint_angle_arrays
+
     cols = [f"joint_{j}" for j in JOINTS]
-    rows = []
-    for s in states:
-        rots = body_rotations(s, static, corner)
-        rows.append({f"joint_{j}": joint_angle(s, static, corner, j, _rots=rots) for j in JOINTS})
-    return pd.DataFrame(rows, columns=cols)
+    if len(states) == 0:
+        return pd.DataFrame(columns=cols)
+    return pd.DataFrame(joint_angle_arrays(states, corner))

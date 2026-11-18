@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Vectorised metric kernels `suspkin.metrics.batch` (`corner_metric_arrays`,
+  `joint_angle_arrays`): the same columns as `metrics_frame` / `joint_angles_frame`, computed
+  over all states at once.
+- Experimental `suspkin.surrogate` (v1.1 surrogate work, see `docs/DESIGN_PLAN.md` §13):
+  optional `surrogate.grid` study block, output channel registry and the corner extractor.
+- `scripts/profile_fom.py`: timing breakdown of one full-order evaluation.
+
+### Changed
+
+- About 3x faster full-order evaluation (0.75 s to 0.24 s on the reference study). Metric
+  tables, `states_to_frame` and `vehicle_frame` are built from the vectorised kernels, and
+  the corner pose and rocker use the scalar fast path. Results are unchanged (max deviation
+  9e-16 against the per-state functions; golden snapshots untouched).
+
 ## [1.0.0] - 2026-11-18
 
 ### Added

@@ -19,7 +19,7 @@ for mirrored motion); the physical rotation is ``side_sign * angle``.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from math import cos, sin, sqrt
 from typing import Literal
@@ -30,7 +30,7 @@ from scipy.optimize import root
 
 from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId
-from suspkin.kinematics.rocker import KinematicsError, side_sign, solve_rocker
+from suspkin.kinematics.rocker import KinematicsError, RockerCtx, side_sign
 
 _RESIDUAL_TOL = 1e-9
 _MAX_HALVINGS = 6
@@ -147,6 +147,11 @@ class _Ctx:
         self.radius = cfg.wheel.tyre_radius
         self.mount = cfg.pushrod_mount
         self.rack_axis = None if cfg.steering is None else np.asarray(cfg.steering.rack_axis)
+        self.rocker = RockerCtx(corner)
+        self.po0 = _tup(p["pushrod_outer"])
+        self.r_po = _sub(self.po0, _tup(self.lbj0))
+        self.spin0_t = _tup(self.spin0)
+        self.static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
 
 
 def _eval(
@@ -229,29 +234,28 @@ def _eval(
     ]
 
 
-def _pose(c: _Ctx, th_u: float, th_l: float, psi: float) -> tuple[Vec, Vec, Vec]:
-    """Return (ubj, lbj, R) of the upright for the given angles."""
+def _upright_map(
+    c: _Ctx, th_u: float, th_l: float, psi: float
+) -> tuple[_V3, _V3, Callable[[_V3], _V3]]:
+    """Return ``(ubj, lbj, rot)``; ``rot(v)`` applies the upright rotation to a vector."""
     s = c.sign
     ru = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), c.r_ubj)
     lr = _rodrigues(c.lca_hat, cos(s * th_l), sin(s * th_l), c.r_lbj)
-    ubj = np.array(ru) + np.array(c.uca_front)
-    lbj = np.array(lr) + np.array(c.lca_front)
-    n = _unit(_tup(ubj - lbj))
+    uf, lf = c.uca_front, c.lca_front
+    ubj = (uf[0] + ru[0], uf[1] + ru[1], uf[2] + ru[2])
+    lbj = (lf[0] + lr[0], lf[1] + lr[1], lf[2] + lr[2])
+    n = _unit(_sub(ubj, lbj))
     cc = _dot(c.d0_hat, n)
     if cc < -1.0 + 1e-12:
         raise ValueError("upright axis flipped")
     ik = 1.0 / (1.0 + cc)
     w = _cross(c.d0_hat, n)
     cph, sph = cos(s * psi), sin(s * psi)
-    basis = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
-    cols = [_rodrigues(n, cph, sph, _min_rot(w, ik, e)) for e in basis]
-    rot: Vec = np.array(cols).T
+
+    def rot(v: _V3) -> _V3:
+        return _rodrigues(n, cph, sph, _min_rot(w, ik, v))
+
     return ubj, lbj, rot
-
-
-def _on_upright(c: _Ctx, lbj: Vec, rot: Vec, point: Vec) -> Vec:
-    out: Vec = lbj + rot @ (point - c.lbj0)
-    return out
 
 
 def _residuals(c: _Ctx, x: Vec, travel: float, tie_inner: Vec) -> Vec:
@@ -340,6 +344,7 @@ def solve_corner(
     rack: float = 0.0,
     *,
     guess: CornerState | None = None,
+    _ctx: _Ctx | None = None,
 ) -> CornerState:
     """Solve one corner for a wheel travel [m] (bump positive) and rack offset [m].
 
@@ -363,7 +368,7 @@ def solve_corner(
     KinematicsError
         If the mechanism cannot be assembled or the solver does not converge.
     """
-    c = _Ctx(corner)
+    c = _Ctx(corner) if _ctx is None else _ctx
     if guess is None:
         if abs(travel) > _COLD_LIMIT or abs(rack) > _COLD_LIMIT:
             return _staged(c, travel, rack)
@@ -450,25 +455,30 @@ def _assemble(
     th_u, th_l, psi = float(x[0]), float(x[1]), float(x[2])
     p = c.p
     s = c.sign
-    ubj, lbj, rot = _pose(c, th_u, th_l, psi)
+    ubj, lbj, rot = _upright_map(c, th_u, th_l, psi)
+
+    def on_upright(r: _V3) -> _V3:
+        v = rot(r)
+        return (lbj[0] + v[0], lbj[1] + v[1], lbj[2] + v[2])
+
     pts: dict[str, Vec] = {k: np.array(v) for k, v in p.items()}
-    pts["uca_outer"] = ubj
-    pts["lca_outer"] = lbj
-    pts["tie_outer"] = _on_upright(c, lbj, rot, p["tie_outer"])
+    pts["uca_outer"] = np.array(ubj)
+    pts["lca_outer"] = np.array(lbj)
+    pts["tie_outer"] = np.array(on_upright(c.r_tie))
     pts["tie_inner"] = np.array(tie_inner)
-    pts["wheel_center"] = _on_upright(c, lbj, rot, c.wc0)
+    wc = on_upright(c.r_wc)
+    pts["wheel_center"] = np.array(wc)
     if c.mount == "upright":
-        pts["pushrod_outer"] = _on_upright(c, lbj, rot, p["pushrod_outer"])
+        po = on_upright(c.r_po)
     elif c.mount == "lca":
-        r = _tup(p["pushrod_outer"])
-        rr = _rodrigues(c.lca_hat, cos(s * th_l), sin(s * th_l), _sub(r, c.lca_front))
-        pts["pushrod_outer"] = np.array(rr) + np.array(c.lca_front)
+        rr = _rodrigues(c.lca_hat, cos(s * th_l), sin(s * th_l), _sub(c.po0, c.lca_front))
+        po = (rr[0] + c.lca_front[0], rr[1] + c.lca_front[1], rr[2] + c.lca_front[2])
     else:
-        r = _tup(p["pushrod_outer"])
-        rr = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), _sub(r, c.uca_front))
-        pts["pushrod_outer"] = np.array(rr) + np.array(c.uca_front)
+        rr = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), _sub(c.po0, c.uca_front))
+        po = (rr[0] + c.uca_front[0], rr[1] + c.uca_front[1], rr[2] + c.uca_front[2])
+    pts["pushrod_outer"] = np.array(po)
     try:
-        rk = solve_rocker(c.corner, pts["pushrod_outer"], phi0)
+        rk = c.rocker.solve(po, phi0)
     except KinematicsError as exc:
         raise KinematicsError(f"{exc} at travel {travel:.6f} m") from exc
     pts["pushrod_inner"] = rk.pushrod_inner
@@ -476,18 +486,20 @@ def _assemble(
     if rk.rocker_arb is not None:
         pts["rocker_arb"] = rk.rocker_arb
 
-    spin = rot @ c.spin0
-    spin = spin / np.linalg.norm(spin)
-    up = np.array([0.0, 0.0, 1.0]) - spin[2] * spin
-    up = up / np.linalg.norm(up)
-    pts["contact_patch"] = pts["wheel_center"] - c.radius * up
+    spin = _unit(rot(c.spin0_t))
+    fz = spin[2]
+    up = _unit((-fz * spin[0], -fz * spin[1], 1.0 - fz * spin[2]))
+    pts["contact_patch"] = np.array(
+        (wc[0] - c.radius * up[0], wc[1] - c.radius * up[1], wc[2] - c.radius * up[2])
+    )
 
-    cl = float(np.linalg.norm(pts["rocker_spring"] - pts["spring_chassis"]))
+    d_coil = _sub(_tup(rk.rocker_spring), _tup(p["spring_chassis"]))
+    cl = sqrt(_dot(d_coil, d_coil))
     coil = c.corner.axle_cfg.coilover
-    push_len = float(np.linalg.norm(pts["pushrod_outer"] - pts["pushrod_inner"]))
-    static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
-    res = _residuals(c, x, travel, tie_inner)
-    max_res = max(float(np.max(np.abs(res))), abs(push_len - static_push))
+    d_push = _sub(po, _tup(rk.pushrod_inner))
+    push_len = sqrt(_dot(d_push, d_push))
+    f, _ = _eval(c, th_u, th_l, psi, travel, _tup(tie_inner), False)
+    max_res = max(max(abs(f[0]), abs(f[1]), abs(f[2])), abs(push_len - c.static_push))
     for v in pts.values():
         v.setflags(write=False)
     return CornerState(
@@ -499,7 +511,7 @@ def _assemble(
         psi=psi,
         rocker_angle=rk.angle,
         points=pts,
-        spin_axis=spin,
+        spin_axis=np.array(spin),
         coilover_length=cl,
         toggle_margin=rk.toggle_margin,
         max_residual=max_res,
