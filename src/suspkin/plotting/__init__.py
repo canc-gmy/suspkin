@@ -22,6 +22,14 @@ from suspkin.plotting.geometry3d import (
     wheel_spin_axis,
 )
 from suspkin.plotting.interactive import interactive_view
+from suspkin.plotting.optimization import (
+    knee_index,
+    pareto_mask,
+    plot_constraint_margins,
+    plot_convergence,
+    plot_parallel_coordinates,
+    plot_pareto,
+)
 from suspkin.plotting.regions import plot_study_3d
 from suspkin.plotting.style import (
     PALETTE,
@@ -49,6 +57,12 @@ __all__ = [
     "fig_summary_table",
     "figure_size",
     "interactive_view",
+    "knee_index",
+    "pareto_mask",
+    "plot_constraint_margins",
+    "plot_convergence",
+    "plot_parallel_coordinates",
+    "plot_pareto",
     "plot_study_3d",
     "plot_vehicle_3d",
     "save_figure",
