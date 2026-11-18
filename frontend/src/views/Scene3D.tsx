@@ -6,6 +6,7 @@ import { Disclosure } from "../components/Disclosure";
 import { OverlaysMenu } from "../components/OverlaysMenu";
 import { loadCentreKinds, loadRegionRoles, saveCentreKinds, saveRegionRoles } from "../lib/centresMenu";
 import { changedSceneNames } from "../lib/hardpoints";
+import { pickRegionSource, regionSources } from "../lib/regionSource";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
 import { readTokens } from "../theme/plotlyTemplate";
@@ -122,8 +123,13 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
   const theme = useUi((s) => s.theme);
   // study regions: static in the body frame (like the chassis points), clipped to the same box
   const [regionRoles, setRegionRoles] = useState<Set<RegionRole>>(loadRegionRoles);
-  const hasStudy = Boolean(ds?.has_study);
-  const regionsQuery = useRegions(hasStudy && regionRoles.size > 0 ? id : null);
+  // the study is picked independently of the revision; its regions are body-frame geometry, drawn
+  // in the selected revision's scene (which is already in the body frame at the current pose)
+  const setOpenDialog = useUi((s) => s.setOpenDialog);
+  const [studyPick, setStudyPick] = useState<string | null>(null);
+  const studies = useMemo(() => regionSources(datasets, letters), [datasets, letters]);
+  const studyId = pickRegionSource(studies, id, studyPick);
+  const regionsQuery = useRegions(studyId && regionRoles.size > 0 ? studyId : null);
   const regionTraces = useMemo(
     () => buildRegionTraces(regionsQuery.data, regionRoles, frameBox(frame), readTokens(theme)),
     [regionsQuery.data, regionRoles, frame, theme],
@@ -273,7 +279,10 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
             setRegionRoles(next);
             saveRegionRoles(next);
           }}
-          hasStudy={hasStudy}
+          sources={studies}
+          source={studyId}
+          onSource={setStudyPick}
+          onOpenFiles={() => setOpenDialog(true)}
         />
         <button type="button" className="btn secondary" aria-pressed={legendOn} onClick={() => setLegendOn(!legendOn)}>
           Legend

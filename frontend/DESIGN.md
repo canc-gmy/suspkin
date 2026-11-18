@@ -187,7 +187,7 @@ An "Overlays" button in the 3D toolbar (after "Reset view") opens a small panel 
 
 #### Constraint regions
 
-The second group of the Overlays menu, "Study regions", draws the variable domains and constraint regions of an optimization study. It is enabled only for a revision with a study attached: a revision of an optimizer run (the run folder's `study.yaml`), or a study YAML opened from the file picker (listed as "Study"; it opens the study's vehicle as a revision labelled with the study file name). Otherwise the three checkboxes are disabled, with the title "No optimization study attached to this revision".
+The second group of the Overlays menu, "Study regions", draws the variable domains and constraint regions of an optimization study. The study whose regions are drawn is chosen independently of the selected revision, so regions can be shown on any revision. Default: the selected revision's own study, else the first open revision that has one (a revision of an optimizer run, or a study YAML opened from the file picker). A "Study" select inside the group lists every open revision with a study (letter and label); the muted line under it reads "Shown as the study defines them, relative to its baseline car." (offset-type design domains are relative to the study's baseline point; constraint regions are absolute). The regions are drawn in the selected revision's scene, which is already in the body frame at the current pose. When no open revision has a study the three checkboxes are disabled (`aria-describedby` the hint) and a muted one-line hint reads "Open a study YAML or an optimizer run to show its regions." followed by an inline "Open files" text button that opens the Open dialog.
 
 | Checkbox | Draws | Colour token, line |
 |---|---|---|
