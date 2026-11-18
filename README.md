@@ -1,5 +1,11 @@
 # suspkin
 
+[![CI](https://github.com/canc-gmy/suspkin/actions/workflows/ci.yml/badge.svg)](https://github.com/canc-gmy/suspkin/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://canc-gmy.github.io/suspkin/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+Documentation: <https://canc-gmy.github.io/suspkin/>
+
 Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars.
 It computes kinematic curves (camber, toe, caster, anti-dive/anti-squat, roll centre,
 motion ratios, steering geometry) from hardpoint geometry and turns them into

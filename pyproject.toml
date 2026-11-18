@@ -32,6 +32,7 @@ dev = [
     "pre-commit>=3.7",
     "types-PyYAML",
     "pandas-stubs",
+    "pytest-cov>=7.1.0",
 ]
 docs = [
     "mkdocs-material>=9.5",
@@ -68,3 +69,12 @@ markers = [
     "perf: wall-clock performance guard (machine dependent, generous limits)",
     "examples: runs the scripts in examples/ (slow, subprocess)",
 ]
+
+[tool.coverage.run]
+source = ["suspkin"]
+branch = false
+
+[tool.coverage.report]
+fail_under = 94
+show_missing = true
+skip_covered = true

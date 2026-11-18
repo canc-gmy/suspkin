@@ -6,19 +6,36 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  MPLBACKEND: Agg
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
       - run: uv sync --all-extras
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy src
-      - run: uv run pytest -q
+      - run: uv run pytest -q --cov=suspkin --cov-report=term --cov-report=xml
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-extras --group docs
+      - run: uv run mkdocs build --strict

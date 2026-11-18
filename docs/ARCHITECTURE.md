@@ -6,7 +6,7 @@
 > Every formula, default and sign convention below was taken from the code. Citations such as
 > [corner.py:88](../src/suspkin/kinematics/corner.py#L88) point at the line where the statement is implemented. Where the code and the
 > design plan disagree, the code is described and the disagreement is listed in
-> [section 15](#15-known-gaps--discrepancies--limitations).
+> [section 15](#15-known-gaps-discrepancies-limitations).
 
 ## Contents
 
@@ -24,7 +24,7 @@
 12. [Tooling and workflow](#12-tooling-and-workflow)
 13. [Extending the code](#13-extending-the-code)
 14. [Optimization (v0.7–v0.8)](#14-optimization-v07v08)
-15. [Known gaps / discrepancies / limitations](#15-known-gaps--discrepancies--limitations)
+15. [Known gaps / discrepancies / limitations](#15-known-gaps-discrepancies-limitations)
 16. [Glossary](#16-glossary)
 
 ---
@@ -58,7 +58,7 @@ The `opt` extra (`pymoo`) is used by the NSGA-II driver ([pyproject.toml](../pyp
 * SI units everywhere internally and in YAML/CSV/JSON; mm and deg only at the CLI and in figures.
 * **Plotting reads result tables** (pandas frames or solved states) and does not run the solver itself;
   the only solver call on the output side is the report layer's 3D section
-  ([builder.py:144](../src/suspkin/report/builder.py#L144), see [section 15](#15-known-gaps--discrepancies--limitations)).
+  ([builder.py:144](../src/suspkin/report/builder.py#L144), see [section 15](#15-known-gaps-discrepancies-limitations)).
 * One source of truth for geometry: the YAML file validated by pydantic.
 
 ### 1.3 Data-flow pipeline
@@ -457,7 +457,7 @@ Joint misalignment angles (v0.7), used by the `joint_angle` constraint. `body_ro
 Vert, a\cdot b)$ in rad
 for one of `JOINTS` (`tie_inner`, `tie_outer`, `pushrod_outer`, `pushrod_inner`, `spring_chassis`, `rocker_spring`, `uca_outer`, `lca_outer`): rod ends compare the current link direction with the static one carried by the housing body, ball joints compare the stud axis
 (static `lca_outer -> uca_outer`) carried by the upright with the same axis carried by the wishbone. `axis` overrides the stud/bore axis (approximate for rod ends). `joint_angles_frame(states, corner)` gives columns `joint_<name>` over a sweep.
-Evaluated, not enforced by the solver ([section 15](#15-known-gaps--discrepancies--limitations)).
+Evaluated, not enforced by the solver ([section 15](#15-known-gaps-discrepancies-limitations)).
 
 #### 3.2.14 `metrics/actuation.py` and `metrics/arb.py`
 
@@ -990,7 +990,7 @@ Remarks:
 * Caster is measured in the x-z projection and KPI in the y-z projection of the steering axis (the usual definitions), so they are not true angles in orthogonal planes for a skew axis.
 * Scrub, trail and kingpin offset need $u_z\ne0$, guaranteed by the "UBJ above LBJ" validator.
 * In `vehicle_frame` the same functions run on a state whose `contact_patch` is replaced by the tilted-ground contact point ([vehicle_sweeps.py:137-140](../src/suspkin/sweeps/vehicle_sweeps.py#L137)); the "static" reference is still the body-frame
-  corner static pose, so under roll/pitch the shifts mix the tilted-ground contact point with the body-frame static point (this is how the code is written; see [15](#15-known-gaps--discrepancies--limitations)).
+  corner static pose, so under roll/pitch the shifts mix the tilted-ground contact point with the body-frame static point (this is how the code is written; see [15](#15-known-gaps-discrepancies-limitations)).
 
 ### 7.2 Instant centres, swing arms and roll centre
 
@@ -1555,7 +1555,7 @@ arm end stays on its circle, left/right symmetry.
 
 ### 11.6 Regression values (reference car)
 
-The regression tests assert ranges, not golden CSVs (see [15](#15-known-gaps--discrepancies--limitations)):
+The regression tests assert ranges, not golden CSVs (see [15](#15-known-gaps-discrepancies-limitations)):
 
 | Check | Bound |
 |---|---|
@@ -1600,7 +1600,7 @@ python -m uv run mypy src && python -m uv run ruff check && python -m uv run ruf
 | pytest | `testpaths = ["tests"]`, `addopts = "-ra"` | |
 
 **Pre-commit** ([.pre-commit-config.yaml](../.pre-commit-config.yaml)): local hooks `ruff check --fix`, `ruff format`, `mypy src` (`pass_filenames: false`) through `python -m uv run`; plus `pre-commit-hooks` v5.0.0: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `mixed-line-ending --fix=lf`.
-Install with `uv run pre-commit install` (README). Tests are **not** part of pre-commit (the design plan says they should be; see [15](#15-known-gaps--discrepancies--limitations)).
+Install with `uv run pre-commit install` (README). Tests are **not** part of pre-commit (the design plan says they should be; see [15](#15-known-gaps-discrepancies-limitations)).
 
 **CI** ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): on push and pull request to `main`; `ubuntu-latest`; matrix Python **3.11, 3.12, 3.13**; steps `actions/checkout@v4`, `astral-sh/setup-uv@v5` (with the matrix Python), `uv sync --all-extras`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest -q`.
 
@@ -1994,7 +1994,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 - The pool parallelises across designs only. Each evaluation still runs its sweeps sequentially, so
   one evaluation costs one solve per sweep.
 - Joint angles are evaluated as study constraints only; the solver does not enforce them
-  ([section 15](#15-known-gaps--discrepancies--limitations)).
+  ([section 15](#15-known-gaps-discrepancies-limitations)).
 - The demo budget (300 evaluations, 15 min) is a smoke run. A real study needs thousands of
   evaluations.
 

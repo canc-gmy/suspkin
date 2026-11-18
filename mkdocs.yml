@@ -4,6 +4,11 @@ site_url: https://canc-gmy.github.io/suspkin/
 repo_url: https://github.com/canc-gmy/suspkin
 repo_name: canc-gmy/suspkin
 docs_dir: docs
+exclude_docs: |
+  hooks/
+
+hooks:
+  - docs/hooks/source_links.py
 
 theme:
   name: material
@@ -45,9 +50,9 @@ nav:
 
 validation:
   links:
-    not_found: ignore
-    anchors: ignore
-    unrecognized_links: ignore
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
 
 markdown_extensions:
   - admonition
