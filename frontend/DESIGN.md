@@ -120,13 +120,50 @@ The index → hue mapping never changes between themes.
   - Example: "Could not open raised_lca.yaml: the rack travel is outside the steering limits. Check `steering.rack_travel` in the file."
 - **Empty state:** the main area says "Open a vehicle YAML, a saved bundle or an optimizer run to start comparing", with one "Open files" button.
 
+### Readout strip (iteration 2)
+
+It replaces floating hover labels, which covered the curves. It lives in the figure view's sticky header, directly under the toolbar, so it stays visible while the panels scroll.
+
+```
+| Wheel travel  [ 12.4 ] mm   Pinned, Esc releases           Show solved points [ ] |
+|      Camber [deg]    Toe [deg]         Caster [deg]   KPI [deg]                   |
+| A ── −1.312          L −0.061 R −0.058  4.938         5.164                       |
+| B ── −1.471          L  0.218 R  0.214  4.938         5.246                       |
+```
+
+- One row per visible revision, using the title-block letter and line sample. One column per panel, in panel order; the columns scroll horizontally on narrow screens while the revision column stays fixed.
+- A panel with left/right (or front/rear) series shows both values in one cell, prefixed L/R (or F/R) in `--ink-muted`.
+- In Δ mode, the cells show signed Δ to the reference, and the reference row reads "ref".
+- Numbers are tabular, right-aligned, with the panel's decimals plus one, since the cursor is finer than the solver. Values outside a revision's x range show "-".
+- **Idle state:** the strip keeps its height and says "Move over a plot to read values", so the layout never jumps.
+- **Pin:**
+  - Clicking a plot pins the cursor: the spike line becomes solid `--layout-blue` 1 px, and the strip shows "Pinned" with the release hint.
+  - ← / → (or the x input) move a pinned cursor by the fine step: 0.1 mm for lengths, 0.01 deg for angles. Shift moves it 10×.
+  - The x input accepts typed values in display units, and Enter applies them.
+- Plot hover labels are off. The only cursor mark on a plot is the spike line: dashed `--ink-muted` while following the mouse, solid `--layout-blue` when pinned.
+
+### Solved points and resolution
+
+- Curves are drawn from a dense resample of the same natural cubic spline the readout uses, so the line and the numbers always agree.
+- "Show solved points" draws 3 px dots in each revision's colour, only at real solver points.
+- The **Resolution** segmented control (31 / 61 / 121 points) sits in the top strip next to Export.
+  - It re-solves revisions opened from vehicle YAML files.
+  - Revisions from bundles or runs show their stored resolution as text ("31 points, stored") and are not re-solved.
+
+### 3D view (iteration 2)
+
+- The canvas fills all the space below the 3D toolbar: full width of the main area, height to the bottom of the viewport. No inner card or padding; the plot's paper is `--sheet`.
+- The toolbar holds the revision picker, pose sliders, "Reset pose", "Reset view" and "Show reference ghost".
+- The camera belongs to the user. Pose changes never move the camera, zoom or pan, and the axis ranges and aspect ratio stay fixed from the static pose. Only "Reset view" restores the default camera.
+- The reference ghost is drawn in 1 px `--ink-muted` lines at 40% opacity. Hardpoints that differ from the reference by more than 0.1 mm get a 6 px ring in `--layout-blue`.
+
 ## Plot template (`plotlyTemplate.ts`)
 
 - Background `--sheet-raised` and paper `--sheet`.
 - Major grid `--grid` 1 px, minor grid `--grid-minor` 1 px dotted. Axis lines `--ink` 1 px; no zero line except where x = 0 is the static pose (drawn in `--ink-muted`, 1 px).
 - Tick font Barlow 12 `--ink-muted` in tabular figures. Axis titles Barlow 14 `--ink` in the form "Camber [deg]".
 - Line width 1.75 px. The static-pose marker is a single small ring at x = 0 on the reference revision only.
-- Hover is unified on x, showing "A  −1.24 deg" per revision with the letter in its colour.
+- No hover labels on curve plots (iteration 2): values are read in the readout strip. The spike line follows the cursor; it is linked across all panels of a figure.
 - The modebar shows only download-PNG and reset-axes. Downloaded PNGs use the light theme at 2× scale, for reports.
 
 ## Motion
