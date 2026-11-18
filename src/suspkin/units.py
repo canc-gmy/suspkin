@@ -43,7 +43,16 @@ def deg_to_rad(x: ArrayLike) -> ArrayLike:
     return np.radians(x)
 
 
-_ATOMS: tuple[str, ...] = ("length", "angle", "force", "accel", "gload", "mass", "percent")
+_ATOMS: tuple[str, ...] = (
+    "length",
+    "angle",
+    "force",
+    "accel",
+    "gload",
+    "mass",
+    "percent",
+    "time",
+)
 _Exps = tuple[int, ...]
 
 _DEG = float(np.pi / 180.0)
@@ -60,6 +69,9 @@ _UNITS: dict[str, tuple[float, str]] = {
     "g": (1.0, "gload"),
     "kg": (1.0, "mass"),
     "%": (1.0, "percent"),
+    "s": (1.0, "time"),
+    "min": (60.0, "time"),
+    "h": (3600.0, "time"),
 }
 # atom -> (display unit, SI -> display factor)
 _DISPLAY: dict[str, tuple[str, float]] = {
@@ -70,6 +82,7 @@ _DISPLAY: dict[str, tuple[str, float]] = {
     "gload": ("g", 1.0),
     "mass": ("kg", 1.0),
     "percent": ("%", 1.0),
+    "time": ("s", 1.0),
 }
 _ALIASES: dict[str, str] = {"stiffness": "force/length", "dimensionless": "ratio"}
 # composite dimensions whose display unit is not the product of the atom displays

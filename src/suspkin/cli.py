@@ -1,5 +1,6 @@
 """Command-line interface for suspkin."""
 
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -513,6 +514,20 @@ def _cell(v: float, fmt: str = "{:.3f}") -> str:
     return "-" if v != v else format_value(fmt, float(v)).strip()
 
 
+def _echo_table(head: tuple[str, ...], rows: Sequence[tuple[str, ...]], right: set[int]) -> None:
+    """Print an aligned text table; columns in ``right`` are right-aligned."""
+    widths = [max([len(h), *(len(r[i]) for r in rows)]) for i, h in enumerate(head)]
+
+    def line(cells: tuple[str, ...]) -> str:
+        return "  ".join(
+            c.rjust(widths[i]) if i in right else c.ljust(widths[i]) for i, c in enumerate(cells)
+        ).rstrip()
+
+    typer.echo(line(head))
+    for row in rows:
+        typer.echo(line(row))
+
+
 @app.command()
 def check(
     study_yaml: Annotated[Path, typer.Argument(help="Study YAML file.")],
@@ -567,22 +582,38 @@ def check(
         for r, st in zip(records, status, strict=True)
     ]
     head = ("name", "type", "value", "min", "max", "unit", "g", "status", "detail")
-    widths = [max(len(h), *(len(r[i]) for r in rows)) for i, h in enumerate(head)]
-    num = {2, 3, 4, 6}  # right-aligned columns
-
-    def line(cells: tuple[str, ...]) -> str:
-        return "  ".join(
-            c.rjust(widths[i]) if i in num else c.ljust(widths[i]) for i, c in enumerate(cells)
-        ).rstrip()
-
-    typer.echo(line(head))
-    for row in rows:
-        typer.echo(line(row))
+    _echo_table(head, rows, {2, 3, 4, 6})  # right-aligned columns
     enabled = [s for s in status if s != "OFF"]
     n_pass = sum(s == "PASS" for s in enabled)
     typer.echo(
         f"{n_pass}/{len(enabled)} constraints pass, feasible: {'yes' if ev.feasible else 'no'}"
     )
+    if ev.objectives:
+        odf = ev.objectives_display_frame()
+        orecords: list[Any] = list(odf.itertuples(index=False))
+        orows = [
+            (
+                str(r.name),
+                str(r.type),
+                _cell(float(r.raw)),
+                str(r.unit) or "-",
+                _cell(float(r.f), "{:.3f}"),
+                _cell(float(r.weight), "{:g}"),
+                str(r.status).upper(),
+                str(r.detail),
+            )
+            for r in orecords
+        ]
+        typer.echo("")
+        _echo_table(
+            ("objective", "type", "raw", "unit", "f", "weight", "status", "detail"),
+            orows,
+            {2, 4, 5},
+        )
+        typer.echo(f"f_total (weighted sum): {_cell(ev.f_total, '{:.3f}')}")
+        opt = study.optimizer
+        if opt is not None:
+            typer.echo(f"optimizer: mode {opt.mode}, method {opt.method}")
     try:
         if csv is not None:
             csv.parent.mkdir(parents=True, exist_ok=True)

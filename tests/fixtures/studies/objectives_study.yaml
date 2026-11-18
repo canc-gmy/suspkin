@@ -1,0 +1,38 @@
+schema: 1
+vehicle: ../minimal_vehicle.yaml
+
+variables:
+  - point: front.tie_inner
+    domain: {box: {min: [60, 130, 120], max: [100, 170, 160], units: mm}}
+
+sweeps:
+  bump_f: {kind: corner, corner: FL, travel: [-30 mm, 30 mm], steps: 13}
+  roll: {kind: vehicle, input: roll, range: [-2 deg, 2 deg], steps: 9, base: {heave: 0 mm}}
+
+constraints:
+  - {name: mr_static, type: value, sweep: bump_f, metric: mr_spring, at: 0 mm, min: 0.5, max: 1.5}
+  - {name: camber_band, type: band, sweep: bump_f, metric: camber, min: -5 deg, max: 5 deg}
+
+objectives:
+  - name: camber_curve
+    type: curve
+    sweep: bump_f
+    metric: camber
+    target: {x: [-30 mm, 0 mm, 30 mm], y: [-1.6 deg, -0.6 deg, 0.3 deg]}
+    where: [-25 mm, 25 mm]
+    weight: 2.0
+    scale: 0.1 deg
+  - {name: mr_target, type: target, sweep: bump_f, metric: mr_spring, at: 0 mm, target: 1.0, scale: 0.05}
+  - {name: rg_target, type: target, metric: roll_gradient, target: 0.8 deg/g}
+  - {name: bs_abs, type: minimize, sweep: bump_f, metric: bump_steer, of: max_abs, where: [-25 mm, 25 mm], scale: 0.01 deg/mm}
+  - {name: camber_gain_max, type: maximize, sweep: bump_f, metric: camber, of: slope, scale: 0.01 deg/mm, weight: 0.5}
+  - {name: mr_lin, type: linearity, sweep: bump_f, metric: mr_spring, where: [-25 mm, 25 mm]}
+
+optimizer:
+  mode: weighted
+  method: de+slsqp
+  seed: 1
+  workers: 2
+  budget: {evaluations: 200, time: 2 h}
+  start: baseline
+  options: {popsize: 8}

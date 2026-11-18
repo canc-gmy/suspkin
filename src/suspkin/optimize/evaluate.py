@@ -44,6 +44,20 @@ not comparable across constraints of different dimensions; v0.8 will revisit the
 Failures: a :class:`~suspkin.kinematics.KinematicsError` (or a non-finite value, a missing
 column or point) marks the constraint ``unsolved`` with ``g = G_FAIL``; an invalid design
 (:class:`InfeasibleDesign`) marks every enabled constraint ``infeasible`` with ``g = G_FAIL``.
+
+Objectives (``study.objectives``) are evaluated on the same sweep cache, so a sweep still runs
+once per call. Each has a raw SI value and a normalised ``f = raw / scale`` (sign-flipped for
+``maximize``; the scale is the user ``scale``, else the dimension default, else ``|target|``
+for a ``target`` objective). Raw values per type:
+
+* ``curve``: RMS of ``metric - target(x)`` (linear interpolation) over the window (default:
+  overlap of the target x range with the sweep); window ends are interpolated.
+* ``target``: ``|value - target|`` with the value at ``at`` of a sweep, or a summary metric.
+* ``minimize`` / ``maximize``: ``of`` = ``value`` (at ``at``), ``slope`` (least squares),
+  ``max``, ``min``, ``max_abs`` or ``mean`` (trapezoidal) over the window; or a summary metric.
+* ``linearity``: RMS residual of a least-squares line through the metric over the window.
+
+A failure gives ``f = F_FAIL`` (status ``unsolved`` or ``infeasible``, raw ``nan``).
 """
 
 from __future__ import annotations
@@ -71,20 +85,27 @@ from suspkin.optimize.spec import (
     BoxRegion,
     Constraint,
     CornerSweep,
+    CurveObjective,
     CylinderRegion,
     DistanceConstraint,
+    ExtremumObjective,
     HexahedronRegion,
     InsideConstraint,
     JointAngleConstraint,
+    LinearityObjective,
+    Objective,
     OutsideConstraint,
     ReachConstraint,
     RelationConstraint,
     SlopeConstraint,
     SphereRegion,
     SummaryConstraint,
+    TargetObjective,
     ValueConstraint,
     VehicleSweep,
     default_scale,
+    objective_dim,
+    objective_scale,
     parse_coord_ref,
     parse_point_ref,
     region_centroid,
@@ -95,12 +116,14 @@ from suspkin.optimize.spec import (
 from suspkin.sweeps import states_to_frame, sweep_vehicle, vehicle_frame
 from suspkin.units import Dim, display_factor, display_unit, slope_dim
 
-__all__ = ["G_FAIL", "ConstraintResult", "Evaluation", "evaluate"]
+__all__ = ["F_FAIL", "G_FAIL", "ConstraintResult", "Evaluation", "ObjectiveResult", "evaluate"]
 
 F64 = NDArray[np.float64]
 Status = Literal["pass", "fail", "unsolved", "infeasible", "disabled"]
+ObjStatus = Literal["ok", "unsolved", "infeasible"]
 
 G_FAIL = 1e3
+F_FAIL = 1e3
 _REACH_STEPS = 13
 _DEG = math.pi / 180.0
 _TOGGLE_SCALE = 0.1 * _DEG
@@ -127,10 +150,25 @@ class ConstraintResult:
 
 
 @dataclass(frozen=True)
+class ObjectiveResult:
+    """Evaluation of one objective: ``raw`` in SI, ``f`` normalised (``F_FAIL`` on failure)."""
+
+    name: str
+    type: str
+    raw: float
+    f: float
+    weight: float
+    status: ObjStatus
+    dim: Dim
+    detail: str = ""
+
+
+@dataclass(frozen=True)
 class Evaluation:
-    """All constraint results of one design, in YAML order."""
+    """All constraint and objective results of one design, in YAML order."""
 
     results: tuple[ConstraintResult, ...]
+    objectives: tuple[ObjectiveResult, ...] = ()
 
     def _enabled(self) -> list[ConstraintResult]:
         return [r for r in self.results if r.status != "disabled"]
@@ -149,6 +187,43 @@ class Evaluation:
     def g_vector(self) -> F64:
         """``g`` of the enabled constraints in YAML order (disabled ones are skipped)."""
         return np.array([r.g for r in self._enabled()], dtype=np.float64)
+
+    def f_vector(self) -> F64:
+        """Normalised ``f`` of every objective in YAML order."""
+        return np.array([o.f for o in self.objectives], dtype=np.float64)
+
+    @property
+    def f_total(self) -> float:
+        """Weighted sum ``sum(weight * f)`` over the objectives (0 if there are none)."""
+        return float(sum(o.weight * o.f for o in self.objectives))
+
+    def objectives_frame(self) -> pd.DataFrame:
+        """Tidy objective table in SI units: name, type, raw, f, weight, status, dim, detail."""
+        cols = ["name", "type", "raw", "f", "weight", "status", "dim", "detail"]
+        return pd.DataFrame(
+            [
+                {
+                    "name": o.name,
+                    "type": o.type,
+                    "raw": o.raw,
+                    "f": o.f,
+                    "weight": o.weight,
+                    "status": o.status,
+                    "dim": o.dim,
+                    "detail": o.detail,
+                }
+                for o in self.objectives
+            ],
+            columns=cols,
+        )
+
+    def objectives_display_frame(self) -> pd.DataFrame:
+        """Like :meth:`objectives_frame` with ``raw`` in display units and a ``unit`` column."""
+        df = self.objectives_frame()
+        f = np.array([display_factor(d) for d in df["dim"]], dtype=np.float64)
+        df["raw"] = df["raw"].to_numpy(dtype=np.float64) * f
+        df["unit"] = [display_unit(d) for d in df["dim"]]
+        return df.drop(columns=["dim"])
 
     def frame(self) -> pd.DataFrame:
         """Tidy table in SI units: name, type, value, min, max, g, status, dim, detail."""
@@ -345,6 +420,23 @@ def _window(x: F64, y: F64, where: tuple[float, float] | None) -> tuple[F64, F64
     return xs, ys
 
 
+def _interp_at(x: F64, y: F64, at: float) -> float:
+    """Linear interpolation of ``y(x)`` at ``at`` (finite data required)."""
+    if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+        raise _Unsolved("non-finite sweep data")
+    order = np.argsort(x)
+    return float(np.interp(at, x[order], y[order]))
+
+
+def _summary_value(ctx: _Ctx, metric: str) -> float:
+    obj = ctx.summary()
+    for part in metric.split("."):
+        obj = getattr(obj, part, None)
+    if obj is None:
+        raise _Unsolved(f"summary field {metric!r} is undefined")
+    return float(obj)
+
+
 def _sd(region: Any, pts: F64) -> F64:
     if isinstance(region, BoxRegion):
         return sd_box(pts, region.lo, region.hi)
@@ -401,10 +493,7 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
         x, y = _column(df, xcol), _column(df, c.metric)
         mdim = sweep_metric_dim(sw, c.metric)
         if isinstance(c, ValueConstraint):
-            if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
-                raise _Unsolved("non-finite sweep data")
-            order = np.argsort(x)
-            v = float(np.interp(c.at, x[order], y[order]))
+            v = _interp_at(x, y, c.at)
             g, val = _worst(v, lo, hi, _scale(user, mdim, lo, hi))
             return res(g, val, mdim, lo, hi)
         xs, ys = _window(x, y, c.where)
@@ -449,13 +538,8 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
         return res(g, val, dim, c.min_toggle_margin if dim == "angle" else 0.0, None, label)
 
     if isinstance(c, SummaryConstraint):
-        obj = ctx.summary()
-        for part in c.metric.split("."):
-            obj = getattr(obj, part, None)
-        if obj is None:
-            raise _Unsolved(f"summary field {c.metric!r} is undefined")
         sdim = summary_metric_dim(c.metric)
-        g, val = _worst(float(obj), lo, hi, _scale(user, sdim, lo, hi))
+        g, val = _worst(_summary_value(ctx, c.metric), lo, hi, _scale(user, sdim, lo, hi))
         return res(g, val, sdim, lo, hi)
 
     if isinstance(c, InsideConstraint | OutsideConstraint):
@@ -529,6 +613,73 @@ def _failed(c: Constraint, ctx: _Ctx, status: Status) -> ConstraintResult:
     )
 
 
+def _trapz_mean(xs: F64, ys: F64) -> float:
+    span = float(xs[-1] - xs[0])
+    if span <= 0.0:
+        return float(np.mean(ys))
+    return float(np.sum(0.5 * (ys[1:] + ys[:-1]) * np.diff(xs)) / span)
+
+
+def _eval_objective(o: Objective, ctx: _Ctx) -> ObjectiveResult:
+    """Evaluate an objective; raises ``_Unsolved``."""
+    dim = objective_dim(ctx.study_sweeps, o)
+    scale = objective_scale(o, dim) or 1.0
+    detail = ""
+    if o.sweep is None:
+        assert isinstance(o, TargetObjective | ExtremumObjective)
+        v = _summary_value(ctx, o.metric)
+        raw = abs(v - o.target) if isinstance(o, TargetObjective) else v
+    else:
+        df, xcol = ctx.sweep_table(o.sweep)
+        x, y = _column(df, xcol), _column(df, o.metric)
+        if isinstance(o, TargetObjective):
+            assert o.at is not None
+            raw = abs(_interp_at(x, y, o.at) - o.target)
+        elif isinstance(o, ExtremumObjective) and o.of == "value":
+            assert o.at is not None
+            raw = _interp_at(x, y, o.at)
+            detail = "value"
+        else:
+            where = o.where
+            if isinstance(o, CurveObjective) and where is None:
+                lo, hi = max(float(np.min(x)), o.target.x[0]), min(float(np.max(x)), o.target.x[-1])
+                if lo >= hi:
+                    raise _Unsolved("target x range does not overlap the sweep")
+                where = (lo, hi)
+            xs, ys = _window(x, y, where)
+            if not (np.all(np.isfinite(xs)) and np.all(np.isfinite(ys))):
+                raise _Unsolved("non-finite sweep data")
+            if isinstance(o, CurveObjective):
+                tgt = np.interp(xs, np.array(o.target.x), np.array(o.target.y))
+                raw = float(np.sqrt(np.mean((ys - tgt) ** 2)))
+            elif isinstance(o, LinearityObjective):
+                resid = ys - np.polyval(np.polyfit(xs, ys, 1), xs)
+                raw = float(np.sqrt(np.mean(resid**2)))
+            else:
+                assert isinstance(o, ExtremumObjective)
+                detail = o.of
+                stat = {
+                    "slope": lambda: float(np.polyfit(xs, ys, 1)[0]),
+                    "max": lambda: float(np.max(ys)),
+                    "min": lambda: float(np.min(ys)),
+                    "max_abs": lambda: float(np.max(np.abs(ys))),
+                    "mean": lambda: _trapz_mean(xs, ys),
+                }
+                raw = stat[o.of]()
+    if not math.isfinite(raw):
+        raise _Unsolved("non-finite objective value")
+    f = (-raw if o.type == "maximize" else raw) / scale
+    return ObjectiveResult(o.name, o.type, raw, f, o.weight, "ok", dim, detail)
+
+
+def _failed_objective(o: Objective, ctx: _Ctx, status: ObjStatus) -> ObjectiveResult:
+    try:
+        dim = objective_dim(ctx.study_sweeps, o)
+    except (KeyError, ValueError):
+        dim = "length"
+    return ObjectiveResult(o.name, o.type, float("nan"), F_FAIL, o.weight, status, dim)
+
+
 def evaluate(
     space: DesignSpace,
     x: ArrayLike | None = None,
@@ -576,4 +727,13 @@ def evaluate(
                 results.append(_eval_one(c, ctx))
             except _Unsolved:
                 results.append(_failed(c, ctx, "unsolved"))
-    return Evaluation(tuple(results))
+    objectives: list[ObjectiveResult] = []
+    for o in study.objectives:
+        if infeasible:
+            objectives.append(_failed_objective(o, ctx, "infeasible"))
+            continue
+        try:
+            objectives.append(_eval_objective(o, ctx))
+        except _Unsolved:
+            objectives.append(_failed_objective(o, ctx, "unsolved"))
+    return Evaluation(tuple(results), tuple(objectives))

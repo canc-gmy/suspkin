@@ -30,6 +30,9 @@ from suspkin.units import (
         ("2 kN", "force", 2000.0),
         ("9.81 m/s^2", "accel", 9.81),
         ("9.81 m/s2", "accel", 9.81),
+        ("2 h", "time", 7200.0),
+        ("90 min", "time", 5400.0),
+        ("30 s", "time", 30.0),
     ],
 )
 def test_parse_units(text: str, dim: str, expected: float) -> None:
@@ -80,5 +83,5 @@ def test_display_roundtrip() -> None:
 
 
 def test_mm_per_s2_is_not_confused_with_m_per_s2() -> None:
-    with pytest.raises(ValueError, match="unknown unit"):
+    with pytest.raises(ValueError, match=r"unknown unit|expected .accel."):
         parse_quantity("5 mm/s^2", "accel")
