@@ -6,6 +6,7 @@ import { Disclosure } from "../components/Disclosure";
 import { OverlaysMenu } from "../components/OverlaysMenu";
 import { loadCentreKinds, loadRegionRoles, saveCentreKinds, saveRegionRoles } from "../lib/centresMenu";
 import { changedSceneNames } from "../lib/hardpoints";
+import { defaultPlaneState, loadPlane, savePlane, type PlaneState } from "../lib/planeMenu";
 import { pickRegionSource, regionSources } from "../lib/regionSource";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
@@ -26,6 +27,7 @@ import {
   type CentreKind,
   type RegionRole,
 } from "../theme/scene3d";
+import { clampPlaneOffset, PLANE_KINDS, PLANE_LABELS, planeRange, type PlaneKind } from "../theme/sceneGrid";
 import "./Scene3D.css";
 
 const NO_POSE: PoseInput[] = [];
@@ -144,6 +146,22 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
       ),
     [figure, centreKinds, frame, theme],
   );
+  // reference plane in the body frame: only adds traces, never touches the ranges or the camera
+  const [planeState, setPlaneState] = useState<PlaneState>(() => (typeof localStorage === "undefined" ? defaultPlaneState() : loadPlane()));
+  const carBox = frameBox(frame);
+  const planeKind = planeState.kind;
+  const planeSpec = planeKind === "none" ? null : { kind: planeKind, range: carBox ? planeRange(planeKind, carBox) : null };
+  const planeOffset =
+    planeKind !== "none" && carBox ? clampPlaneOffset(planeKind, planeState.offsets[planeKind], carBox) : 0;
+  const plane = useMemo(
+    () => (planeKind === "none" || !carBox ? undefined : { kind: planeKind, offsetMm: planeOffset }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [planeKind, planeOffset, frame],
+  );
+  const updatePlane = (next: PlaneState) => {
+    setPlaneState(next);
+    savePlane(next);
+  };
   const host = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
   const rendered = useRef(false);
@@ -165,6 +183,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         centres: [...regionTraces, ...centres.traces],
         camera: cameraForLayout({ reset: false, saved: savedCamera.current, fallback: framedCamera(el, frame, legendOn) }),
         legend: legendOn,
+        plane,
       });
       const gd = await P.react(el, fig.data, fig.layout, {
         responsive: true,
@@ -182,7 +201,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
     return () => {
       cancelled = true;
     };
-  }, [figure, ghostFigure, frame, theme, highlight, centres, regionTraces, legendOn]);
+  }, [figure, ghostFigure, frame, theme, highlight, centres, regionTraces, legendOn, plane]);
 
   const resetView = () => {
     const el = host.current;
@@ -287,6 +306,39 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <button type="button" className="btn secondary" aria-pressed={legendOn} onClick={() => setLegendOn(!legendOn)}>
           Legend
         </button>
+        <label className="field">
+          <span>Plane</span>
+          <select
+            aria-label="Plane"
+            value={planeKind}
+            onChange={(e) => updatePlane({ ...planeState, kind: e.target.value as PlaneKind })}
+          >
+            {PLANE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {PLANE_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {planeSpec?.range && (
+          <label className="slider plane-slider">
+            <span className="slider-head">
+              <span>Offset</span>
+              <output className="slider-value">{`${planeOffset.toFixed(0)} mm`}</output>
+            </span>
+            <input
+              type="range"
+              min={planeSpec.range.min}
+              max={planeSpec.range.max}
+              step={1}
+              value={planeOffset}
+              aria-label="Plane offset [mm]"
+              onChange={(e) =>
+                updatePlane({ ...planeState, offsets: { ...planeState.offsets, [planeSpec.kind]: Number(e.target.value) } })
+              }
+            />
+          </label>
+        )}
         {centres.notes.length > 0 && (
           <Disclosure label={`Notes (${centres.notes.length})`}>
             {() => (

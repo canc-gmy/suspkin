@@ -1,4 +1,5 @@
 import { themeScene, type PlotlyObject, type Tokens } from "./plotlyTemplate";
+import { buildGridTraces, buildPlaneTraces, worldFrame, type PlaneKind, type World } from "./sceneGrid";
 
 export type Vec3 = [number, number, number];
 export interface Bounds {
@@ -73,9 +74,14 @@ export interface SceneFrame {
   ranges: [number, number][];
   /** Axis lengths relative to the longest one, for `aspectmode: "manual"`. */
   aspect: { x: number; y: number; z: number };
+  /** The large box the scene is laid out in (ground grid); the car box above sits in its middle. */
+  world?: World;
 }
 
-/** Fixed axis ranges (bounding box plus 10% margin per axis) and the matching aspect ratio. */
+/**
+ * Car box (bounding box plus 10% margin per axis) with its aspect ratio, and the world box around
+ * it that the Plotly axes use. The camera and the overlay clipping work on the car box.
+ */
 export function sceneFrame(b: Bounds): SceneFrame {
   const ranges = AXES.map((_, i): [number, number] => {
     const lo = b.min[i]!;
@@ -85,7 +91,8 @@ export function sceneFrame(b: Bounds): SceneFrame {
   });
   const len = ranges.map(([lo, hi]) => hi - lo);
   const top = Math.max(...len);
-  return { ranges, aspect: { x: len[0]! / top, y: len[1]! / top, z: len[2]! / top } };
+  const box: Bounds = { min: [ranges[0]![0], ranges[1]![0], ranges[2]![0]], max: [ranges[0]![1], ranges[1]![1], ranges[2]![1]] };
+  return { ranges, aspect: { x: len[0]! / top, y: len[1]! / top, z: len[2]! / top }, world: worldFrame(box) };
 }
 
 /** Line traces of `data` restyled as a reference ghost: thin muted, translucent, inert. */
@@ -131,7 +138,9 @@ export function fitCamera(
   const u: Vec3 = [e.x / len, e.y / len, e.z / len]; // from the centre towards the eye
   const right = normalize([-u[1], u[0], 0]);
   const up = cross(right, [-u[0], -u[1], -u[2]]);
-  const half = [frame.aspect.x / 2, frame.aspect.y / 2, frame.aspect.z / 2];
+  // the car box is a small part of the scene box when a world box surrounds it
+  const share = frame.world?.scale ?? 1;
+  const half = [frame.aspect.x / 2, frame.aspect.y / 2, frame.aspect.z / 2].map((h) => h * share);
   const corners: Vec3[] = [];
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
     corners.push([sx * half[0]!, sy * half[1]!, sz * half[2]!]);
@@ -215,6 +224,8 @@ export interface SceneFigureInput {
   centres?: readonly PlotlyObject[];
   /** Show the legend strip above the scene (default true). */
   legend?: boolean;
+  /** Reference plane (body frame, offset in mm); absent or "none": no plane. */
+  plane?: { kind: PlaneKind; offsetMm: number };
 }
 
 export const RING_SIZE = 6;
@@ -251,9 +262,12 @@ export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; l
   const t = i.tokens;
   const themed = themeScene(i.figure, t, { legend: i.legend ?? true });
   const sc = themed.layout["scene"] as PlotlyObject;
+  // with a world box the Plotly axes are hidden (no walls, ticks or titles): the grid is drawn as traces
+  const world = i.frame?.world;
   const axisOf = (name: "xaxis" | "yaxis" | "zaxis", idx: number): PlotlyObject => ({
     ...(sc[name] as PlotlyObject),
-    ...(i.frame ? { range: i.frame.ranges[idx], autorange: false } : {}),
+    ...(i.frame ? { range: (world ?? i.frame).ranges[idx], autorange: false } : {}),
+    ...(world ? { visible: false, showbackground: false, showgrid: false, zeroline: false, showline: false } : {}),
   });
   const scene: PlotlyObject = {
     ...sc,
@@ -261,18 +275,23 @@ export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; l
     yaxis: axisOf("yaxis", 1),
     zaxis: axisOf("zaxis", 2),
     aspectmode: i.frame ? "manual" : "data",
-    ...(i.frame ? { aspectratio: i.frame.aspect } : {}),
+    ...(i.frame ? { aspectratio: world ? world.aspect : i.frame.aspect } : {}),
     uirevision: SCENE_UIREVISION,
   };
   delete scene["camera"];
   scene["camera"] = i.camera;
   const ghost = i.ghost ? ghostTraces((i.ghost.data as PlotlyObject[] | undefined) ?? [], t) : [];
+  const car = frameBox(i.frame);
+  const grid = world && car ? buildGridTraces(world, car, t) : [];
+  const plane = car && i.plane ? buildPlaneTraces(i.plane.kind, i.plane.offsetMm, car, t) : [];
   return {
     data: [
+      ...grid,
       ...ghost,
       ...themed.data,
       ...(i.highlight && i.highlight.length > 0 ? [ringTrace(i.highlight, t)] : []),
       ...(i.centres ?? []),
+      ...plane,
     ],
     layout: { ...themed.layout, uirevision: SCENE_UIREVISION, autosize: true, paper_bgcolor: t.sheetRaised, scene },
   };

@@ -55,3 +55,8 @@
   color: var(--ink-muted);
   font-size: var(--text-12);
 }
+
+/* Plane offset slider: same look as a pose slider, sized to sit in the options row. */
+.plane-slider {
+  width: 12rem;
+}
