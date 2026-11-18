@@ -82,6 +82,9 @@ export class HttpSource implements DataSource {
     const qs = q.toString();
     return this.request(`/datasets/${encodeURIComponent(id)}/scene${qs ? `?${qs}` : ""}`);
   }
+  getHardpoints(id: string): Ret<"getHardpoints"> {
+    return this.request(`/datasets/${encodeURIComponent(id)}/hardpoints`);
+  }
   getHistory(runId: string): Ret<"getHistory"> {
     return this.request(`/runs/${encodeURIComponent(runId)}/history`);
   }

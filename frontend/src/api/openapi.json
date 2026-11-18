@@ -363,6 +363,50 @@
         }
       }
     },
+    "/api/v1/datasets/{dataset_id}/hardpoints": {
+      "get": {
+        "summary": "Hardpoints",
+        "description": "Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set).",
+        "operationId": "hardpoints_api_v1_datasets__dataset_id__hardpoints_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HardpointOut"
+                  },
+                  "title": "Response Hardpoints Api V1 Datasets  Dataset Id  Hardpoints Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runs/{run_id}/history": {
       "get": {
         "summary": "History",
@@ -740,6 +784,62 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HardpointOut": {
+        "properties": {
+          "axle": {
+            "type": "string",
+            "enum": [
+              "front",
+              "rear"
+            ],
+            "title": "Axle"
+          },
+          "point": {
+            "type": "string",
+            "title": "Point"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Side"
+          },
+          "x": {
+            "type": "number",
+            "title": "X",
+            "description": "Metres."
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "description": "Metres."
+          },
+          "z": {
+            "type": "number",
+            "title": "Z",
+            "description": "Metres."
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "description": "True for a right point taken from ``right_overrides``.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "axle",
+          "point",
+          "side",
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "HardpointOut",
+        "description": "One hardpoint of one corner after mirroring (SI, ISO 8855 vehicle frame)."
       },
       "HealthOut": {
         "properties": {

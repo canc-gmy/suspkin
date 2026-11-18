@@ -162,7 +162,7 @@ The user also chose three areas: the comparison workflow, hardpoint editing, and
 |---|---|---|
 | I2-1 | DESIGN.md update. Readout strip with pin and nudge. Continuous cursor with spline interpolation shared with drawing. Solved-points toggle. Resolution control and backend per-dataset steps. | done |
 | I2-2 | 3D: full-height canvas, fixed camera, zoom and ranges, reference ghost, differing-hardpoint highlight. (hardpoint ring moved to I2-3) | done |
-| I2-3 | Comparison: Front/Rear/Both, Hardpoints tab with Δ, copy and download panel data. | todo |
+| I2-3 | Comparison: Front/Rear/Both, Hardpoints tab with Δ, copy and download panel data. + 3D hardpoint rings, one 3D surface colour, legend inside | done |
 | I2-4 | Hardpoint editing: derive and save endpoints with tests, editor UI, auto-solve. | todo |
 | I2-5 | Polish pass from a design critique. Docs (guide, CHANGELOG). Review. | todo |
 

@@ -126,6 +126,37 @@ export interface SceneFigureInput {
   tokens: Tokens;
   frame: SceneFrame | null;
   camera: Camera;
+  /** Posed positions (m, scene frame) of the hardpoints to ring; empty or absent: no rings. */
+  highlight?: readonly Vec3[];
+}
+
+export const RING_SIZE = 6;
+
+/** Posed hardpoint positions by scene name ("FL:uca_outer"), as the scene endpoint returns them. */
+export function posedHardpoints(fig: { hardpoints?: unknown } | null | undefined): Record<string, Vec3> {
+  const raw = fig?.hardpoints;
+  const out: Record<string, Vec3> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n))) {
+      out[k] = [v[0] as number, v[1] as number, v[2] as number];
+    }
+  }
+  return out;
+}
+
+/** Open 6 px rings in the layout blue around the given points; inert (no hover, no legend). */
+export function ringTrace(points: readonly Vec3[], t: Pick<Tokens, "layoutBlue">): PlotlyObject {
+  return {
+    type: "scatter3d",
+    mode: "markers",
+    x: points.map((p) => p[0]),
+    y: points.map((p) => p[1]),
+    z: points.map((p) => p[2]),
+    marker: { symbol: "circle-open", size: RING_SIZE, color: t.layoutBlue, line: { color: t.layoutBlue, width: 2 } },
+    showlegend: false,
+    hoverinfo: "skip",
+  };
 }
 
 /** Themed 3D figure: styling from the tokens, fixed ranges and aspect, optional ghost behind. */
@@ -150,7 +181,7 @@ export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; l
   scene["camera"] = i.camera;
   const ghost = i.ghost ? ghostTraces((i.ghost.data as PlotlyObject[] | undefined) ?? [], t) : [];
   return {
-    data: [...ghost, ...themed.data],
-    layout: { ...themed.layout, uirevision: SCENE_UIREVISION, autosize: true, paper_bgcolor: t.sheet, scene },
+    data: [...ghost, ...themed.data, ...(i.highlight && i.highlight.length > 0 ? [ringTrace(i.highlight, t)] : [])],
+    layout: { ...themed.layout, uirevision: SCENE_UIREVISION, autosize: true, paper_bgcolor: t.sheetRaised, scene },
   };
 }

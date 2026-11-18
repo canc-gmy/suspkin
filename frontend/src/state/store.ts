@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { nextLetter, type Theme } from "../theme/revisions";
-import type { Axle } from "../lib/panels";
+import type { AxleChoice } from "../lib/panels";
 
 export type Mode = "overlay" | "delta";
 
@@ -15,7 +15,7 @@ export interface UiState {
   fresh: Record<string, true>;
   synced: boolean;
   tab: string | null;
-  axle: Axle;
+  axle: AxleChoice;
   mode: Mode;
   theme: Theme;
   /** Draw small markers at the real solver points (kept for the session in localStorage). */
@@ -27,7 +27,7 @@ export interface UiState {
   toggleVisible: (id: string) => void;
   setReference: (id: string) => void;
   setTab: (tab: string) => void;
-  setAxle: (axle: Axle) => void;
+  setAxle: (axle: AxleChoice) => void;
   setMode: (mode: Mode) => void;
   setTheme: (theme: Theme) => void;
   setShowPoints: (show: boolean) => void;

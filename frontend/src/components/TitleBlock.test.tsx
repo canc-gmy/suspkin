@@ -35,6 +35,7 @@ function mockSource(): DataSource {
     getTable: fail,
     getSummary: fail,
     getScene: fail,
+    getHardpoints: fail,
     getHistory: fail,
     browse: fail,
   } as DataSource;

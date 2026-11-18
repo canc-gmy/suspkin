@@ -535,6 +535,27 @@ input.readout-input[aria-invalid="true"] {
   margin: var(--space-2) 0 var(--space-1);
 }
 
+/* Both axles: side by side from 1400 px (one panel column each), stacked below */
+.figure-columns.both {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.figure-column {
+  min-width: 0;
+}
+
+@media (min-width: 1400px) {
+  .figure-columns.both {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .figure-columns.both .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .panel-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -547,11 +568,51 @@ input.readout-input[aria-invalid="true"] {
   }
 }
 
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+}
+
 .panel-title {
   font-family: var(--font-title);
   font-size: var(--text-17);
   font-weight: var(--weight-title);
-  margin: 0 0 var(--space-1);
+  margin: 0;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 var(--space-2);
+  font-size: var(--text-12);
+}
+
+.text-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  text-decoration: underline;
+}
+
+.panel-status {
+  color: var(--ink-muted);
+  order: -1; /* left of the buttons, so they never move when it appears */
+}
+
+.panel-status.error {
+  color: var(--danger);
+  margin: 0;
 }
 
 .panel-note {
@@ -600,6 +661,46 @@ input.readout-input[aria-invalid="true"] {
 
 .summary .unit {
   color: var(--ink-muted);
+}
+
+/* ---- hardpoints tab --------------------------------------------------------------- */
+.hardpoints-bar {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}
+
+.hardpoint-table .hp-point,
+.hardpoint-table .hp-side {
+  white-space: nowrap;
+}
+
+.hardpoint-table thead th.sub {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-body);
+  color: var(--ink-muted);
+}
+
+.hardpoint-table .group-start {
+  border-left: 1px solid var(--rule);
+}
+
+.hardpoint-table .group-row th {
+  font-family: var(--font-title);
+  font-weight: var(--weight-title);
+  background: var(--sheet);
+}
+
+.hardpoint-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* the point column stays in view while the revisions scroll */
+.hardpoint-table .hp-point {
+  position: sticky;
+  left: 0;
+  background: var(--sheet-raised);
+  z-index: 1;
 }
 
 /* ---- empty state, dialog ---------------------------------------------------------- */

@@ -452,3 +452,11 @@ def test_run_warns_for_non_loopback_host(
     run(ws, host="0.0.0.0", open_browser=False)
     err = capsys.readouterr().err
     assert "WARNING" in err and "0.0.0.0" in err and len(served) == 2
+
+
+def test_snapshot_has_hardpoints(ws: Path) -> None:
+    mgr = DatasetManager(ws, study_params=PARAMS)
+    (ds,) = mgr.open("car.yaml")
+    snap = build_snapshot(mgr, include_scene=False)
+    rows = snap["hardpoints"][ds.id]
+    assert rows and {"axle", "point", "side", "x", "y", "z", "overridden"} <= set(rows[0])

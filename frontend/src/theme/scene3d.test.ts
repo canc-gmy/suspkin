@@ -7,6 +7,7 @@ import {
   coordValues,
   DEFAULT_CAMERA,
   ghostTraces,
+  posedHardpoints,
   sceneBounds,
   sceneFrame,
 } from "./scene3d";
@@ -115,5 +116,33 @@ describe("camera preservation", () => {
     expect(b.layout["uirevision"]).toBe(a.layout["uirevision"]);
     const withCam = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame, camera: saved });
     expect((withCam.layout["scene"] as Record<string, unknown>)["camera"]).toBe(saved);
+  });
+});
+
+describe("rings and surface", () => {
+  it("adds one open 6 px ring trace in the layout blue at the given posed points", () => {
+    const pts: [number, number, number][] = [[0.1, 0.2, 0.3], [1, 2, 3]];
+    const fig = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA, highlight: pts });
+    const ring = fig.data[fig.data.length - 1] as Record<string, unknown>;
+    expect(ring["x"]).toEqual([0.1, 1]);
+    expect(ring["z"]).toEqual([0.3, 3]);
+    const m = ring["marker"] as Record<string, unknown>;
+    expect([m["symbol"], m["size"], m["color"]]).toEqual(["circle-open", 6, "#00f"]);
+    const none = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA, highlight: [] });
+    expect(none.data).toHaveLength(FIGURE.data.length);
+  });
+
+  it("reads posed hardpoints by name and drops malformed entries", () => {
+    expect(posedHardpoints({ hardpoints: { "FL:a": [1, 2, 3], "FL:b": [1, 2], "FL:c": [1, "x", 3] } })).toEqual({ "FL:a": [1, 2, 3] });
+    expect(posedHardpoints(null)).toEqual({});
+  });
+
+  it("uses one surface colour for paper and scene, and keeps the legend inside the canvas", () => {
+    const fig = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA });
+    const scene = fig.layout["scene"] as Record<string, unknown>;
+    expect(fig.layout["paper_bgcolor"]).toBe(TOKENS.sheetRaised);
+    expect(scene["bgcolor"]).toBe(TOKENS.sheetRaised);
+    const legend = fig.layout["legend"] as Record<string, unknown>;
+    expect([legend["x"], legend["xanchor"], legend["yanchor"]]).toEqual([0.01, "left", "top"]);
   });
 });

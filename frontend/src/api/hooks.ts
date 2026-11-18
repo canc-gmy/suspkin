@@ -84,6 +84,19 @@ export function useScene(id: string | null, pose: ScenePose) {
   });
 }
 
+/** Hardpoints (SI) per revision; a revision that cannot be read comes back as an error entry. */
+export function useHardpoints(ids: string[]) {
+  const src = useSource();
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["hardpoints", id],
+      queryFn: () => src.getHardpoints(id),
+      staleTime: Infinity,
+      retry: false,
+    })),
+  });
+}
+
 export function useOpenPath() {
   const src = useSource();
   const qc = useQueryClient();

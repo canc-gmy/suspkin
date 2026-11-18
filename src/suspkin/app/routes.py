@@ -19,12 +19,14 @@ from suspkin.app.models import (
     DatasetPatch,
     ExportOut,
     ExportRequest,
+    HardpointOut,
     HealthOut,
     HistoryOut,
     OpenRequest,
     PoseInput,
     TableOut,
 )
+from suspkin.geometry import Vehicle, build_corners
 from suspkin.kinematics import KinematicsError, solve_vehicle
 from suspkin.plotting.optimization import best_so_far, knee_index, pareto_mask
 from suspkin.plotting.spec import spec_json
@@ -131,11 +133,43 @@ def history_out(run: RunInfo) -> HistoryOut:
     )
 
 
+def hardpoints_out(ds: Dataset) -> list[HardpointOut]:
+    """Every hardpoint of the vehicle after mirroring (right side: mirrored or override)."""
+    out: list[HardpointOut] = []
+    for corner in build_corners(ds.vehicle).values():
+        overrides = corner.axle_cfg.right_overrides if corner.side == "right" else {}
+        for name, p in corner.points.items():
+            out.append(
+                HardpointOut(
+                    axle=corner.axle,
+                    point=name,
+                    side=corner.side,
+                    x=float(p[0]),
+                    y=float(p[1]),
+                    z=float(p[2]),
+                    overridden=name in overrides,
+                )
+            )
+    return out
+
+
+def scene_hardpoints(vehicle: Vehicle, state: Any = None) -> dict[str, list[float]]:
+    """Posed hardpoint positions (SI) by ``"<corner>:<point>"``, e.g. ``FL:uca_outer``."""
+    from suspkin.plotting.geometry3d import vehicle_segments
+
+    scene = vehicle_segments(vehicle, state)
+    return {name: [float(v) for v in p] for name, p in scene.labels}
+
+
 def scene_json(ds: Dataset) -> dict[str, Any]:
-    """Plotly 3D figure JSON of a dataset at the static pose (raises ImportError without plotly)."""
+    """Plotly 3D figure JSON of a dataset at the static pose (raises ImportError without plotly).
+
+    The extra top-level key ``hardpoints`` holds the posed hardpoint positions by name.
+    """
     from suspkin.plotting.interactive import interactive_figure
 
     out: dict[str, Any] = json.loads(interactive_figure(ds.vehicle).to_json())
+    out["hardpoints"] = scene_hardpoints(ds.vehicle)
     return out
 
 
@@ -213,7 +247,13 @@ def make_router(manager: DatasetManager) -> APIRouter:
         except ImportError as exc:
             raise HTTPException(501, str(exc)) from exc
         out: dict[str, Any] = json.loads(fig.to_json())
+        out["hardpoints"] = scene_hardpoints(ds.vehicle, state)
         return out
+
+    @r.get("/datasets/{dataset_id}/hardpoints", response_model=list[HardpointOut])
+    def hardpoints(dataset_id: str) -> list[HardpointOut]:
+        """Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set)."""
+        return hardpoints_out(manager.get(dataset_id))
 
     @r.get("/runs/{run_id}/history", response_model=HistoryOut)
     def history(run_id: str) -> HistoryOut:

@@ -9,12 +9,14 @@ import { groupLabel, groupsOf } from "./lib/panels";
 import { useUi } from "./state/store";
 import { EmptyState } from "./views/EmptyState";
 import { FigureView } from "./views/FigureView";
+import { HardpointsView } from "./views/HardpointsView";
 import { OptimizationView } from "./views/OptimizationView";
 import { Scene3D } from "./views/Scene3D";
 import { Tabs, type TabDef } from "./views/Tabs";
 
 const EXTRA_TABS: TabDef[] = [
   { id: "summary", label: "Summary" },
+  { id: "hardpoints", label: "Hardpoints" },
   { id: "scene3d", label: "3D" },
   { id: "optimization", label: "Optimization" },
 ];
@@ -86,6 +88,13 @@ export function App() {
       <section aria-label="Summary">
         <h2 className="view-title">Summary</h2>
         <SummaryTable spec={spec} datasets={list} />
+      </section>
+    );
+  } else if (active === "hardpoints") {
+    content = (
+      <section aria-label="Hardpoints">
+        <h2 className="view-title">Hardpoints</h2>
+        <HardpointsView datasets={list} />
       </section>
     );
   } else if (active === "scene3d") {

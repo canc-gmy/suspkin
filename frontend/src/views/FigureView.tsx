@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { DatasetInfo, SpecDoc } from "../api";
 import { Segmented } from "../components/Segmented";
 import { SpecFigure } from "../components/SpecFigure";
-import { figuresFor, groupLabel, hasAxles, type Axle } from "../lib/panels";
+import { figureColumns, groupLabel, hasAxles, type AxleChoice } from "../lib/panels";
 import { useUi } from "../state/store";
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
   datasets: DatasetInfo[];
 }
 
-/** One figure group: Front|Rear and Overlay|Δ controls above a grid of panels. */
+/** One figure group: Front|Rear|Both and Overlay|Δ controls above a grid of panels. */
 export function FigureView({ group, spec, datasets }: Props) {
   const axle = useUi((s) => s.axle);
   const setAxle = useUi((s) => s.setAxle);
@@ -34,21 +34,24 @@ export function FigureView({ group, spec, datasets }: Props) {
   }, []);
 
   const all = spec.figures.filter((f) => f.group === group);
-  const figs = figuresFor(spec.figures, group, axle as Axle);
+  const columns = figureColumns(spec.figures, group, axle);
   const axles = hasAxles(all);
+  const both = columns.length > 1;
+  const showTitle = both || columns.some((c) => c.length > 1);
 
   return (
     <section aria-label={groupLabel(group)} ref={section}>
       <div className="toolbar figure-toolbar" ref={toolbar}>
         <h2 className="view-title">{groupLabel(group)}</h2>
         {axles && (
-          <Segmented<Axle>
+          <Segmented<AxleChoice>
             label="Axle"
             value={axle}
             onChange={setAxle}
             options={[
               { value: "front", label: "Front" },
               { value: "rear", label: "Rear" },
+              { value: "both", label: "Both" },
             ]}
           />
         )}
@@ -63,9 +66,15 @@ export function FigureView({ group, spec, datasets }: Props) {
           ]}
         />
       </div>
-      {figs.map((fig) => (
-        <SpecFigure key={fig.id} fig={fig} spec={spec} datasets={datasets} showTitle={figs.length > 1} />
-      ))}
+      <div className={both ? "figure-columns both" : "figure-columns"}>
+        {columns.map((figs) => (
+          <div key={figs.map((f) => f.id).join("|")} className="figure-column">
+            {figs.map((fig) => (
+              <SpecFigure key={fig.id} fig={fig} spec={spec} datasets={datasets} showTitle={showTitle} />
+            ))}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

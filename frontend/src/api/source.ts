@@ -3,6 +3,7 @@ import type {
   DatasetInfo,
   DatasetPatch,
   ExportResult,
+  Hardpoint,
   Health,
   HistoryData,
   ScenePose,
@@ -25,6 +26,8 @@ export interface DataSource {
   getTable(id: string, study: string): Promise<TableData>;
   getSummary(id: string): Promise<Summary>;
   getScene(id: string, pose?: ScenePose): Promise<Record<string, unknown>>;
+  /** Every hardpoint of a revision after mirroring (SI). */
+  getHardpoints(id: string): Promise<Hardpoint[]>;
   getHistory(runId: string): Promise<HistoryData>;
   browse(dir: string): Promise<BrowseData>;
   /** Write a snapshot of the open revisions into the workspace. */

@@ -2,12 +2,14 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardE
 import type { DatasetInfo, FigureSpec, PanelSpec, SpecDoc } from "../api";
 import { useTables } from "../api/hooks";
 import { selectPanels } from "../lib/panels";
+import { csvName, panelRows, toCsv, toTsv } from "../lib/panelData";
 import { buildReadout, clampX, formatX, nudge } from "../lib/readout";
 import { buildPanel, scaled, type RevisionData, type Table } from "../lib/traces";
 import { useUi, visibleIds, type Mode } from "../state/store";
 import { revisionColor, type Theme } from "../theme/revisions";
 import { chartLayout, readTokens } from "../theme/plotlyTemplate";
 import { PlotlyChart, type ChartCursor } from "./PlotlyChart";
+import { PanelActions } from "./PanelActions";
 import { Readout } from "./Readout";
 
 interface PanelChartProps {
@@ -47,7 +49,15 @@ const PanelChart = memo(function PanelChart(p: PanelChartProps) {
 
   return (
     <section className="panel" aria-label={panel.title}>
-      <h3 className="panel-title">{panel.title}</h3>
+      <div className="panel-head">
+        <h3 className="panel-title">{panel.title}</h3>
+        <PanelActions
+          getRows={() => panelRows(fig, panel, revs, reference, mode === "delta")}
+          filename={csvName(fig, panel)}
+          toCsv={toCsv}
+          toTsv={toTsv}
+        />
+      </div>
       {panel.ic && icDropped > 0 && <p className="panel-note">IC at infinity: {icDropped} points not drawn</p>}
       <PlotlyChart
         build={build}

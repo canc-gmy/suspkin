@@ -51,6 +51,20 @@ class DatasetOut(BaseModel):
     )
 
 
+class HardpointOut(BaseModel):
+    """One hardpoint of one corner after mirroring (SI, ISO 8855 vehicle frame)."""
+
+    axle: Literal["front", "rear"]
+    point: str
+    side: Literal["left", "right"]
+    x: float = Field(description="Metres.")
+    y: float = Field(description="Metres.")
+    z: float = Field(description="Metres.")
+    overridden: bool = Field(
+        default=False, description="True for a right point taken from ``right_overrides``."
+    )
+
+
 class OpenRequest(BaseModel):
     """Open a path (absolute, or relative to the workspace)."""
 

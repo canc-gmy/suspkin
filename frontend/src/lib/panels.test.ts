@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureSpec, PanelSpec, SeriesSpec } from "../api/spec";
-import { figuresFor, groupLabel, groupsOf, hasAxles, seriesIn, selectPanels } from "./panels";
+import { figureColumns, figuresFor, groupLabel, groupsOf, hasAxles, seriesIn, selectPanels } from "./panels";
 
 const ser = (column: string): SeriesSpec => ({
   column,
@@ -96,5 +96,17 @@ describe("groups", () => {
     expect(figuresFor(figs, "roll", "rear").map((f) => f.id)).toEqual(["roll"]);
     expect(hasAxles(figs.slice(0, 2))).toBe(true);
     expect(hasAxles(figs.slice(2))).toBe(false);
+  });
+
+  it("lays out Front, Rear and Both as columns", () => {
+    const ids = (cols: FigureSpec[][]) => cols.map((c) => c.map((f) => f.id));
+    expect(ids(figureColumns(figs, "corner_alignment", "front"))).toEqual([["corner_alignment_front"]]);
+    expect(ids(figureColumns(figs, "corner_alignment", "both"))).toEqual([
+      ["corner_alignment_front"],
+      ["corner_alignment_rear"],
+    ]);
+    // a group without axles never splits, whatever the choice
+    expect(ids(figureColumns(figs, "roll", "both"))).toEqual([["roll"]]);
+    expect(ids(figureColumns(figs, "roll", "rear"))).toEqual([["roll"]]);
   });
 });

@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from suspkin.app.datasets import DatasetManager
-from suspkin.app.routes import _column, _dataset_out, health_out, history_out, scene_json
+from suspkin.app.routes import (
+    _column,
+    _dataset_out,
+    hardpoints_out,
+    health_out,
+    history_out,
+    scene_json,
+)
 from suspkin.plotting.spec import spec_json
 
 __all__ = [
@@ -72,6 +79,9 @@ def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> di
         "summaries": {d.id: d.summary for d in datasets},
         "histories": histories,
         "scenes": scenes,
+        "hardpoints": {
+            d.id: [h.model_dump(mode="json") for h in hardpoints_out(d)] for d in datasets
+        },
     }
 
 

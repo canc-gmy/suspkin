@@ -1,6 +1,13 @@
-/* Full-bleed 3D canvas: cancels the main area padding, no card. */
+/* Full-bleed 3D canvas: cancels the main area padding, no card. One surface with the plot
+   (paper, scene and walls are all --sheet-raised), so there is no visible box or seam. */
 .scene3d-canvas {
   width: auto;
   margin: 0 calc(-1 * var(--space-3)) calc(-1 * var(--space-3));
-  background: var(--sheet);
+  background: var(--sheet-raised);
+}
+
+@media (max-width: 899px) {
+  .scene3d-canvas {
+    margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
+  }
 }

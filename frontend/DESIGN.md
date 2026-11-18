@@ -152,10 +152,65 @@ It replaces floating hover labels, which covered the curves. It lives in the fig
 
 ### 3D view (iteration 2)
 
-- The canvas fills all the space below the 3D toolbar: full width of the main area, height to the bottom of the viewport. No inner card or padding; the plot's paper is `--sheet`.
+- The canvas fills all the space below the 3D toolbar: full width of the main area, height to the bottom of the viewport. No inner card or padding. The Plotly paper, the scene background, the axis walls and the container below the toolbar are all `--sheet-raised` (the plot surface), so the canvas is one surface edge to edge with no visible box or seam, in both themes. The legend sits inside the canvas at the top left, so it is never clipped at any width.
 - The toolbar holds the revision picker, pose sliders, "Reset pose", "Reset view" and "Show reference ghost".
 - The camera belongs to the user. Pose changes never move the camera, zoom or pan, and the axis ranges and aspect ratio stay fixed from the static pose. Only "Reset view" restores the default camera.
 - The reference ghost is drawn in 1 px `--ink-muted` lines at 40% opacity. Hardpoints that differ from the reference by more than 0.1 mm get a 6 px ring in `--layout-blue`.
+- The rings have their own checkbox, "Highlight changes", next to "Show reference ghost". It is on by default and disabled (with a "Same as the reference" title) while the selected revision is the reference. The ring sits on the posed position of the point, so it follows the pose sliders. It uses the same 0.1 mm threshold as the Hardpoints tab.
+
+### Hardpoints tab (iteration 2)
+
+A tab after Summary. It answers "what did I move, and by how much" for every hardpoint of every visible revision.
+
+```
+| Hardpoints                                                                       |
+| Show [ All | Differing only ]   Filter points [ uca_       ]   12 of 34 rows      |
+|-------------------------------------------------------------------------------------|
+|                          |  A  raised_lca         |  B  opt best          | Δ B − A  |
+| Point         Side       |   x      y      z      |   x      y      z     |  |Δ| mm  |
+|--------------------------+------------------------+-----------------------+----------|
+| Front axle                                                                          |
+| lca_outer     left       |  0.0   580.0  130.0    |  0.0   580.0  142.0   |  12.00   |
+|                          |                        |                       | x +0.00 y +0.00 z +12.00 |
+| lca_outer     right      | ...                                                    |
+| tie_inner     left       |  80.0  150.0  140.0    | ...                   |   0.00   |
+| Rear axle                                                                           |
+```
+
+- One ruled table in the `--sheet-raised` body, same rules as the summary table: a 2 px `--ink` rule under the header, 1 px `--rule` between rows, left-aligned text, right-aligned tabular numbers.
+- **Rows:** one per (axle, point, side). Axles are group rows ("Front axle", "Rear axle") in `--font-title`. Inside an axle, rows that differ from the reference by more than 0.1 mm in any revision come first, then the rest, each part in alphabetical order (point name, left before right). A right point that comes from `right_overrides` shows "override" in `--ink-muted` 12 px under "right".
+- **Columns:** point, side, then one group of x, y, z per visible revision with the revision letter and label in the group heading (the same stacked heading as the summary table). Values are in mm with 1 decimal. After the revisions come the Δ columns, one per visible revision other than the reference, headed "Δ B − A".
+- **Δ cell:** the vector magnitude |Δ| in mm (2 decimals) on the first line, and the per-axis Δ ("x +0.00 y −2.00 z +0.00", signed, 2 decimals) on a second line in `--ink-muted` 12 px. No colouring: a difference is not good or bad by itself. A reference-only column reads "ref".
+- **Filter bar:** a segmented control "All / Differing only", a text input "Filter points" (case-insensitive substring of the point name), and a muted count "12 of 34 rows". A filter that hides everything says "No hardpoints match. Clear the filter or choose All."
+- A revision whose hardpoints cannot be read shows "-" in all its cells. The tab scrolls horizontally on narrow screens; the point and side columns stay fixed.
+
+### Front / Rear / Both and panel data actions (iteration 2)
+
+**Front / Rear / Both**
+
+```
+>= 1400 px, Both:                              < 1400 px, Both:
+| Front                | Rear                 |  | Front                              |
+| readout strip        | readout strip        |  | readout strip, panels (2 columns)  |
+| panel                | panel                |  | Rear                               |
+| panel                | panel                |  | readout strip, panels (2 columns)  |
+```
+
+- The axle control is a three-segment toggle: Front, Rear, Both. Both is only offered for groups that have separate front and rear figures.
+- Both shows the two figures side by side from 1400 px, each with a single column of panels, and stacked below that, each with its usual panel grid. Each figure has its title ("Front", "Rear") above its strip.
+- **One readout strip per figure, not one with F/R cells.** The strip belongs to its figure: the cursor, the pin and the x input act on that figure's panels, and the cells sit directly above the plots they describe. A shared strip would need F and R cells in every column, which doubles its width, and would hide which axle a pinned x belongs to. Each strip is sticky only inside its own figure, so stacked strips replace each other while scrolling.
+
+**Panel data actions**
+
+```
+| Camber [deg]                                          Copy data  Download CSV  Copied |
+```
+
+- Right-aligned in the panel header, on the title's baseline: two text buttons "Copy data" and "Download CSV", `--ink-muted` 12 px, no border, underlined on hover, with the usual focus ring. A muted "Copied" appears to their left for 1.5 s in a polite live region, so the buttons never move.
+- The data is the solved points (never the dense spline) of every visible revision, in display units. The first column is the study x, "Wheel travel [mm]". Then one column per revision and series: "A camber [deg]". A panel with its own x axis adds an "A <x name> [unit]" column per revision. A revision that has no point at a row's x leaves the cell empty.
+- In Δ mode the rows are the reference's solved x, and the columns are "B-A camber [deg]" for every visible revision except the reference.
+- Copy puts tab-separated text on the clipboard so it pastes into a spreadsheet; the download is a CSV named `<figure>_<panel>.csv` (UTF-8 with a byte-order mark so Excel reads the Δ and unit text). Both work in snapshots because they use only the loaded tables.
+- If the clipboard is not available, a hidden-textarea fallback is tried; if that fails too, the status reads "Could not copy, use Download CSV" in `--danger`.
 
 ## Plot template (`plotlyTemplate.ts`)
 

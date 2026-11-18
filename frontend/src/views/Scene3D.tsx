@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlotlyHTMLElement } from "plotly.js-dist-min";
 import type { DatasetInfo, PoseInput } from "../api";
-import { useHealth, useScene, useSource } from "../api/hooks";
+import { useHardpoints, useHealth, useScene, useSource } from "../api/hooks";
+import { changedSceneNames } from "../lib/hardpoints";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
 import { readTokens } from "../theme/plotlyTemplate";
@@ -10,6 +11,7 @@ import {
   cameraForLayout,
   cameraFromRelayout,
   DEFAULT_CAMERA,
+  posedHardpoints,
   sceneBounds,
   sceneFrame,
   type Camera,
@@ -79,6 +81,21 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
   }, [staticScene.data, id]);
   const ghostFigure = ghostId ? (ghost.data ?? null) : null;
 
+  // rings on the points that moved more than 0.1 mm against the reference, at the posed positions
+  const [highlightOn, setHighlightOn] = useState(true);
+  const isRef = id !== null && id === reference;
+  const compare = highlightOn && !isRef && id !== null && reference !== null && datasets.some((d) => d.id === reference);
+  const hp = useHardpoints(compare ? [id as string, reference as string] : []);
+  const mineHp = hp[0]?.data;
+  const refHp = hp[1]?.data;
+  const highlight = useMemo(() => {
+    if (!compare) return [];
+    const posed = posedHardpoints(figure as { hardpoints?: unknown } | null);
+    return changedSceneNames(mineHp ?? null, refHp ?? null)
+      .map((n) => posed[n])
+      .filter((p): p is NonNullable<typeof p> => p !== undefined);
+  }, [compare, figure, mineHp, refHp]);
+
   const theme = useUi((s) => s.theme);
   const host = useRef<HTMLDivElement>(null);
   const top = useRef<HTMLDivElement>(null);
@@ -97,6 +114,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         ghost: ghostFigure,
         tokens: readTokens(theme),
         frame,
+        highlight,
         camera: cameraForLayout({ reset: false, saved: savedCamera.current }),
       });
       const gd = await P.react(el, fig.data, fig.layout, {
@@ -115,7 +133,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
     return () => {
       cancelled = true;
     };
-  }, [figure, ghostFigure, frame, theme]);
+  }, [figure, ghostFigure, frame, theme, highlight]);
 
   const resetView = () => {
     const el = host.current;
@@ -200,6 +218,10 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <label className="field">
           <input type="checkbox" checked={ghostOn} onChange={(e) => setGhostOn(e.target.checked)} />
           <span>Show reference ghost</span>
+        </label>
+        <label className="field" title={isRef ? "Same as the reference" : undefined}>
+          <input type="checkbox" checked={highlightOn && !isRef} disabled={isRef} onChange={(e) => setHighlightOn(e.target.checked)} />
+          <span>Highlight changes</span>
         </label>
       </div>
 

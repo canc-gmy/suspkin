@@ -1,6 +1,6 @@
 import { ApiError, type DataSource } from "./source";
 import type { SpecDoc } from "./spec";
-import type { DatasetInfo, ExportResult, Health, HistoryData, Summary, TableData } from "./types";
+import type { DatasetInfo, ExportResult, Hardpoint, Health, HistoryData, Summary, TableData } from "./types";
 
 /** Shape of the data embedded by the snapshot export (full support arrives with the export). */
 export interface Snapshot {
@@ -11,6 +11,7 @@ export interface Snapshot {
   summaries: Record<string, Summary>;
   histories?: Record<string, HistoryData>;
   scenes?: Record<string, Record<string, unknown>>;
+  hardpoints?: Record<string, Hardpoint[]>;
 }
 
 declare global {
@@ -64,6 +65,11 @@ export class SnapshotSource implements DataSource {
     const s = this.snap.scenes?.[id];
     if (!s) throw new ApiError("The snapshot has no 3D scene for this revision.", 404);
     return s;
+  }
+  async getHardpoints(id: string): Promise<Hardpoint[]> {
+    const h = this.snap.hardpoints?.[id];
+    if (!h) throw new ApiError("The snapshot has no hardpoints for this revision.", 404);
+    return h;
   }
   async getHistory(runId: string): Promise<HistoryData> {
     const h = this.snap.histories?.[runId];

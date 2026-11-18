@@ -128,6 +128,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/datasets/{dataset_id}/hardpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hardpoints
+         * @description Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set).
+         */
+        get: operations["hardpoints_api_v1_datasets__dataset_id__hardpoints_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/history": {
         parameters: {
             query?: never;
@@ -322,6 +342,45 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HardpointOut
+         * @description One hardpoint of one corner after mirroring (SI, ISO 8855 vehicle frame).
+         */
+        HardpointOut: {
+            /**
+             * Axle
+             * @enum {string}
+             */
+            axle: "front" | "rear";
+            /** Point */
+            point: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "left" | "right";
+            /**
+             * X
+             * @description Metres.
+             */
+            x: number;
+            /**
+             * Y
+             * @description Metres.
+             */
+            y: number;
+            /**
+             * Z
+             * @description Metres.
+             */
+            z: number;
+            /**
+             * Overridden
+             * @description True for a right point taken from ``right_overrides``.
+             * @default false
+             */
+            overridden: boolean;
         };
         /**
          * HealthOut
@@ -724,6 +783,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hardpoints_api_v1_datasets__dataset_id__hardpoints_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HardpointOut"][];
                 };
             };
             /** @description Validation Error */

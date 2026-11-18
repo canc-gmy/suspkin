@@ -188,16 +188,26 @@ export function themeScene(fig: { data?: unknown; layout?: unknown }, t: Tokens)
       ...base,
       title: { text: "" },
       uirevision: "pose", // keep the camera when the pose (and so the data) changes
-      paper_bgcolor: t.sheet,
+      // one surface: paper, scene and axis walls share --sheet-raised, so there is no box or seam
+      paper_bgcolor: t.sheetRaised,
       font: { family: t.fontUi, size: 12, color: t.ink },
       margin: { l: 0, r: 0, t: 8, b: 0 },
-      legend: { font: { family: t.fontUi, size: 12, color: t.inkMuted }, bgcolor: "rgba(0,0,0,0)" },
+      // inside the canvas, top left: never clipped at the right edge at any width
+      legend: {
+        x: 0.01,
+        xanchor: "left",
+        y: 0.99,
+        yanchor: "top",
+        orientation: "v",
+        font: { family: t.fontUi, size: 12, color: t.inkMuted },
+        bgcolor: "rgba(0,0,0,0)",
+      },
       scene: {
         ...scene,
         xaxis: axisOf("xaxis"),
         yaxis: axisOf("yaxis"),
         zaxis: axisOf("zaxis"),
-        bgcolor: t.sheet,
+        bgcolor: t.sheetRaised,
         uirevision: "pose",
       },
     },
