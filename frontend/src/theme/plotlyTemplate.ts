@@ -58,19 +58,14 @@ export interface LayoutOptions {
   legend: boolean;
   /** Draw a zero line on y (Δ mode) in addition to the static-pose line on x. */
   yZero: boolean;
-  /** "x unified" (default, curves over a shared x) or "closest" (scatter charts). */
-  hover?: "x unified" | "closest";
+  /**
+   * "closest" shows Plotly hover labels (scatter charts); "none" (default) turns them off: the
+   * curve panels are read in the readout strip and mark the cursor with a layout shape.
+   */
+  hover?: "none" | "closest";
   /** Draw the static-pose zero line on x (default true). */
   xZero?: boolean;
   yType?: "linear" | "log";
-  /** Show the x spike line across panels (default true for unified hover). */
-  spikes?: boolean;
-  /**
-   * Heading of the unified hover ("Wheel travel 12 mm"). Needs every trace on `xaxis: "x2"`:
-   * a hidden overlaying axis carries the label as tick prefix and the unit as suffix (shown
-   * only for the hover value, never on ticks).
-   */
-  xHover?: { label: string; unit: string };
 }
 
 function axis(t: Tokens, title: string, zero: boolean): PlotlyObject {
@@ -96,47 +91,14 @@ function axis(t: Tokens, title: string, zero: boolean): PlotlyObject {
 
 /** Plotly layout for one panel, from the DESIGN.md "Plot template". */
 export function chartLayout(t: Tokens, o: LayoutOptions): PlotlyObject {
-  const xaxis = {
-    ...axis(t, o.xTitle, o.xZero ?? true),
-    showspikes: o.spikes ?? (o.hover ?? "x unified") === "x unified",
-    spikemode: "across",
-    spikesnap: "cursor",
-    spikecolor: t.inkMuted,
-    spikethickness: 1,
-    spikedash: "dot",
-  };
-  const hoverAxis = o.xHover
-    ? {
-        xaxis2: {
-          overlaying: "x",
-          matches: "x",
-          showticklabels: false,
-          showgrid: false,
-          zeroline: false,
-          showline: false,
-          ticks: "",
-          hoverformat: ".4~g",
-          tickprefix: `${o.xHover.label} `,
-          showtickprefix: "first",
-          ticksuffix: o.xHover.unit ? ` ${o.xHover.unit}` : "",
-          showticksuffix: "first",
-          showspikes: xaxis.showspikes,
-          spikemode: "across",
-          spikesnap: "data" /* programmatic (linked) hover has no cursor to snap to */,
-          spikecolor: t.inkMuted,
-          spikethickness: 1,
-          spikedash: "dot",
-        },
-      }
-    : {};
+  const closest = o.hover === "closest";
   return {
-    ...hoverAxis,
     paper_bgcolor: t.sheet,
     plot_bgcolor: t.sheetRaised,
     font: { family: t.fontUi, size: 12, color: t.ink },
     margin: { l: 72, r: 16, t: o.legend ? 32 : 8, b: 52, pad: 0 },
-    hovermode: o.hover ?? "x unified",
-    hoverdistance: o.hover === "closest" ? 20 : -1,
+    hovermode: closest ? "closest" : false,
+    hoverdistance: closest ? 20 : -1,
     hoverlabel: {
       bgcolor: t.sheetRaised,
       bordercolor: t.rule,
@@ -152,8 +114,25 @@ export function chartLayout(t: Tokens, o: LayoutOptions): PlotlyObject {
       font: { family: t.fontUi, size: 12, color: t.inkMuted },
       bgcolor: "rgba(0,0,0,0)",
     },
-    xaxis: { ...xaxis, ...(o.xHover ? { showspikes: false } : {}) },
+    xaxis: axis(t, o.xTitle, o.xZero ?? true),
     yaxis: { ...axis(t, o.yTitle, o.yZero), ...(o.yType ? { type: o.yType } : {}) },
+  };
+}
+
+/** Shape of the cursor line on a curve panel: dashed muted while following, solid blue when pinned. */
+export function cursorShape(t: Tokens, x: number, pinned: boolean): PlotlyObject {
+  return {
+    type: "line",
+    xref: "x",
+    yref: "paper",
+    x0: x,
+    x1: x,
+    y0: 0,
+    y1: 1,
+    layer: "above",
+    line: pinned
+      ? { color: t.layoutBlue, width: 1, dash: "solid" }
+      : { color: t.inkMuted, width: 1, dash: "dash" },
   };
 }
 

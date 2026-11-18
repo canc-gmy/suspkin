@@ -5,10 +5,11 @@ interface Props<T extends string> {
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
+  disabled?: boolean;
 }
 
 /** Segmented control (radio group): 1 px rule, active segment filled with the layout blue. */
-export function Segmented<T extends string>({ label, value, options, onChange }: Props<T>) {
+export function Segmented<T extends string>({ label, value, options, onChange, disabled = false }: Props<T>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const onKey = (e: KeyboardEvent, i: number) => {
@@ -23,6 +24,7 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
     }
   };
 
+  const hasActive = options.some((o) => o.value === value);
   return (
     <div className="segmented" role="radiogroup" aria-label={label}>
       {options.map((o, i) => (
@@ -34,7 +36,8 @@ export function Segmented<T extends string>({ label, value, options, onChange }:
           type="button"
           role="radio"
           aria-checked={o.value === value}
-          tabIndex={o.value === value ? 0 : -1}
+          tabIndex={o.value === value || (!hasActive && i === 0) ? 0 : -1}
+          disabled={disabled}
           className={o.value === value ? "seg active" : "seg"}
           onClick={() => onChange(o.value)}
           onKeyDown={(e) => onKey(e, i)}

@@ -1,14 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { PlotlyHTMLElement } from "plotly.js-dist-min";
 import type { DatasetInfo, PoseInput } from "../api";
 import { useHealth, useScene, useSource } from "../api/hooks";
-import { PlotlyChart } from "../components/PlotlyChart";
 import { poseAxes, poseToSi, ZERO_POSE, type Pose } from "../lib/pose";
 import { useUi } from "../state/store";
-import { readTokens, themeScene } from "../theme/plotlyTemplate";
-import type { Theme } from "../theme/revisions";
+import { readTokens } from "../theme/plotlyTemplate";
+import {
+  buildSceneFigure,
+  cameraForLayout,
+  cameraFromRelayout,
+  DEFAULT_CAMERA,
+  sceneBounds,
+  sceneFrame,
+  type Camera,
+} from "../theme/scene3d";
+import "./Scene3D.css";
 
 const NO_POSE: PoseInput[] = [];
-const SCENE_BUTTONS = ["resetCameraDefault3d"];
+
+type PlotlyModule = typeof import("plotly.js-dist-min");
+let plotlyPromise: Promise<PlotlyModule["default"]> | null = null;
+
+/** Same lazy load as PlotlyChart: Plotly is large, so it loads on first use. */
+function loadPlotly(): Promise<PlotlyModule["default"]> {
+  plotlyPromise ??= import("plotly.js-dist-min").then((m) => m.default);
+  return plotlyPromise;
+}
+
+/** `relayout` is missing from the bundled typings. */
+type Relayout = { relayout: (el: HTMLElement, update: Record<string, unknown>) => Promise<unknown> };
+
+const MIN_CANVAS = 320;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -37,24 +59,119 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
   const axes = poseAxes((ds?.params ?? {}) as Record<string, unknown>, poseInputs);
 
   const debounced = useDebounced(pose, 150);
-  const scene = useScene(id, poseToSi(readOnly ? ZERO_POSE : debounced, poseInputs));
+  const poseSi = poseToSi(readOnly ? ZERO_POSE : debounced, poseInputs);
+  const scene = useScene(id, poseSi);
+  const [ghostOn, setGhostOn] = useState(false);
+  const ghostId = ghostOn && reference && reference !== id && datasets.some((d) => d.id === reference) ? reference : null;
+  const ghost = useScene(ghostId, poseSi);
+  const staticScene = useScene(id, poseToSi(ZERO_POSE, poseInputs));
 
   // keep the last figure that solved, so an unsolvable pose does not blank the view
   const last = useRef<Record<string, unknown> | null>(null);
   if (scene.data) last.current = scene.data;
   const figure = scene.data ?? last.current;
 
-  const build = useCallback(
-    (theme: Theme) => themeScene(figure ?? {}, readTokens(theme)),
-    [figure],
-  );
+  const frame = useMemo(() => {
+    const b = sceneBounds(staticScene.data ?? figure);
+    return b ? sceneFrame(b) : null;
+    // the frame follows the revision, never the pose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staticScene.data, id]);
+  const ghostFigure = ghostId ? (ghost.data ?? null) : null;
+
+  const theme = useUi((s) => s.theme);
+  const host = useRef<HTMLDivElement>(null);
+  const top = useRef<HTMLDivElement>(null);
+  const rendered = useRef(false);
+  const savedCamera = useRef<Camera | null>(null);
+  const [canvasTop, setCanvasTop] = useState(0);
+
+  useEffect(() => {
+    const el = host.current;
+    if (!el || !figure) return;
+    let cancelled = false;
+    void loadPlotly().then(async (P) => {
+      if (cancelled) return;
+      const fig = buildSceneFigure({
+        figure,
+        ghost: ghostFigure,
+        tokens: readTokens(theme),
+        frame,
+        camera: cameraForLayout({ reset: false, saved: savedCamera.current }),
+      });
+      const gd = await P.react(el, fig.data, fig.layout, {
+        responsive: true,
+        displaylogo: false,
+        displayModeBar: "hover",
+        modeBarButtons: [["toImage", "resetCameraDefault3d"]],
+      });
+      if (cancelled || rendered.current) return;
+      rendered.current = true;
+      (gd as PlotlyHTMLElement).on("plotly_relayout", (ev) => {
+        const c = cameraFromRelayout(ev as Record<string, unknown>);
+        if (c) savedCamera.current = c;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [figure, ghostFigure, frame, theme]);
+
+  const resetView = () => {
+    const el = host.current;
+    if (!el || !rendered.current) return;
+    savedCamera.current = DEFAULT_CAMERA;
+    void loadPlotly().then((P) => (P as unknown as Relayout).relayout(el, { "scene.camera": DEFAULT_CAMERA }));
+  };
+
+  // canvas height: from the bottom of the toolbar block to the bottom of the viewport
+  useEffect(() => {
+    const el = top.current;
+    if (!el) return;
+    const measure = () => setCanvasTop(Math.round(el.getBoundingClientRect().bottom + window.scrollY));
+    measure();
+    window.addEventListener("resize", measure);
+    if (typeof ResizeObserver === "undefined") return () => window.removeEventListener("resize", measure);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = host.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    let frameId = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(() => {
+        if (rendered.current) void loadPlotly().then((P) => P.Plots.resize(el));
+      });
+    });
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(frameId);
+      ro.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const el = host.current;
+    return () => {
+      rendered.current = false;
+      if (el) void loadPlotly().then((P) => P.purge(el));
+    };
+  }, []);
 
   const error = scene.isError
     ? `Could not show this pose: ${scene.error.message.replace(/^pose not solvable:\s*/, "")}. Move a slider back toward zero or press Reset pose.`
     : null;
 
   return (
-    <section aria-label="3D">
+    <section aria-label="3D" className="scene3d">
+      <div ref={top}>
       <div className="toolbar">
         <h2 className="view-title">3D</h2>
         <label className="field">
@@ -77,6 +194,13 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <button type="button" className="btn secondary" disabled={readOnly} onClick={() => setPose(ZERO_POSE)}>
           Reset pose
         </button>
+        <button type="button" className="btn secondary" onClick={resetView}>
+          Reset view
+        </button>
+        <label className="field">
+          <input type="checkbox" checked={ghostOn} onChange={(e) => setGhostOn(e.target.checked)} />
+          <span>Show reference ghost</span>
+        </label>
       </div>
 
       <div className="sliders">
@@ -106,15 +230,14 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         </p>
       )}
       {scene.isPending && !figure && <p className="muted">Loading the 3D view.</p>}
-      {figure && (
-        <PlotlyChart
-          build={build}
-          ariaLabel={`3D view of ${ds?.label ?? "the revision"}`}
-          filename={`scene_${ds?.label ?? "revision"}`}
-          height={600}
-          buttons={SCENE_BUTTONS}
-        />
-      )}
+      </div>
+      <div
+        ref={host}
+        className="scene3d-canvas"
+        role="img"
+        aria-label={`3D view of ${ds?.label ?? "the revision"}`}
+        style={{ height: `max(${MIN_CANVAS}px, calc(100dvh - ${canvasTop}px))` }}
+      />
     </section>
   );
 }

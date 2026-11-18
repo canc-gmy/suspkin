@@ -107,6 +107,21 @@ export function usePatchDataset() {
   });
 }
 
+/**
+ * Re-solve vehicle-backed revisions with `steps` points per sweep. Stays pending until the new
+ * tables have been fetched, so the UI can show "Solving" the whole time.
+ */
+export function useSetResolution() {
+  const src = useSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { ids: string[]; steps: number }) =>
+      Promise.all(a.ids.map((id) => src.patchDataset(id, { steps: a.steps }))),
+    onSuccess: () =>
+      Promise.all(["datasets", "table", "summary", "scene"].map((k) => qc.invalidateQueries({ queryKey: [k] }))),
+  });
+}
+
 export function useCloseDataset() {
   const src = useSource();
   const qc = useQueryClient();

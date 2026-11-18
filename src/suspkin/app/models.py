@@ -44,6 +44,11 @@ class DatasetOut(BaseModel):
     studies: list[str] = Field(description="Names of the tables this dataset has.")
     run_id: str | None = None
     params: dict[str, Any] = Field(default_factory=dict, description="Study parameters (SI).")
+    steps: int = Field(default=31, description="Points per sweep of the solved tables.")
+    resolution_fixed: bool = Field(
+        default=True,
+        description="True for bundles and runs: the stored resolution cannot be changed.",
+    )
 
 
 class OpenRequest(BaseModel):
@@ -57,6 +62,12 @@ class DatasetPatch(BaseModel):
 
     label: str | None = None
     color: int | None = Field(default=None, ge=0)
+    steps: int | None = Field(
+        default=None,
+        ge=3,
+        le=401,
+        description="Re-solve with this many points per sweep (vehicle files only).",
+    )
 
 
 class TableOut(BaseModel):

@@ -257,6 +257,18 @@ export interface components {
             params?: {
                 [key: string]: unknown;
             };
+            /**
+             * Steps
+             * @description Points per sweep of the solved tables.
+             * @default 31
+             */
+            steps: number;
+            /**
+             * Resolution Fixed
+             * @description True for bundles and runs: the stored resolution cannot be changed.
+             * @default true
+             */
+            resolution_fixed: boolean;
         };
         /**
          * DatasetPatch
@@ -267,6 +279,11 @@ export interface components {
             label?: string | null;
             /** Color */
             color?: number | null;
+            /**
+             * Steps
+             * @description Re-solve with this many points per sweep (vehicle files only).
+             */
+            steps?: number | null;
         };
         /**
          * ExportOut

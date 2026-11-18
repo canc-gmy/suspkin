@@ -1,6 +1,6 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import type { PlotlyHTMLElement } from "plotly.js-dist-min";
-import type { PlotlyObject } from "../theme/plotlyTemplate";
+import { useEffect, useRef } from "react";
+import { pointerToX, type PixelAxis } from "../lib/readout";
+import { cursorShape, readTokens, type PlotlyObject, type Tokens } from "../theme/plotlyTemplate";
 import type { Theme } from "../theme/revisions";
 import { useUi } from "../state/store";
 
@@ -9,10 +9,10 @@ export interface ChartFigure {
   layout: PlotlyObject;
 }
 
-export interface ChartHandle {
-  /** Show the unified hover of this chart at x (used to link sibling charts). */
-  hoverAt: (x: number) => void;
-  clearHover: () => void;
+/** Vertical cursor drawn on a chart (a layout shape): dashed while following, solid when pinned. */
+export interface ChartCursor {
+  x: number | null;
+  pinned: boolean;
 }
 
 interface Props {
@@ -23,11 +23,17 @@ interface Props {
   height?: number;
   /** Extra modebar buttons after the PNG download (default: reset axes). */
   buttons?: string[];
-  /** x value under the cursor, or null when the cursor leaves. */
-  onHoverX?: (x: number | null) => void;
+  /** Cursor line to draw; omit for charts that do not show one. */
+  cursor?: ChartCursor | null;
+  /** Data x under the pointer (null when it leaves the plot area). Set it to track the pointer. */
+  onPointerX?: (x: number | null) => void;
+  /** A click (not a drag) at data x. */
+  onPointerClick?: (x: number) => void;
 }
 
 const DEFAULT_BUTTONS = ["resetScale2d"];
+/** Pointer travel (px) between press and release above which a click counts as a drag (zoom). */
+const DRAG_PX = 4;
 
 type PlotlyModule = typeof import("plotly.js-dist-min");
 let plotlyPromise: Promise<PlotlyModule["default"]> | null = null;
@@ -38,44 +44,50 @@ function loadPlotly(): Promise<PlotlyModule["default"]> {
   return plotlyPromise;
 }
 
-function hoveredX(e: unknown): number | null {
-  const ev = e as { xvals?: unknown[]; points?: { x?: unknown }[] } | undefined;
-  const v = ev?.xvals?.[0] ?? ev?.points?.[0]?.x;
-  return typeof v === "number" ? v : null;
+interface FullLayoutHost extends HTMLElement {
+  _fullLayout?: { xaxis?: PixelAxis; yaxis?: PixelAxis };
+}
+
+/** Data x under a mouse event, read from the chart's current axes (so it follows zoom and resize). */
+function eventX(el: FullLayoutHost, e: MouseEvent): number | null {
+  const full = el._fullLayout;
+  if (!full?.xaxis || !full.yaxis) return null;
+  return pointerToX(e.clientX, e.clientY, el.getBoundingClientRect(), full.xaxis, full.yaxis);
 }
 
 /** A single Plotly chart rendered with `Plotly.react` (no wrapper library). */
-export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
-  { build, ariaLabel, filename, height = 320, buttons = DEFAULT_BUTTONS, onHoverX },
-  ref,
-) {
+export function PlotlyChart({
+  build,
+  ariaLabel,
+  filename,
+  height = 320,
+  buttons = DEFAULT_BUTTONS,
+  cursor,
+  onPointerX,
+  onPointerClick,
+}: Props) {
   const host = useRef<HTMLDivElement>(null);
   const theme = useUi((s) => s.theme);
-  const hoverCb = useRef(onHoverX);
   const buildRef = useRef(build);
+  const cursorRef = useRef(cursor);
+  const tokens = useRef<Tokens | null>(null);
+  const moveCb = useRef(onPointerX);
+  const clickCb = useRef(onPointerClick);
   const attached = useRef(false);
 
   useEffect(() => {
-    hoverCb.current = onHoverX;
     buildRef.current = build;
+    cursorRef.current = cursor;
+    moveCb.current = onPointerX;
+    clickCb.current = onPointerClick;
   });
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      hoverAt: (x) => {
-        const el = host.current;
-        if (!el || !attached.current) return;
-        void loadPlotly().then((P) => P.Fx.hover(el, { xval: x }, "x2y"));
-      },
-      clearHover: () => {
-        const el = host.current;
-        if (!el || !attached.current) return;
-        void loadPlotly().then((P) => P.Fx.unhover(el));
-      },
-    }),
-    [],
-  );
+  const applyCursor = (P: PlotlyModule["default"], el: HTMLElement) => {
+    const c = cursorRef.current;
+    const t = tokens.current;
+    if (!c || !t || !attached.current) return;
+    void P.relayout(el, { shapes: c.x === null ? [] : [cursorShape(t, c.x, c.pinned)] });
+  };
 
   useEffect(() => {
     const el = host.current;
@@ -84,6 +96,7 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
     void loadPlotly().then(async (P) => {
       if (cancelled) return;
       const fig = build(theme);
+      tokens.current = readTokens(theme);
       const pngButton = {
         name: "downloadPngLight",
         title: "Download PNG (light theme, 2x)",
@@ -104,21 +117,57 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
           }
         },
       };
-      const gd = await P.react(el, fig.data, fig.layout, {
+      await P.react(el, fig.data, fig.layout, {
         responsive: true,
         displaylogo: false,
         displayModeBar: "hover",
         modeBarButtons: [[pngButton, ...buttons]],
       });
-      if (cancelled || attached.current) return;
+      if (cancelled) return;
       attached.current = true;
-      (gd as PlotlyHTMLElement).on("plotly_hover", (e) => hoverCb.current?.(hoveredX(e)));
-      (gd as PlotlyHTMLElement).on("plotly_unhover", () => hoverCb.current?.(null));
+      applyCursor(P, el); // `react` replaces the layout, so the cursor shape is drawn again
     });
     return () => {
       cancelled = true;
     };
   }, [build, theme, filename, height, buttons]);
+
+  const cx = cursor?.x ?? null;
+  const pinned = cursor?.pinned ?? false;
+  useEffect(() => {
+    const el = host.current;
+    if (!el || !attached.current) return;
+    void loadPlotly().then((P) => applyCursor(P, el));
+  }, [cx, pinned]);
+
+  const tracksPointer = onPointerX !== undefined || onPointerClick !== undefined;
+  useEffect(() => {
+    const el = host.current;
+    if (!el || !tracksPointer) return;
+    let down: { x: number; y: number } | null = null;
+    const move = (e: MouseEvent) => moveCb.current?.(eventX(el, e));
+    const leave = () => moveCb.current?.(null);
+    const press = (e: MouseEvent) => {
+      down = { x: e.clientX, y: e.clientY };
+    };
+    const click = (e: MouseEvent) => {
+      const moved = down ? Math.hypot(e.clientX - down.x, e.clientY - down.y) : 0;
+      down = null;
+      if (moved > DRAG_PX) return;
+      const x = eventX(el, e);
+      if (x !== null) clickCb.current?.(x);
+    };
+    el.addEventListener("mousemove", move);
+    el.addEventListener("mouseleave", leave);
+    el.addEventListener("mousedown", press);
+    el.addEventListener("click", click);
+    return () => {
+      el.removeEventListener("mousemove", move);
+      el.removeEventListener("mouseleave", leave);
+      el.removeEventListener("mousedown", press);
+      el.removeEventListener("click", click);
+    };
+  }, [tracksPointer]);
 
   useEffect(() => {
     const el = host.current;
@@ -146,4 +195,4 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
   }, []);
 
   return <div ref={host} className="chart" role="img" aria-label={ariaLabel} style={{ height }} />;
-});
+}

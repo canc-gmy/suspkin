@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+import type { Tokens } from "./plotlyTemplate";
+import {
+  buildSceneFigure,
+  cameraForLayout,
+  cameraFromRelayout,
+  coordValues,
+  DEFAULT_CAMERA,
+  ghostTraces,
+  sceneBounds,
+  sceneFrame,
+} from "./scene3d";
+
+const TOKENS = {
+  sheet: "#fff",
+  sheetRaised: "#eee",
+  ink: "#111",
+  inkMuted: "#777",
+  grid: "#ccc",
+  gridMinor: "#ddd",
+  rule: "#bbb",
+  layoutBlue: "#00f",
+  danger: "#f00",
+  fontUi: "Barlow",
+  rev: {},
+} as Tokens;
+
+function f8(values: number[]): { dtype: string; bdata: string } {
+  const buf = new DataView(new ArrayBuffer(values.length * 8));
+  values.forEach((v, i) => buf.setFloat64(i * 8, v, true));
+  return { dtype: "f8", bdata: btoa(String.fromCharCode(...new Uint8Array(buf.buffer))) };
+}
+
+const FIGURE = {
+  data: [
+    { type: "scatter3d", mode: "lines", x: [0, 1, null, 2], y: [0, 0.5, null, 1], z: [0, 0.2, null, 0.4], line: { color: "#1f77b4", width: 3 }, name: "wishbones" },
+    { type: "mesh3d", x: f8([-1, 3]), y: f8([-2, 2]), z: f8([0, 0]) },
+    { type: "scatter3d", mode: "markers", x: [0.5], y: [0.5], z: [0.5], marker: { color: "#222222", size: 3 } },
+  ],
+  layout: { scene: { aspectmode: "data", camera: { eye: { x: 9, y: 9, z: 9 } } } },
+};
+
+describe("scene bounds and frame", () => {
+  it("decodes plotly.py binary arrays and skips nulls", () => {
+    expect(coordValues(f8([1.5, -2]))).toEqual([1.5, -2]);
+    expect(coordValues([1, null, 2])).toEqual([1, 2]);
+  });
+
+  it("takes the bounding box over every trace", () => {
+    expect(sceneBounds(FIGURE)).toEqual({ min: [-1, -2, 0], max: [3, 2, 0.5] });
+    expect(sceneBounds({ data: [] })).toBeNull();
+  });
+
+  it("adds a 10% margin per axis and derives the aspect from the ranges", () => {
+    const f = sceneFrame({ min: [-1, -2, 0], max: [3, 2, 0.5] });
+    expect(f.ranges[0]![0]).toBeCloseTo(-1.4);
+    expect(f.ranges[0]![1]).toBeCloseTo(3.4);
+    expect(f.ranges[2]![1]).toBeCloseTo(0.55);
+    expect(f.aspect.x).toBeCloseTo(1);
+    expect(f.aspect.y).toBeCloseTo(4.8 / 4.8);
+    expect(f.aspect.z).toBeCloseTo(0.6 / 4.8);
+  });
+
+  it("does not collapse a flat axis", () => {
+    const f = sceneFrame({ min: [0, 0, 1], max: [1, 1, 1] });
+    expect(f.ranges[2]![1]).toBeGreaterThan(f.ranges[2]![0]);
+    expect(f.aspect.z).toBeGreaterThan(0);
+  });
+});
+
+describe("reference ghost", () => {
+  it("keeps only line traces, thin, muted, translucent and inert", () => {
+    const g = ghostTraces(FIGURE.data, TOKENS);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({
+      mode: "lines",
+      line: { color: "#777", width: 1 },
+      opacity: 0.4,
+      showlegend: false,
+      hoverinfo: "skip",
+    });
+  });
+
+  it("is drawn behind the selected revision", () => {
+    const fig = buildSceneFigure({ figure: FIGURE, ghost: FIGURE, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA });
+    expect(fig.data).toHaveLength(1 + FIGURE.data.length);
+    expect(fig.data[0]).toMatchObject({ hoverinfo: "skip" });
+    expect(fig.data[1]).toMatchObject({ name: "wishbones" });
+  });
+});
+
+describe("camera preservation", () => {
+  const saved = { eye: { x: 1, y: 2, z: 3 } };
+
+  it("uses the saved camera, the default only at the start or on reset", () => {
+    expect(cameraForLayout({ reset: false, saved: null })).toEqual(DEFAULT_CAMERA);
+    expect(cameraForLayout({ reset: false, saved })).toBe(saved);
+    expect(cameraForLayout({ reset: true, saved })).toEqual(DEFAULT_CAMERA);
+  });
+
+  it("reads the camera from relayout events", () => {
+    expect(cameraFromRelayout({ "scene.camera": saved })).toBe(saved);
+    expect(cameraFromRelayout({ "scene.camera.eye": 1 })).toBeNull();
+    expect(cameraFromRelayout(undefined)).toBeNull();
+  });
+
+  it("ignores the server camera and uses constant uirevisions", () => {
+    const frame = sceneFrame(sceneBounds(FIGURE)!);
+    const a = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame, camera: DEFAULT_CAMERA });
+    const scene = a.layout["scene"] as Record<string, unknown>;
+    expect(scene["camera"]).toEqual(DEFAULT_CAMERA);
+    expect(scene["aspectmode"]).toBe("manual");
+    expect(scene["uirevision"]).toBe(a.layout["uirevision"]);
+    const b = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: { ...TOKENS, ink: "#eee" }, frame, camera: DEFAULT_CAMERA });
+    expect(b.layout["uirevision"]).toBe(a.layout["uirevision"]);
+    const withCam = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame, camera: saved });
+    expect((withCam.layout["scene"] as Record<string, unknown>)["camera"]).toBe(saved);
+  });
+});

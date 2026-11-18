@@ -612,6 +612,18 @@
             "type": "object",
             "title": "Params",
             "description": "Study parameters (SI)."
+          },
+          "steps": {
+            "type": "integer",
+            "title": "Steps",
+            "description": "Points per sweep of the solved tables.",
+            "default": 31
+          },
+          "resolution_fixed": {
+            "type": "boolean",
+            "title": "Resolution Fixed",
+            "description": "True for bundles and runs: the stored resolution cannot be changed.",
+            "default": true
           }
         },
         "type": "object",
@@ -650,6 +662,20 @@
               }
             ],
             "title": "Color"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 401.0,
+                "minimum": 3.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps",
+            "description": "Re-solve with this many points per sweep (vehicle files only)."
           }
         },
         "type": "object",

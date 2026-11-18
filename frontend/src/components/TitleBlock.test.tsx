@@ -16,6 +16,8 @@ const ds = (id: string, label: string, color: number): DatasetInfo => ({
   color,
   studies: ["front_corner"],
   params: {},
+  steps: 31,
+  resolution_fixed: false,
 });
 
 function mockSource(): DataSource {

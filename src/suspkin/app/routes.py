@@ -43,6 +43,8 @@ def _dataset_out(ds: Dataset) -> DatasetOut:
         studies=list(ds.tables),
         run_id=ds.run_id,
         params=ds.params,
+        steps=ds.steps,
+        resolution_fixed=ds.resolution_fixed,
     )
 
 
@@ -159,11 +161,17 @@ def make_router(manager: DatasetManager) -> APIRouter:
 
     @r.patch("/datasets/{dataset_id}", response_model=DatasetOut)
     def patch_dataset(dataset_id: str, patch: DatasetPatch) -> DatasetOut:
-        manager.get(dataset_id)
+        ds = manager.get(dataset_id)
+        if patch.steps is not None and ds.resolution_fixed:
+            raise HTTPException(
+                400, "the resolution of bundles and runs is stored; it cannot change"
+            )
         if patch.label is not None:
             manager.rename(dataset_id, patch.label)
         if patch.color is not None:
             manager.recolor(dataset_id, patch.color)
+        if patch.steps is not None:
+            manager.set_steps(dataset_id, patch.steps)
         return _dataset_out(manager.get(dataset_id))
 
     @r.delete("/datasets/{dataset_id}", status_code=204)

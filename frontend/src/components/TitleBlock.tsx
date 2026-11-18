@@ -12,7 +12,7 @@ interface Props {
 }
 
 /** Drawn line sample in the revision colour (solid = left / front). */
-function Swatch({ color }: { color: string }) {
+export function Swatch({ color }: { color: string }) {
   return (
     <svg className="swatch" width="28" height="10" viewBox="0 0 28 10" aria-hidden="true">
       <line x1="1" y1="5" x2="27" y2="5" stroke={color} strokeWidth="2.25" strokeLinecap="butt" />
@@ -94,6 +94,9 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
               <span className="design-label" title={d.source}>
                 {d.label}
               </span>
+              {d.resolution_fixed === true && typeof d.steps === "number" && (
+                <span className="design-meta">{`${d.steps} points, stored`}</span>
+              )}
               <button
                 type="button"
                 className="link-btn"

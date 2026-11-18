@@ -76,6 +76,13 @@ class Dataset:
     vehicle: Vehicle
     params: dict[str, Any] = field(default_factory=dict)
     run_id: str | None = None
+    #: Points per sweep of the solved tables.
+    steps: int = 31
+    #: True when the tables are stored (bundle) or tied to a run: the resolution cannot change.
+    resolution_fixed: bool = True
+    #: Bytes and path of the vehicle file a ``vehicle`` dataset was solved from (for re-solving).
+    vehicle_bytes: bytes | None = field(default=None, repr=False)
+    vehicle_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +101,12 @@ class _Solved:
     tables: dict[str, pd.DataFrame]
     summary: dict[str, Any]
     params: dict[str, Any]
+    steps: int = 31
+
+
+def _table_steps(tables: Mapping[str, pd.DataFrame], default: int) -> int:
+    """Points per sweep of stored tables: the length of the longest one."""
+    return max((len(t) for t in tables.values()), default=default) or default
 
 
 def clean_json(obj: Any) -> Any:
@@ -259,8 +272,17 @@ class DatasetManager:
         except OSError as exc:
             raise DatasetError(f"cannot read {self.rel(path)}: {exc}") from exc
 
-    def _solve(self, vehicle_path: Path, data: bytes, digest: str) -> _Solved:
-        key = (digest, tuple(sorted(self.study_params.items())))
+    @property
+    def default_steps(self) -> int:
+        """Points per sweep of newly opened vehicle files."""
+        return int(self.study_params.get("steps", 31))
+
+    def _solve(
+        self, vehicle_path: Path, data: bytes, digest: str, steps: int | None = None
+    ) -> _Solved:
+        n = self.default_steps if steps is None else steps
+        params = {**self.study_params, "steps": n}
+        key = (digest, tuple(sorted(params.items())))
         with self._lock:
             hit = self._cache.get(key)
         if hit is not None:
@@ -270,7 +292,7 @@ class DatasetManager:
         except VehicleConfigError as exc:
             raise DatasetError(f"{self.rel(vehicle_path)} is not a vehicle: {exc}") from exc
         try:
-            res = run_standard_studies(veh, **self.study_params)
+            res = run_standard_studies(veh, **params)
         except (KinematicsError, ValueError, ArithmeticError) as exc:
             raise DatasetError(f"cannot solve {self.rel(vehicle_path)}: {exc}") from exc
         solved = _Solved(
@@ -278,6 +300,7 @@ class DatasetManager:
             tables={k: derived_columns(k, v) for k, v in res.tables().items()},
             summary=clean_json(res.summary.to_dict()),
             params=clean_json(dict(res.params)),
+            steps=n,
         )
         with self._lock:
             self._cache[key] = solved
@@ -292,6 +315,7 @@ class DatasetManager:
         solved: _Solved,
         run_id: str | None = None,
         content: str = "",
+        vehicle_bytes: bytes | None = None,
     ) -> Dataset:
         did = _short(kind, str(path), content)
         with self._lock:
@@ -315,6 +339,10 @@ class DatasetManager:
                 vehicle=solved.vehicle,
                 params=solved.params,
                 run_id=run_id,
+                steps=solved.steps,
+                resolution_fixed=kind != "vehicle",
+                vehicle_bytes=vehicle_bytes if kind == "vehicle" else None,
+                vehicle_path=path if kind == "vehicle" else None,
             )
             self._datasets[did] = ds
             return ds
@@ -332,6 +360,7 @@ class DatasetManager:
             solved=solved,
             run_id=run_id,
             content=digest[:16],
+            vehicle_bytes=data,
         )
 
     def _load_bundle(self, p: Path) -> tuple[Path, Any, _Solved, str]:
@@ -348,6 +377,7 @@ class DatasetManager:
             tables={k: derived_columns(k, v) for k, v in b.tables.items()},
             summary=clean_json(b.summary),
             params=clean_json(dict(b.manifest.get("params") or {})),
+            steps=_table_steps(b.tables, self.default_steps),
         )
         return p, b, solved, _stat_sig(*files)
 
@@ -444,6 +474,22 @@ class DatasetManager:
         with self._lock:
             ds = self.get(dataset_id)
             ds.color = color
+            return ds
+
+    def set_steps(self, dataset_id: str, steps: int) -> Dataset:
+        """Re-solve a vehicle dataset with ``steps`` points per sweep (cached by file and steps)."""
+        ds = self.get(dataset_id)
+        if ds.resolution_fixed or ds.vehicle_bytes is None or ds.vehicle_path is None:
+            raise DatasetError(f"the resolution of {ds.label!r} is stored and cannot change")
+        if steps == ds.steps:
+            return ds
+        digest = hashlib.sha256(ds.vehicle_bytes).hexdigest()
+        solved = self._solve(ds.vehicle_path, ds.vehicle_bytes, digest, steps)  # outside the lock
+        with self._lock:
+            ds.tables = solved.tables
+            ds.summary = solved.summary
+            ds.params = solved.params
+            ds.steps = solved.steps
             return ds
 
     def close(self, dataset_id: str) -> None:

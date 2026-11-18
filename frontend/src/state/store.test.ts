@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useUi, visibleIds } from "./store";
 
 const s = () => useUi.getState();
@@ -74,5 +74,22 @@ describe("bindHash", () => {
     s().setTab("summary");
     expect(location.hash).toBe("#summary");
     off();
+  });
+});
+
+describe("show solved points", () => {
+  it("is stored for the session and survives unavailable storage", () => {
+    s().setShowPoints(true);
+    expect(s().showPoints).toBe(true);
+    expect(localStorage.getItem("suspkin.showPoints")).toBe("1");
+    s().setShowPoints(false);
+    expect(localStorage.getItem("suspkin.showPoints")).toBe("0");
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    s().setShowPoints(true);
+    expect(s().showPoints).toBe(true);
+    spy.mockRestore();
+    s().setShowPoints(false);
   });
 });

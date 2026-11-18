@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { ApiError } from "./api";
 import { useDatasets, useExportSnapshot, useFigures, useHealth, useSource } from "./api/hooks";
 import { OpenDialog } from "./components/OpenDialog";
+import { ResolutionControl } from "./components/ResolutionControl";
 import { SummaryTable } from "./components/SummaryTable";
 import { TitleBlock } from "./components/TitleBlock";
 import { groupLabel, groupsOf } from "./lib/panels";
@@ -116,6 +117,7 @@ export function App() {
             Open files
           </button>
         </span>
+        <ResolutionControl datasets={list} />
         <span title={readOnly ? "Read-only snapshot" : empty ? "Open a revision first" : undefined}>
           <button
             type="button"

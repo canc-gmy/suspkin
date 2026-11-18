@@ -184,6 +184,49 @@ def test_cache_hit(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 2
 
 
+def test_resolution_patch(client: TestClient, ws: Path) -> None:
+    (d,) = _open(client, "car.yaml")
+    assert d["steps"] == PARAMS["steps"] and d["resolution_fixed"] is False
+    n0 = len(client.get(f"{API}/datasets/{d['id']}/tables/heave").json()["columns"]["heave"])
+    assert n0 == PARAMS["steps"]
+    r = client.patch(f"{API}/datasets/{d['id']}", json={"steps": 9})
+    assert r.status_code == 200 and r.json()["steps"] == 9
+    n1 = len(client.get(f"{API}/datasets/{d['id']}/tables/heave").json()["columns"]["heave"])
+    assert n1 == 9
+    assert client.patch(f"{API}/datasets/{d['id']}", json={"steps": 2}).status_code == 422
+    # same dataset id after re-solving
+    assert [x["id"] for x in client.get(f"{API}/datasets").json()] == [d["id"]]
+
+
+def test_resolution_fixed_for_bundle_and_run(client: TestClient, ws: Path) -> None:
+    res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
+    save_bundle(res, ws / "b1", label="mybundle")
+    (b,) = _open(client, "b1")
+    assert b["resolution_fixed"] is True and b["steps"] == PARAMS["steps"]
+    assert client.patch(f"{API}/datasets/{b['id']}", json={"steps": 9}).status_code == 400
+    run = _make_run(ws)
+    for d in _open(client, run.name):
+        assert d["resolution_fixed"] is True
+        assert client.patch(f"{API}/datasets/{d['id']}", json={"steps": 9}).status_code == 400
+
+
+def test_resolution_cache_key_includes_steps(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    real = ds_mod.run_standard_studies
+
+    def counting(*a: Any, **k: Any) -> Any:
+        calls.append(k["steps"])
+        return real(*a, **k)
+
+    monkeypatch.setattr(ds_mod, "run_standard_studies", counting)
+    m = DatasetManager(ws, study_params=PARAMS)
+    (d,) = m.open("car.yaml")
+    m.set_steps(d.id, 7)
+    m.set_steps(d.id, PARAMS["steps"])  # back to the first resolution: cached
+    m.set_steps(d.id, 7)
+    assert calls == [PARAMS["steps"], 7]
+
+
 def test_bundle_and_report_folder(client: TestClient, ws: Path) -> None:
     res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
     save_bundle(res, ws / "b1", label="mybundle")

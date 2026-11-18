@@ -384,6 +384,142 @@ tr.fresh {
   flex: 1;
 }
 
+/* the toolbar and the readout strip stay in view while the panels scroll */
+.figure-toolbar {
+  position: sticky;
+  top: var(--topbar-h, 49px);
+  z-index: 4;
+  background: var(--sheet);
+  padding: var(--space-1) 0;
+  margin-bottom: 0;
+}
+
+.figure:focus-visible {
+  outline-offset: 4px;
+}
+
+.figure-sticky {
+  position: sticky;
+  top: calc(var(--topbar-h, 49px) + var(--toolbar-h, 0px));
+  z-index: 3;
+  background: var(--sheet);
+  padding-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ---- readout strip ---------------------------------------------------------------- */
+.readout-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding-bottom: 4px;
+}
+
+.readout-x {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+}
+
+input.readout-input {
+  width: 6.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+input.readout-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.readout-unit {
+  color: var(--ink-muted);
+}
+
+.readout-status {
+  margin-left: var(--space-1);
+  font-size: var(--text-12);
+}
+
+.readout-status.error {
+  margin: 0 0 0 var(--space-1);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--layout-blue);
+}
+
+.readout-scroll {
+  overflow: auto;
+  max-height: 30vh;
+}
+
+.readout-table {
+  border-collapse: collapse;
+  background: var(--sheet-raised);
+  white-space: nowrap;
+}
+
+.readout-table th,
+.readout-table td {
+  padding: 2px var(--space-1);
+  border-bottom: 1px solid var(--rule);
+  font-weight: var(--weight-body);
+}
+
+.readout-table thead th {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+  border-bottom: 2px solid var(--ink);
+}
+
+.readout-table .num {
+  text-align: right;
+  min-width: 9rem;
+}
+
+.readout-table .readout-rev {
+  position: sticky;
+  left: 0;
+  text-align: left;
+  background: var(--sheet-raised);
+  min-width: 3.5rem;
+}
+
+.readout-part + .readout-part {
+  margin-left: var(--space-2);
+}
+
+.pfx {
+  color: var(--ink-muted);
+  margin-right: 4px;
+}
+
+.resolution {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.resolution-note {
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+.design-meta {
+  flex: 1 1 100%;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
 .view-title {
   font-family: var(--font-title);
   font-size: var(--text-20);

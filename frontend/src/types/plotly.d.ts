@@ -17,6 +17,7 @@ declare module "plotly.js-dist-min" {
       layout?: Record<string, unknown>,
       config?: Record<string, unknown>,
     ): Promise<PlotlyHTMLElement>;
+    relayout(root: HTMLElement, update: Record<string, unknown>): Promise<PlotlyHTMLElement>;
     purge(root: HTMLElement): void;
     downloadImage(root: HTMLElement, opts: Record<string, unknown>): Promise<string>;
     Fx: {
