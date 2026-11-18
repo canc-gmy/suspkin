@@ -51,7 +51,7 @@ _KINDS: dict[str, tuple[float, str]] = {
     "N/mm": (1e-3, "N/mm"),
     "1/mm": (1e-3, "1/mm"),
     "pct": (1.0, "%"),
-    "ratio": (1.0, "-"),
+    "ratio": (1.0, ""),
     "raw": (1.0, ""),
 }
 _CORNER_IDS = ("FL", "FR", "RL", "RR")
@@ -62,6 +62,7 @@ class _Series:
     col: str
     label: str
     kind: str
+    side: str | None = None  # "left"/"right" or "front"/"rear" (informational, for the spec)
 
 
 @dataclass(frozen=True)
@@ -81,8 +82,8 @@ class _Item:
     xname: str
 
 
-def _s(col: str, label: str, kind: str) -> _Series:
-    return _Series(col, label, kind)
+def _s(col: str, label: str, kind: str, side: str | None = None) -> _Series:
+    return _Series(col, label, kind, side)
 
 
 def _check(datasets: Datasets, name: str, allow_empty: bool = False) -> None:
@@ -350,7 +351,10 @@ def _steering_frame(
 # ratio when a c_factor is known, else the steer gain.
 _STEERING_PANELS: tuple[tuple[_Panel, str, str, str], ...] = (
     (
-        _Panel("Steer angle", (_s("d_left", "left", "deg"), _s("d_right", "right", "deg"))),
+        _Panel(
+            "Steer angle",
+            (_s("d_left", "left", "deg", "left"), _s("d_right", "right", "deg", "right")),
+        ),
         "rack",
         "mm",
         "rack travel",
@@ -362,7 +366,7 @@ _STEERING_PANELS: tuple[tuple[_Panel, str, str, str], ...] = (
         "outer steer angle",
     ),
     (
-        _Panel("Toe", (_s("FL_toe", "left", "deg"), _s("FR_toe", "right", "deg"))),
+        _Panel("Toe", (_s("FL_toe", "left", "deg", "left"), _s("FR_toe", "right", "deg", "right"))),
         "rack",
         "mm",
         "rack travel",
@@ -423,17 +427,20 @@ _ROLL_PANELS = [
     _Panel("Steer to ground", _corners("steer_ground", "deg")),
     _Panel(
         "Roll-centre height",
-        (_s("rc_front_z", "front", "mm"), _s("rc_rear_z", "rear", "mm")),
+        (_s("rc_front_z", "front", "mm", "front"), _s("rc_rear_z", "rear", "mm", "rear")),
         ic=True,
     ),
     _Panel(
         "Roll-centre lateral position",
-        (_s("rc_front_y", "front", "mm"), _s("rc_rear_y", "rear", "mm")),
+        (_s("rc_front_y", "front", "mm", "front"), _s("rc_rear_y", "rear", "mm", "rear")),
         ic=True,
     ),
     _Panel(
         "ARB elastic coordinate",
-        (_s("arb_front_elastic", "front", "raw"), _s("arb_rear_elastic", "rear", "raw")),
+        (
+            _s("arb_front_elastic", "front", "raw", "front"),
+            _s("arb_rear_elastic", "rear", "raw", "rear"),
+        ),
         ylabel="[rad or m]",
     ),
 ]
@@ -442,7 +449,7 @@ _HEAVE_PANELS = (
     _Panel("Heave: corner travel", _corners("travel", "mm")),
     _Panel(
         "Heave: roll-centre height",
-        (_s("rc_front_z", "front", "mm"), _s("rc_rear_z", "rear", "mm")),
+        (_s("rc_front_z", "front", "mm", "front"), _s("rc_rear_z", "rear", "mm", "rear")),
         ic=True,
     ),
 )
@@ -450,13 +457,13 @@ _HEAVE_PANELS = (
 _PITCH_PANELS = (
     _Panel(
         "Pitch: axle travel",
-        (_s("FL_travel", "front (FL)", "mm"), _s("RL_travel", "rear (RL)", "mm")),
+        (_s("FL_travel", "front (FL)", "mm", "front"), _s("RL_travel", "rear (RL)", "mm", "rear")),
     ),
     _Panel(
         "Pitch: side-view swing angle",
         (
-            _s("FL_sv_swing_angle", "front (FL)", "deg"),
-            _s("RL_sv_swing_angle", "rear (RL)", "deg"),
+            _s("FL_sv_swing_angle", "front (FL)", "deg", "front"),
+            _s("RL_sv_swing_angle", "rear (RL)", "deg", "rear"),
         ),
         ic=True,
     ),

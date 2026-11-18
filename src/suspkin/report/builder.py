@@ -24,7 +24,7 @@ from suspkin.plotting.figures import (
     format_value,
     save_figure,
 )
-from suspkin.report.bundle import save_bundle
+from suspkin.report.bundle import json_safe, save_bundle
 from suspkin.report.studies import StudyResults
 
 Designs = Sequence[tuple[str, StudyResults]]
@@ -60,15 +60,6 @@ img{max-width:100%;height:auto}
 
 def _slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_") or "design"
-
-
-def _clean(obj: object) -> object:
-    """JSON-safe copy: nan/inf become null."""
-    if isinstance(obj, dict):
-        return {k: _clean(v) for k, v in obj.items()}
-    if isinstance(obj, float):
-        return obj if math.isfinite(obj) else None
-    return obj
 
 
 def _make_figures(designs: Designs) -> list[tuple[str, str, Figure]]:
@@ -179,8 +170,15 @@ def build_report(
         raise ValueError("results must contain at least one (label, StudyResults) pair")
     designs: Designs = list(results)
     labels = [lab for lab, _ in designs]
-    if len({_slug(x) for x in labels}) != len(labels):
-        raise ValueError("design labels must be unique")
+    by_slug: dict[str, list[str]] = {}
+    for lab in labels:
+        by_slug.setdefault(_slug(lab), []).append(lab)
+    clashes = {k: v for k, v in by_slug.items() if len(v) > 1}
+    if clashes:
+        detail = "; ".join(f"{', '.join(map(repr, v))} -> {k!r}" for k, v in clashes.items())
+        raise ValueError(
+            f"design labels must be unique as file names (data/ and bundles/): {detail}"
+        )
     out = Path(out_dir)
     data_dir, fig_dir = out / "data", out / "figures"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -189,10 +187,10 @@ def build_report(
     for lab, res in designs:
         for name, df in res.tables().items():
             df.to_csv(data_dir / f"{_slug(lab)}_{name}.csv", index=False)
-    summary = {lab: _clean(res.summary.to_dict()) for lab, res in designs}
+    summary = {lab: json_safe(res.summary.to_dict()) for lab, res in designs}
     (out / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     for lab, res in designs:
-        save_bundle(res, out / "bundles" / _slug(lab), label=lab)
+        save_bundle(res, out / "bundles" / _slug(lab), label=lab, overwrite=True)
 
     sections: list[_Section] = []
     for stem, title, fig in _make_figures(designs):

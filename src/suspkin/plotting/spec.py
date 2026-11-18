@@ -23,7 +23,34 @@ Structure decisions
   the static pose), ``outer``, ``ackermann`` [%], ``ratio`` (steering ratio, needs the
   ``steer_c_factor`` column).
 * ``SummaryRow`` mirrors ``_SUMMARY_ROWS`` (path into the summary dict, display factor,
-  unit and format; ``dim`` from the registry for information).
+  unit and ``decimals``; ``dim`` from the registry for information). A renderer shows
+  ``value * factor`` with ``decimals`` fixed decimals; a null / non-finite value shows
+  as ``"-"``; a value that rounds to zero is shown without a minus sign ("-0.0" -> "0.0").
+  A row whose path is absent from the summary is left out.
+* Units: the dimensionless unit is ``""`` everywhere in :func:`spec_json` (the registry
+  and figures.py may spell it ``"-"``; it is normalised in one place, ``_norm_unit``).
+
+Renderer rules (what ``plotting.figures`` does, to be matched by any other renderer)
+-----------------------------------------------------------------------------------
+* Dataset ``i`` (overlay order) is drawn in ``palette[i % len(palette)]``; ``spec_json``
+  carries the palette as the hex list ``palette``.
+* Series ``k`` of a panel gets the line style ``linestyles[k % len(linestyles)]``
+  (``side_linestyle(k)`` in ``plotting.style``; ``spec_json["linestyles"]``): solid =
+  left / front, dashed = right / rear, then dotted and dash-dot.
+* A panel legend (series labels in neutral grey with their line style) is shown only
+  when the panel has more than one drawn series; a dataset legend (colour per dataset
+  label) only when more than one dataset is overlaid.
+* Panel selection per figure, given the columns of each dataset (after
+  :func:`derived_columns`): a series is drawn when its column exists in the dataset; a
+  panel is drawn when at least one of its series is drawn, its x column (``Panel.x`` or
+  the figure x) exists, and every ``Panel.requires`` column exists in at least one
+  dataset. A panel with ``alternative_to`` set is an alternative of the panel with that
+  id: it is drawn only when that panel is not drawn (the first panel of an alternative
+  group whose requirements hold wins). The steering figure ends with ``steering_ratio``
+  (requires ``ratio``, i.e. a ``steer_c_factor`` column in the rack table), else
+  ``steer_gain`` (requires ``gain``).
+* Non-finite values are gaps (nan); a panel with ``ic=True`` notes the number of dropped
+  points as "IC at infinity".
 """
 
 from __future__ import annotations
@@ -40,6 +67,7 @@ from suspkin.optimize.metric_registry import (
     vehicle_metric_dim,
 )
 from suspkin.plotting import figures as _f
+from suspkin.plotting.style import PALETTE, SIDE_LINESTYLES
 from suspkin.units import Dim, display_factor, display_unit
 
 __all__ = [
@@ -98,7 +126,12 @@ class Series:
 
 @dataclass(frozen=True)
 class Panel:
-    """One axes: series sharing a y axis. ``x`` overrides the figure's x axis."""
+    """One axes: series sharing a y axis. ``x`` overrides the figure's x axis.
+
+    ``requires``: columns (after :func:`derived_columns`) that must exist, in at least one
+    dataset, for the panel to be drawn. ``alternative_to``: id of the panel this one
+    replaces when that panel is not drawn (see the module docstring).
+    """
 
     id: str
     title: str
@@ -106,6 +139,8 @@ class Panel:
     y_label: str | None = None  # explicit y label, default "[unit of the first series]"
     ic: bool = False  # non-finite points are instant centres at infinity
     x: Axis | None = None
+    requires: tuple[str, ...] = ()
+    alternative_to: str | None = None
 
     @property
     def y_dim(self) -> Dim:
@@ -135,7 +170,15 @@ class SummaryRow:
     dim: Dim | None
     factor: float
     unit: str
-    fmt: str
+    fmt: str  # figures.py format string ("{:.2f}"); the spec exposes ``decimals``
+
+    @property
+    def decimals(self) -> int:
+        """Number of decimals of ``fmt`` (``"{:.2f}"`` -> 2)."""
+        m = re.fullmatch(r"\{:\.(\d+)f\}", self.fmt)
+        if m is None:
+            raise ValueError(f"unsupported summary format {self.fmt!r}")
+        return int(m.group(1))
 
 
 # ------------------------------------------------------------------------------- builders
@@ -145,8 +188,18 @@ def _dim(study: str, column: str) -> Dim:
     return corner_metric_dim(column) if study.endswith("_corner") else vehicle_metric_dim(column)
 
 
+def _norm_unit(unit: str) -> str:
+    """Dimensionless is ``""`` (figures.py / the registry may spell it ``"-"``)."""
+    return "" if unit == "-" else unit
+
+
 def _unit_of(dim: Dim) -> tuple[float, str]:
-    return display_factor(dim), display_unit(dim)
+    return display_factor(dim), _norm_unit(display_unit(dim))
+
+
+def _kind_unit(kind: str) -> tuple[float, str]:
+    fac, unit = _f._KINDS[kind]
+    return fac, _norm_unit(unit)
 
 
 def _same_factor(a: float, b: float) -> bool:
@@ -155,12 +208,15 @@ def _same_factor(a: float, b: float) -> bool:
 
 def _series(study: str, s: _f._Series) -> Series:
     dim = _dim(study, s.col)
-    display = None if _same_factor(display_factor(dim), _f._KINDS[s.kind][0]) else s.kind
+    fac, unit = _unit_of(dim)
+    kfac, kunit = _kind_unit(s.kind)
+    display = None if _same_factor(fac, kfac) and unit == kunit else s.kind
     m = re.match(r"^(FL|FR|RL|RR)_", s.col)
     side: Side | None = None
-    for cand in _SIDES:
-        if s.label.startswith(cand):
-            side = cand
+    if s.side is not None:
+        side = next((c for c in _SIDES if c == s.side), None)
+        if side is None:
+            raise ValueError(f"series {s.col!r}: unknown side {s.side!r}")
     return Series(s.col, s.label, dim, side, m.group(1) if m else None, display)
 
 
@@ -175,7 +231,15 @@ def _axis(study: str, column: str, kind: str, name: str) -> Axis:
     return ax
 
 
-def _panel(study: str, p: _f._Panel, fig_x: Axis, x: Axis | None = None) -> Panel:
+def _panel(
+    study: str,
+    p: _f._Panel,
+    fig_x: Axis,
+    x: Axis | None = None,
+    *,
+    requires: tuple[str, ...] = (),
+    alternative_to: str | None = None,
+) -> Panel:
     return Panel(
         id=_slug(p.title),
         title=p.title,
@@ -183,6 +247,8 @@ def _panel(study: str, p: _f._Panel, fig_x: Axis, x: Axis | None = None) -> Pane
         y_label=p.ylabel,
         ic=p.ic,
         x=x if x is not None and x != fig_x else None,
+        requires=requires,
+        alternative_to=alternative_to,
     )
 
 
@@ -205,12 +271,21 @@ def _build() -> tuple[FigureSpec, ...]:
                     study, x, panels, ncols,
                 )
             )  # fmt: skip
-    # steering (rack study; ratio panel needs the c_factor, present in the rack table)
+    # steering (rack study): the last panel is the steering ratio when the table has
+    # ``steer_c_factor`` (derived column ``ratio``), else the steer gain (``gain``)
     xr = _axis("rack", "rack", "mm", "rack travel")
-    steer = (*_f._STEERING_PANELS, _f._STEER_RATIO)
+    ratio_id = _slug(_f._STEER_RATIO[0].title)
     panels = tuple(
-        _panel("rack", p, xr, _axis("rack", col, kind, name)) for p, col, kind, name in steer
+        _panel("rack", p, xr, _axis("rack", col, kind, name))
+        for p, col, kind, name in _f._STEERING_PANELS
     )
+    for (p, col, kind, name), req, alt in (
+        (_f._STEER_RATIO, ("ratio",), None),
+        (_f._STEER_GAIN, ("gain",), ratio_id),
+    ):
+        panels += (
+            _panel("rack", p, xr, _axis("rack", col, kind, name), requires=req, alternative_to=alt),
+        )
     out.append(FigureSpec("steering", "steering", "Steering", "rack", xr, panels, 2))
     xroll = _axis("roll", "roll", "deg", "body roll")
     out.append(
@@ -240,6 +315,8 @@ def _summary_rows() -> tuple[SummaryRow, ...]:
     rows = []
     for label, path, factor, unit, fmt in _f._SUMMARY_ROWS:
         rows.append(SummaryRow(label, path, summary_metric_dim(".".join(path)), factor, unit, fmt))
+    for r in rows:
+        _ = r.decimals  # validate the format strings at import time
     return tuple(rows)
 
 
@@ -272,7 +349,7 @@ def _axis_json(ax: Axis) -> dict[str, Any]:
 
 def _series_json(s: Series) -> dict[str, Any]:
     if s.display is not None:
-        fac, unit = _f._KINDS[s.display]
+        fac, unit = _kind_unit(s.display)
     else:
         fac, unit = _unit_of(s.dim)
     return {
@@ -297,6 +374,8 @@ def _panel_json(p: Panel) -> dict[str, Any]:
         "y_label": y_label,
         "y_dim": p.y_dim,
         "ic": p.ic,
+        "requires": list(p.requires),
+        "alternative_to": p.alternative_to,
         "x": None if p.x is None else _axis_json(p.x),
         "series": [_series_json(s) for s in p.series],
     }
@@ -306,6 +385,8 @@ def spec_json() -> dict[str, Any]:
     """The whole spec as a JSON-serialisable dict (display factor/unit resolved)."""
     return {
         "schema": SPEC_SCHEMA,
+        "palette": list(PALETTE),
+        "linestyles": list(SIDE_LINESTYLES),
         "figures": [
             {
                 "id": f.id,
@@ -324,8 +405,8 @@ def spec_json() -> dict[str, Any]:
                 "path": list(r.path),
                 "dim": r.dim,
                 "factor": r.factor,
-                "unit": r.unit,
-                "fmt": r.fmt,
+                "unit": _norm_unit(r.unit),
+                "decimals": r.decimals,
             }
             for r in SUMMARY_ROWS
         ],
