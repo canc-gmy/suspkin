@@ -9,6 +9,8 @@ import suspkin as sk
 vehicle = sk.load_vehicle("configs/vehicles/fs_reference.yaml")
 ```
 
+`suspkin.__version__` holds the installed package version (a string such as `"1.0.0"`).
+
 The reference below documents each name at its defining module.
 
 ## Geometry

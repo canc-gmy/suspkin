@@ -180,6 +180,16 @@ def test_study_model_direct() -> None:
     assert s.constraints == ()
 
 
+def test_unsupported_study_schema(tmp_path: Path) -> None:
+    def bump(d: dict[str, Any]) -> None:
+        d["schema"] = 2
+
+    with pytest.raises(
+        StudyConfigError, match="unsupported study schema 2; this suspkin supports 1"
+    ):
+        load_study(_write(tmp_path, bump))
+
+
 def test_registry_covers_real_columns() -> None:
     v = fixture_vehicle()
     c = build_corners(v)["FL"]

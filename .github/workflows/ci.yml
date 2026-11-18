@@ -27,7 +27,18 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy src
-      - run: uv run pytest -q --cov=suspkin --cov-report=term --cov-report=xml
+      - run: uv run pytest -q -m "not examples" --cov=suspkin --cov-report=term --cov-report=xml
+
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --all-extras
+      - run: uv run pytest -q -m examples
 
   docs:
     runs-on: ubuntu-latest

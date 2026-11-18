@@ -522,8 +522,8 @@ The package name `suspkin` is a placeholder.
 | v0.5.0 | Vehicle level | Heave / roll / pitch / combined; anti-features, roll, steering (§5.4, 5.7, 5.8) |
 | v0.6.0 | Plots and report | Full figure set, 3D viewer, report, data export |
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
-| **v0.8.0** (current) | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
-| v1.0.0 | Stable kinematics | Docs complete, regression suite frozen |
+| v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
+| **v1.0.0** (current, done) | Stable kinematics | Docs complete, regression suite frozen |
 
 **Future phases (not planned in detail yet)**:
 
@@ -564,6 +564,13 @@ The package name `suspkin` is a placeholder.
 | O19 | Failures | An unsolved or infeasible design gets g = G_FAIL on every constraint, and every objective gets the finite penalty F_FAIL = 1e3. |
 | O20 | Reproducibility | `seed` in the YAML. The run folder stores study.yaml, vehicle.yaml and meta.json (package version, git hash, seed, method, times, evaluation count). |
 | O21 | Outputs | Optimized vehicle YAML (best, or every Pareto point), history.csv, plots (convergence, Pareto front, parallel coordinates, constraint margins) and a before/after report through `build_report`. |
+| V1 | Regression freeze | Golden CSV snapshots in `tests/regression/golden/` (corner bump and rack sweeps of all corner metrics, vehicle heave/roll/pitch/rack sweeps, the vehicle summary as JSON, and the reference study's evaluation frame). They are compared with tight tolerances and regenerated only with `pytest --update-golden`. The existing hand-picked values stay. |
+| V2 | Validation data | No external validation data for now. Validation rests on the analytic tests plus the golden snapshots. |
+| V3 | Docs site | A MkDocs Material site with mkdocstrings, deployed to GitHub Pages: tutorial, how-to pages, YAML reference, API reference, and the existing Markdown docs. |
+| V4 | Stable surface | Stable surface: vehicle YAML, study YAML, CLI and `suspkin.__all__`. `suspkin.optimize` is experimental. The vehicle YAML gets `schema: 1`. Deprecation policy: one minor release of `DeprecationWarning` before removal. |
+| V5 | CI | Ubuntu and windows × Python 3.11/3.12/3.13, a coverage floor, a docs build (`mkdocs build --strict`) and the examples run. |
+| V6 | Release | On a `v*` tag, a GitHub Action builds the sdist and wheel and attaches them to a GitHub Release. PyPI comes later. MIT licence (already present). |
+| V7 | Examples | Plain `.py` scripts, run in CI and shown in the docs. |
 | O7 | Package name | `suspkin` |
 | D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |

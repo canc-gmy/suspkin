@@ -7,10 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-18
+
 ### Added
 
 - One-command setup scripts `scripts/setup.ps1` and `scripts/setup.sh` (Python check, uv bootstrap,
   `uv sync --all-extras`, pre-commit hooks, smoke check; `-Minimal` and `-Test` flags).
+- Golden regression snapshots (`tests/regression/golden`) of the reference car, rewritten with
+  `pytest --update-golden`; the flag is refused on CI.
+- Vehicle YAML `schema: 1` (unsupported schemas are rejected with a clear message).
+- Stable public API `suspkin.__all__` (lazy imports), `suspkin.__version__`, the deprecation
+  policy and the `suspkin.deprecated` helper (see `docs/guides/stability.md`).
+- Examples in `examples/`, run by the `examples` test marker.
+- MkDocs Material site with API reference and guides, deployed to GitHub Pages.
+- CI: OS matrix (Ubuntu, Windows) x Python 3.11-3.13, coverage floor, docs build job and a
+  separate examples job.
+- Release workflow: tag checks, tests, `uv build` and a GitHub release with notes from this
+  file.
+- `.gitattributes` enforcing LF line endings.
+
+### Changed
+
+- `docs/ARCHITECTURE.md` refreshed for 1.0 (testing, tooling, stable surface).
+- `suspkin optimize` and `suspkin.optimize` are marked experimental; their API may change in
+  minor releases.
+- Study schema error message: `unsupported study schema N; this suspkin supports 1`.
 
 ## [0.8.0] - 2026-11-18
 

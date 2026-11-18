@@ -42,6 +42,9 @@ Each entry: `point: <axle>.<hardpoint>`, `domain` (exactly one of the below), op
 | `box` | `min`, `max` corner points. |
 | `offset` | Per-axis ranges around the baseline point, e.g. `{x: [-10 mm, 10 mm], z: [-8 mm, 8 mm]}`. |
 
+`sphere` and `cylinder` regions are constraint-only (`inside` / `outside`); they are not
+valid variable domains.
+
 ## `sweeps`
 
 A mapping of name to definition.
@@ -65,7 +68,7 @@ A list. Common keys: `name`, `type`, optional `min`, `max` (where the type has l
 | `summary` | A static vehicle-summary metric is within limits. |
 | `inside`, `outside` | A hardpoint (optionally over a sweep, `over`) stays inside or outside a `region` (`box`, `hexahedron`, `sphere`, `cylinder`). |
 | `distance` | Distance between points `a` and `b` is within limits. |
-| `relation` | Linear relation between coordinates: `lhs op rhs` with `op` in `<=`, `>=`, `==` and an `offset`. |
+| `relation` | Linear relation between coordinates: `lhs op rhs` with `op` in `<=`, `>=` and an `offset`. |
 | `joint_angle` | Misalignment angle of a spherical joint over a sweep stays within limits. |
 
 Semantics of each type are given in [Design plan, section 7.4](../DESIGN_PLAN.md).

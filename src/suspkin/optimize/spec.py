@@ -977,7 +977,15 @@ class Study(_Frozen):
 
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
-    schema_version: Literal[1] = Field(alias="schema")
+    schema_version: int = Field(alias="schema")
+
+    @field_validator("schema_version")
+    @classmethod
+    def _check_schema(cls, v: int) -> int:
+        if v != 1:
+            raise ValueError(f"unsupported study schema {v}; this suspkin supports 1")
+        return v
+
     vehicle: str
     variables: tuple[Variable, ...] = ()
     sweeps: dict[str, Sweep] = Field(default_factory=dict)

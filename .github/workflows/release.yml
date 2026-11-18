@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
@@ -25,6 +27,13 @@ jobs:
           if tag != f"v{version}":
               sys.exit(f"Tag {tag} does not match pyproject version v{version}")
           PY
+      - name: Verify the tagged commit is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "Tagged commit $GITHUB_SHA is not contained in origin/main"; exit 1; }
+      - run: uv sync --all-extras
+      - run: uv run pytest -q -m "not examples"
       - run: uv build
       - name: Extract release notes from CHANGELOG
         run: |
@@ -42,4 +51,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: dist/*

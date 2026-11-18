@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
+
+from suspkin.metrics.table import GRADIENTS
 
 GOLDEN = Path(__file__).resolve().parent / "golden"
 HINT = "run `python -m uv run pytest tests/regression --update-golden` to create it"
@@ -19,8 +22,49 @@ ATOL = 1e-9
 ATOL_GRADIENT = 1e-8
 
 
+# Finite-difference gradient columns added by ``add_gradients`` (plus the actuation
+# derivatives) and the polynomial-slope keys of the vehicle summary.
+_TABLE_GRADIENTS = {name for cols in GRADIENTS.values() for name in cols.values()} | {
+    "mr_spring",
+    "mr_progression",
+    "wheel_load_spring",
+    "wheel_rate_linear",
+    "wheel_rate",
+    "ride_rate",
+}
+_SUMMARY_GRADIENTS = {
+    "roll_camber",
+    "roll_steer",
+    "rc_migration",
+    "rc_height_curvature",
+}
+_GRADIENT_NAMES = _TABLE_GRADIENTS | _SUMMARY_GRADIENTS
+
+
 def _atol(col: str) -> float:
-    return ATOL_GRADIENT if col.startswith("d_") or "gradient" in col else ATOL
+    """Loose atol for gradient columns (also ``FL_``-prefixed / dotted summary keys)."""
+    base = col.rsplit(".", 1)[-1]
+    if base in _GRADIENT_NAMES:
+        return ATOL_GRADIENT
+    return ATOL_GRADIENT if any(base.endswith(f"_{g}") for g in _GRADIENT_NAMES) else ATOL
+
+
+def refuse_in_ci() -> None:
+    """``--update-golden`` must never rewrite snapshots on CI."""
+    if os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"):
+        pytest.fail(
+            "--update-golden is refused when CI / GITHUB_ACTIONS is set: "
+            "regenerate snapshots locally and commit them",
+            pytrace=False,
+        )
+
+
+def _jsonable(v: Any) -> Any:
+    if isinstance(v, np.generic):
+        v = v.item()
+    if isinstance(v, float) and v != v:
+        return None
+    return v
 
 
 def write_frame(name: str, df: pd.DataFrame) -> None:
@@ -31,9 +75,12 @@ def write_frame(name: str, df: pd.DataFrame) -> None:
 def check_frames(frames: dict[str, pd.DataFrame], update: bool) -> None:
     """Write all snapshots (and skip) when ``update``, else compare each one."""
     if update:
+        refuse_in_ci()
         for name, df in frames.items():
             write_frame(name, df)
-        pytest.skip(f"golden snapshots written: {', '.join(frames)}")
+        written = ", ".join(f"{GOLDEN.name}/{n}.csv" for n in frames)
+        print(f"golden snapshots written: {written}")
+        pytest.skip(f"golden snapshots written: {written}")
     for name, df in frames.items():
         _compare_frame(name, df)
 
@@ -78,13 +125,15 @@ def flatten(obj: Any, prefix: str = "") -> dict[str, Any]:
 
 def check_json(name: str, data: dict[str, Any], update: bool) -> None:
     path = GOLDEN / f"{name}.json"
-    clean = {k: (None if isinstance(v, float) and np.isnan(v) else v) for k, v in data.items()}
+    clean = {k: _jsonable(v) for k, v in data.items()}
     if update:
+        refuse_in_ci()
         GOLDEN.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(clean, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
         )
-        pytest.skip(f"golden snapshot written: {path.name}")
+        print(f"golden snapshot written: {GOLDEN.name}/{path.name}")
+        pytest.skip(f"golden snapshot written: {GOLDEN.name}/{path.name}")
     if not path.exists():
         pytest.fail(f"missing golden file {path.name}: {HINT}")
     gold = json.loads(path.read_text(encoding="utf-8"))

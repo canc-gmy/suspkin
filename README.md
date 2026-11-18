@@ -14,6 +14,9 @@ checks of key parts, and a neural-network surrogate for fast design sweeps.
 Geometry optimization (v0.8) is available: multi-objective and weighted-sum studies on the
 constraint specification.
 
+Stability: 1.0 freezes the vehicle and study YAML (`schema: 1`), the CLI and `suspkin.__all__`
+([details](docs/guides/stability.md)); `suspkin.optimize` stays experimental.
+
 ## Conventions
 
 - ISO 8855 frame: x forward, y left, z up. Origin on the ground, mid front axle.

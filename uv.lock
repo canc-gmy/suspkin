@@ -2825,7 +2825,7 @@ wheels = [
 
 [[package]]
 name = "suspkin"
-version = "0.8.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },
@@ -2889,7 +2889,7 @@ dev = [
     { name = "types-pyyaml" },
 ]
 docs = [
-    { name = "mkdocs-material", specifier = ">=9.5" },
+    { name = "mkdocs-material", specifier = ">=9.5,<10" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26" },
 ]
 

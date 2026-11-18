@@ -1,6 +1,6 @@
 # suspkin architecture and mathematics
 
-> Version described: **suspkin 0.8.0** ([pyproject.toml](../pyproject.toml), [CHANGELOG.md](../CHANGELOG.md)).
+> Version described: **suspkin 1.0.0** ([pyproject.toml](../pyproject.toml), [CHANGELOG.md](../CHANGELOG.md)).
 > Companion documents: [DESIGN_PLAN.md](DESIGN_PLAN.md) (design intent and decisions log), [CLAUDE.md](../CLAUDE.md) (project rules), [README.md](../README.md) (usage).
 >
 > Every formula, default and sign convention below was taken from the code. Citations such as
@@ -51,6 +51,8 @@ What it is **not** (yet): a force solver, FEM of members, a neural-network surro
 elasto-kinematic (K&C) model ([DESIGN_PLAN.md sections 1 and 11](DESIGN_PLAN.md)). The optimizer
 (objectives, drivers, `suspkin optimize`) was added in v0.8.0, see [section 14](#14-optimization-v07v08).
 The `opt` extra (`pymoo`) is used by the NSGA-II driver ([pyproject.toml](../pyproject.toml)).
+
+**Stable surface (1.0).** The vehicle YAML (`schema: 1`), the study YAML (`schema: 1`), the CLI and the names in `suspkin.__all__` follow SemVer; `suspkin.optimize` is experimental. Details and the deprecation policy are in [stability.md](guides/stability.md).
 
 ### 1.2 Design principles ([CLAUDE.md](../CLAUDE.md))
 
@@ -266,7 +268,7 @@ veichle-dynamics/
 │   ├── ARCHITECTURE.md            this document
 │   └── images/fs_reference.png    static 3D render used by the README
 ├── src/suspkin/
-│   ├── __init__.py                __version__ = "0.8.0"
+│   ├── __init__.py                __version__ = "1.0.0"
 │   ├── units.py                   display converters; parse_quantity, format_quantity, dimension table (study YAML)
 │   ├── cli.py                     typer CLI (10 commands)
 │   ├── geom_math/                 pure geometry helpers
@@ -332,7 +334,7 @@ abbreviated to the parameters that matter.
 
 #### 3.2.1 `suspkin/__init__.py` and `units.py`
 
-* [\_\_init\_\_.py:3](../src/suspkin/__init__.py#L3): `__version__ = "0.8.0"`; a smoke test asserts it
+* [\_\_init\_\_.py:3](../src/suspkin/__init__.py#L3): `__version__ = "1.0.0"`; a smoke test asserts it
   equals `pyproject.toml`'s version.
 * [units.py:9-26](../src/suspkin/units.py#L9): `m_to_mm`, `mm_to_m`, `rad_to_deg`, `deg_to_rad` (thin `numpy` wrappers
   accepting scalars or arrays). Used by the CLI display layer ([cli.py:236](../src/suspkin/cli.py#L236)).
@@ -1465,7 +1467,7 @@ Entry point `suspkin = suspkin.cli:app` (typer; `no_args_is_help=True`) ([cli.py
 
 | Command | Purpose |
 |---|---|
-| `version` | print `suspkin 0.8.0` |
+| `version` | print `suspkin 1.0.0` |
 | `show` | 3D geometry, static or at a solved body pose |
 | `animate` | animate a body-pose sweep (GIF/MP4) |
 | `sweep` | single-corner sweep over travel or rack to CSV |
@@ -1555,7 +1557,7 @@ arm end stays on its circle, left/right symmetry.
 
 ### 11.6 Regression values (reference car)
 
-The regression tests assert ranges, not golden CSVs (see [15](#15-known-gaps-discrepancies-limitations)):
+The hand-picked regression tests assert ranges and signs; the stored snapshots are described in [11.8](#118-golden-snapshots):
 
 | Check | Bound |
 |---|---|
@@ -1578,6 +1580,12 @@ python -m uv run pytest -q                 # all tests (CI runs `uv run pytest -
 python -m uv run pytest tests/property -q  # property tests only
 python -m uv run mypy src && python -m uv run ruff check && python -m uv run ruff format --check
 ```
+
+### 11.8 Golden snapshots
+
+`tests/regression/golden/` holds CSV / JSON snapshots of the reference car: the four corner bump sweeps, the FL rack sweep, the vehicle heave / roll / pitch / rack sweeps, the vehicle summary (JSON) and the reference study evaluation frames. `tests/regression/test_golden.py` compares them with `rtol = 1e-6` and `atol = 1e-9`; finite-difference gradient columns (`camber_gain`, `bump_steer`, `FL_camber_gain`, ...) use `atol = 1e-8` because their near-zero values carry platform round-off noise. The helpers are in `tests/regression/_golden.py`.
+
+Snapshots are rewritten only on purpose with `python -m uv run pytest tests/regression --update-golden`; the run prints the files it wrote. The flag is **refused** when the `CI` or `GITHUB_ACTIONS` environment variable is set, so a CI run can never overwrite the baseline. Review the diff of every regenerated file and say why it changed in the commit and in the CHANGELOG.
 
 ---
 
@@ -1602,7 +1610,13 @@ python -m uv run mypy src && python -m uv run ruff check && python -m uv run ruf
 **Pre-commit** ([.pre-commit-config.yaml](../.pre-commit-config.yaml)): local hooks `ruff check --fix`, `ruff format`, `mypy src` (`pass_filenames: false`) through `python -m uv run`; plus `pre-commit-hooks` v5.0.0: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `mixed-line-ending --fix=lf`.
 Install with `uv run pre-commit install` (README). Tests are **not** part of pre-commit (the design plan says they should be; see [15](#15-known-gaps-discrepancies-limitations)).
 
-**CI** ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): on push and pull request to `main`; `ubuntu-latest`; matrix Python **3.11, 3.12, 3.13**; steps `actions/checkout@v4`, `astral-sh/setup-uv@v5` (with the matrix Python), `uv sync --all-extras`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest -q`.
+**CI** ([.github/workflows/ci.yml](../.github/workflows/ci.yml)): on push and pull request to `main`; matrix **ubuntu-latest, windows-latest** x Python **3.11, 3.12, 3.13**; steps `actions/checkout@v4`, `astral-sh/setup-uv@v5` (with the matrix Python), `uv sync --all-extras`, `uv run ruff check`, `uv run ruff format --check`, `uv run mypy src`, `uv run pytest -q -m "not examples" --cov=suspkin` (coverage floor `fail_under` in [pyproject.toml](../pyproject.toml)). Two more jobs: `docs` (`mkdocs build --strict`) and `examples` (ubuntu, Python 3.12, `pytest -m examples`).
+
+### 12.2.1 Docs site, CI jobs and release
+
+* **Docs site**: MkDocs Material with mkdocstrings ([mkdocs.yml](../mkdocs.yml), [docs/](.)). Install with `python -m uv sync --group docs --all-extras`, preview with `python -m uv run mkdocs serve`, check with `python -m uv run mkdocs build --strict`. The `docs` workflow ([docs.yml](../.github/workflows/docs.yml)) builds on every relevant push to `main` and deploys to GitHub Pages only from `main`.
+* **Coverage floor**: `[tool.coverage.report] fail_under` in `pyproject.toml`, measured without the examples job; raise it when coverage rises, never lower it to hide a gap.
+* **Release workflow** ([release.yml](../.github/workflows/release.yml)): on a `v*` tag it checks that the tag equals the pyproject version and that the tagged commit is on `origin/main`, runs `uv sync --all-extras` and `pytest -m "not examples"`, builds the sdist and wheel with `uv build`, takes the release notes from the matching CHANGELOG section and publishes a GitHub Release (tags containing `-` are marked pre-release).
 
 ### 12.3 Git conventions ([CLAUDE.md](../CLAUDE.md), [DESIGN_PLAN.md section 10](DESIGN_PLAN.md))
 
@@ -2015,7 +2029,7 @@ folder is still written); **2** for a study, argument or I/O error (message on s
 | 5 | Section 8: `math/` package; `configs/studies/{heave,roll,steer,optimize}.yaml`; CLI `suspkin run\|plot\|report\|optimize`; report under `plotting/` | the package is `geom_math/` (avoids shadowing the stdlib `math`); `configs/studies/` holds `fs_reference_constraints.yaml` (v0.7) and `fs_reference_optimize.yaml` (v0.8); the heave, roll and steer study files are not written; commands are `version, show, animate, sweep, summary, vehicle, vsweep, report, check, optimize` (no `run` or `plot`); the report lives in `report/` |
 | 6 | Section 5.4: anti-features "as % vs travel" | `anti_*` are **static scalars** in `VehicleSummary`; vs-travel curves only exist as the swing-angle columns (`*_sv_swing_angle`, `*_sv_wc_angle`) the user can convert with $\tan\theta\,b\,L/h$ |
 | 7 | Section 5.5: wheel rate "k MR^2 from virtual work" | code and CHANGELOG use the complete virtual-work rate $kMR^2+F_s\,dMR/dz$ ([actuation.py:161](../src/suspkin/metrics/actuation.py#L161)); `k MR^2` is kept as `wheel_rate_linear` |
-| 8 | Section 9: "Regression: golden CSVs for the reference FS geometry" | regression tests assert **ranges and signs** on the reference car ([11.6](#116-regression-values-reference-car)); no golden CSVs are stored |
+| 8 | Section 9: "Regression: golden CSVs for the reference FS geometry" | regression tests assert **ranges and signs** on the reference car ([11.6](#116-regression-values-reference-car)); golden CSV/JSON snapshots were added in 1.0 ([11.8](#118-golden-snapshots)) |
 | 9 | Section 10: "pre-commit runs ruff + mypy + fast tests" | pre-commit runs ruff, ruff-format, mypy and file hygiene hooks; **no tests**; tests run in CI |
 | 10 | Section 3.3 YAML sketch: `coilover: {k: ...}` | actual keys are `spring_rate, free_length, preload, length_min, length_max`; the sketch also omits `wheel`, `unsprung_mass` and the full ARB fields |
 | 11 | Section 5.8: "Toe change vs travel at steer angles (combined steer + bump)" | no dedicated output; reachable with `sweep --rack` (corner) or `vsweep ... --base-rack` (vehicle) and the `toe` columns |

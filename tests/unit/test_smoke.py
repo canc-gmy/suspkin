@@ -1,5 +1,8 @@
 """Smoke tests: version, units and CLI stub."""
 
+import tomllib
+from pathlib import Path
+
 import numpy as np
 import numpy.testing as npt
 from typer.testing import CliRunner
@@ -10,7 +13,13 @@ from suspkin.cli import app
 
 
 def test_version() -> None:
-    assert suspkin.__version__ == "0.8.0"
+    assert suspkin.__version__ == "1.0.0"
+
+
+def test_version_matches_pyproject() -> None:
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        assert tomllib.load(f)["project"]["version"] == suspkin.__version__
 
 
 def test_mm_m_roundtrip_scalar() -> None:

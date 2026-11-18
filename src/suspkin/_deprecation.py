@@ -14,7 +14,10 @@ R = TypeVar("R")
 def deprecated(
     reason: str, *, since: str, removed_in: str
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Mark a function deprecated; calls emit a :class:`DeprecationWarning`."""
+    """Mark a function or method deprecated; calls emit a :class:`DeprecationWarning`.
+
+    Works on plain functions and methods only, not on classes or properties.
+    """
 
     def decorator(func: Callable[P, R]) -> Callable[P, R]:
         msg = (
