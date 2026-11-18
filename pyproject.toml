@@ -23,6 +23,7 @@ dependencies = [
 viz = ["plotly>=5.22"]
 opt = ["pymoo>=0.6.1"]
 app = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+surrogate = ["torch>=2.5,<2.7", "optuna>=4.0"]
 
 [dependency-groups]
 dev = [
@@ -44,6 +45,22 @@ docs = [
 [project.scripts]
 suspkin = "suspkin.cli:app"
 
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu124", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/suspkin"]
 # built frontend (git-ignored) must still ship in the wheel
@@ -64,7 +81,7 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*"]
+module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*", "optuna.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

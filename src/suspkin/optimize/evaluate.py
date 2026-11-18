@@ -282,23 +282,33 @@ def _scale(user: float | None, dim: Dim, lo: float | None, hi: float | None) -> 
     return lims[0] if lims else 1.0  # unreachable via load_study (needs an explicit scale)
 
 
-def _g_array(v: F64, lo: float | None, hi: float | None, s: float) -> F64:
-    g = np.full(v.shape, -np.inf)
-    if hi is not None:
-        g = np.maximum(g, (v - hi) / s)
-    if lo is not None:
-        g = np.maximum(g, (lo - v) / s)
-    return g
-
-
 def _worst(
     v: ArrayLike, lo: float | None, hi: float | None, s: float, signed: float = 1.0
 ) -> tuple[float, float]:
     """(g, value) of the worst entry of ``v``; ``signed=-1`` flips g (outside constraints)."""
+    if isinstance(v, float | int):  # scalar fast path, same arithmetic as the array path
+        x = float(v)
+        if not math.isfinite(x):
+            raise _Unsolved("non-finite value")
+        gs = -math.inf
+        if hi is not None:
+            gs = max(gs, (x - hi) / s)
+        if lo is not None:
+            gs = max(gs, (lo - x) / s)
+        return signed * gs, x
     arr = np.atleast_1d(np.asarray(v, dtype=np.float64))
-    if not np.all(np.isfinite(arr)):
+    if not np.isfinite(arr).all():
         raise _Unsolved("non-finite value")
-    g = signed * _g_array(arr, lo, hi, s)
+    if hi is not None and lo is not None:
+        g = np.maximum((arr - hi) / s, (lo - arr) / s)
+    elif hi is not None:
+        g = (arr - hi) / s
+    elif lo is not None:
+        g = (lo - arr) / s
+    else:
+        g = np.full(arr.shape, -np.inf)
+    if signed != 1.0:
+        g = signed * g
     i = int(np.argmax(g))
     return float(g[i]), float(arr[i])
 
@@ -417,25 +427,38 @@ def _column(df: pd.DataFrame, metric: str) -> F64:
     return df[metric].to_numpy(dtype=np.float64)
 
 
+def _sorted_xy(x: F64, y: F64) -> tuple[F64, F64]:
+    """``(x, y)`` ordered by ``x``; no copy when ``x`` is already strictly increasing."""
+    if x.size < 2 or bool((x[1:] > x[:-1]).all()):
+        return x, y
+    order = np.argsort(x)
+    return x[order], y[order]
+
+
 def _window(x: F64, y: F64, where: tuple[float, float] | None) -> tuple[F64, F64]:
     """Samples of ``y(x)`` within ``where`` plus interpolated values at its ends."""
-    order = np.argsort(x)
-    x, y = x[order], y[order]
+    x, y = _sorted_xy(x, y)
     if where is None:
         return x, y
     lo, hi = where
     inner = (x > lo) & (x < hi)
-    xs = np.concatenate([[lo], x[inner], [hi]])
-    ys = np.concatenate([[np.interp(lo, x, y)], y[inner], [np.interp(hi, x, y)]])
+    n = int(inner.sum())
+    ends = np.interp((lo, hi), x, y)
+    xs = np.empty(n + 2)
+    ys = np.empty(n + 2)
+    xs[0], xs[-1] = lo, hi
+    ys[0], ys[-1] = ends[0], ends[1]
+    xs[1:-1] = x[inner]
+    ys[1:-1] = y[inner]
     return xs, ys
 
 
 def _interp_at(x: F64, y: F64, at: float) -> float:
     """Linear interpolation of ``y(x)`` at ``at`` (finite data required)."""
-    if not (np.all(np.isfinite(x)) and np.all(np.isfinite(y))):
+    if not (np.isfinite(x).all() and np.isfinite(y).all()):
         raise _Unsolved("non-finite sweep data")
-    order = np.argsort(x)
-    return float(np.interp(at, x[order], y[order]))
+    x, y = _sorted_xy(x, y)
+    return float(np.interp(at, x, y))
 
 
 def _summary_value(ctx: _Ctx, metric: str) -> float:
@@ -507,7 +530,7 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
             g, val = _worst(v, lo, hi, _scale(user, mdim, lo, hi))
             return res(g, val, mdim, lo, hi)
         xs, ys = _window(x, y, c.where)
-        if not (np.all(np.isfinite(xs)) and np.all(np.isfinite(ys))):
+        if not (np.isfinite(xs).all() and np.isfinite(ys).all()):
             raise _Unsolved("non-finite sweep data")
         if isinstance(c, BandConstraint):
             g, val = _worst(ys, lo, hi, _scale(user, mdim, lo, hi))
@@ -626,10 +649,16 @@ def _failed(c: Constraint, ctx: _Ctx, status: Status, detail: str = "") -> Const
 
 def _fit_line(xs: F64, ys: F64) -> F64:
     """Least-squares line ``[slope, intercept]``; needs at least 2 distinct x values."""
-    if np.unique(xs).size < 2:
+    if xs.size < 2 or not np.min(xs) < np.max(xs):
         raise _Unsolved("window has fewer than 2 distinct x values (slope/linearity undefined)")
-    out: F64 = np.polyfit(xs, ys, 1)
-    return out
+    xm = float(xs.mean())
+    dx = xs - xm
+    sxx = float(dx @ dx)
+    if sxx <= 0.0:
+        raise _Unsolved("window has fewer than 2 distinct x values (slope/linearity undefined)")
+    ym = float(ys.mean())
+    slope = float(dx @ (ys - ym)) / sxx
+    return np.array([slope, ym - slope * xm])
 
 
 def _trapz_mean(xs: F64, ys: F64) -> float:
@@ -666,13 +695,14 @@ def _eval_objective(o: Objective, ctx: _Ctx) -> ObjectiveResult:
                     raise _Unsolved("target x range does not overlap the sweep")
                 where = (lo, hi)
             xs, ys = _window(x, y, where)
-            if not (np.all(np.isfinite(xs)) and np.all(np.isfinite(ys))):
+            if not (np.isfinite(xs).all() and np.isfinite(ys).all()):
                 raise _Unsolved("non-finite sweep data")
             if isinstance(o, CurveObjective):
                 tgt = np.interp(xs, np.array(o.target.x), np.array(o.target.y))
                 raw = float(np.sqrt(np.mean((ys - tgt) ** 2)))
             elif isinstance(o, LinearityObjective):
-                resid = ys - np.polyval(_fit_line(xs, ys), xs)
+                slope, icpt = _fit_line(xs, ys)
+                resid = ys - (slope * xs + icpt)
                 raw = float(np.sqrt(np.mean(resid**2)))
             else:
                 assert isinstance(o, ExtremumObjective)
@@ -706,12 +736,16 @@ def evaluate(
     x: ArrayLike | None = None,
     *,
     vehicle: Vehicle | None = None,
+    ctx: _Ctx | None = None,
 ) -> Evaluation:
     """Evaluate all enabled constraints of ``space.study`` for a design.
 
     Give either ``x`` (normalised design vector) or ``vehicle``; with neither, the baseline
     vehicle is used. An ``x`` that gives an invalid vehicle makes every enabled constraint
     ``infeasible`` (``g = G_FAIL``).
+
+    ``ctx`` (internal, default ``None``) replaces the FOM sweep context; the surrogate
+    evaluator passes a context whose sweeps come from the networks.
     """
     if x is not None and vehicle is not None:
         raise ValueError("give either x or vehicle, not both")
@@ -725,7 +759,8 @@ def evaluate(
         except InfeasibleDesign:
             infeasible = True
     study = space.study
-    ctx = _Ctx(dict(study.sweeps), veh)
+    if ctx is None:
+        ctx = _Ctx(dict(study.sweeps), veh)
     results: list[ConstraintResult] = []
     for c in study.constraints:
         if not c.enabled:

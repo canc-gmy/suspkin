@@ -24,6 +24,7 @@ objectives and an optimizer block).
 | `constraints` | Requirements. |
 | `objectives` | Optional goals. |
 | `optimizer` | Optional optimizer settings. |
+| `surrogate` | Optional, experimental: output grid and dataset of the NN surrogate. |
 
 Values are SI numbers or strings with a unit (`"30 mm"`, `"-1.5 deg"`, `"0.5 deg/deg"`). A
 block-level `units: mm` applies to every bare coordinate in that block. Durations take `s`,
@@ -96,6 +97,56 @@ Keys: `name`, `type`, `sweep`, `metric`, `where`, `at`, `of`, `target`, `scale`,
 | `budget` | `evaluations` and/or `time` (`"15 min"`). |
 | `start` | `baseline` or `best` (warm start from a previous run). |
 | `options` | Pass-through method options (`pop_size`, `popsize`, `maxiter`, `ftol`, `xtol`, `gtol`, `fd_step`, ...). |
+
+## `surrogate` (experimental)
+
+Used by `suspkin surrogate sample`, `train` and `validate` (see [stability](stability.md)). The surrogate learns the
+left corner of each axle on a fixed grid. Only symmetric variables are supported.
+
+| Key | Meaning |
+|---|---|
+| `grid.travel` | `min`, `max`, `points`: wheel-travel grid (contains 0, at least 3 points). |
+| `grid.rack` | Same for the rack, front axle only (omit: rack fixed at 0). |
+| `dataset.n_initial` | Latin-hypercube samples per axle (default 20000). |
+| `dataset.seed` | LHS and split seed (default 1). |
+| `dataset.shard_size` | Rows per shard file (default 500). |
+| `training.device` | `auto` (CUDA if available, else CPU), `cpu` or `cuda` (default `auto`). |
+| `training.max_epochs`, `training.patience` | Epoch cap and early-stopping patience (defaults 2000, 100). |
+| `training.num_threads` | CPU threads of torch (default: torch default). |
+| `training.finetune_lr_factor` | Learning-rate factor when fine-tuning from a trained model (default 0.1). |
+| `hpo.n_trials` | Optuna trials per axle (default 100). |
+| `hpo.timeout` | Search time budget with a unit, e.g. `4 h` (default `4 h`; `null` for none). |
+| `hpo.parallel` | `auto` (axles in parallel on CUDA, sequential on CPU), `true` or `false`. |
+| `active_learning.max_iterations` | Iteration cap of `optimize --surrogate` (default 50). |
+| `active_learning.fom_evaluations` | FOM evaluation budget of the whole run, baseline included (default 2000). |
+| `active_learning.time` | Wall-time budget with a unit, e.g. `2 h` (default none). |
+| `active_learning.surrogate_evaluations` | Budget of each inner optimisation on the networks (default 20000). |
+| `active_learning.infill` | `top` extra candidates (default 0) and `perturb` random points (default 4) besides the predicted optimum. |
+| `active_learning.finetune` | `epochs` (default 200), `weight` (default 5.0) of the new dataset rows, and `replay` (default 4096): each fine-tuning uses all active-learning rows plus a fresh random subset of `replay` earlier train rows (validation split unchanged); early stopping scores the mean of the validation score and the score on all active-learning rows. |
+| `active_learning.margin` | Constraint margin on the normalised `g` during the network search (default 0.05). |
+| `active_learning.trust_region` | `initial`, `min`, `max` radius in the unit cube (defaults 0.2, 0.01, 0.5). |
+| `active_learning.stop` | `eps_f` (relative agreement, default 0.01) and `patience` (iterations, default 5). |
+
+The inner optimiser is the study's `optimizer` block (`method`, `mode`, `seed`).
+
+```yaml
+surrogate:
+  grid:
+    travel: {min: -30 mm, max: 30 mm, points: 41}
+    rack: {min: -25 mm, max: 25 mm, points: 21}
+  dataset: {n_initial: 20000, seed: 1, shard_size: 500}
+  training: {device: auto, max_epochs: 2000, patience: 100}
+  hpo: {n_trials: 100, timeout: 4 h}
+  active_learning:
+    max_iterations: 50
+    fom_evaluations: 2000
+    surrogate_evaluations: 20000
+    infill: {top: 0, perturb: 4}
+    finetune: {epochs: 200, weight: 5.0, replay: 4096}
+    margin: 0.05
+    trust_region: {initial: 0.2, min: 0.01, max: 0.5}
+    stop: {eps_f: 0.01, patience: 5}
+```
 
 ## Abridged example
 

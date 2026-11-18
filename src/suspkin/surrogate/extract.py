@@ -17,8 +17,7 @@ from suspkin.geometry.corners import Corner, build_corners
 from suspkin.geometry.models import Vehicle
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
-from suspkin.metrics.joints import joint_angles_frame
-from suspkin.metrics.table import metrics_frame
+from suspkin.metrics.batch import corner_metric_arrays, joint_angle_arrays
 from suspkin.surrogate.channels import channels_for
 from suspkin.surrogate.grid import AxleGrid
 
@@ -41,17 +40,16 @@ class CornerSample:
 def _metric_arrays(states: list[CornerState], corner: Corner) -> dict[str, NDArray[np.float64]]:
     """Per-state column arrays of every source column the channels use.
 
-    Single adapter between the extractor and the metric tables: today it calls
-    ``metrics_frame`` and ``joint_angles_frame`` (plus the solver's coilover length); a
-    vectorised implementation can replace the body without touching the caller.
-    ``states`` must be non-empty.
+    Single adapter between the extractor and the metrics: the vectorised batch kernels
+    (``corner_metric_arrays`` and ``joint_angle_arrays``) plus the solver's coilover length
+    and toggle margin. ``states`` must be non-empty.
     """
-    mf = metrics_frame(states, corner)
-    jf = joint_angles_frame(states, corner)
-    out = {c: mf[c].to_numpy(dtype=np.float64) for c in mf.columns}
-    out.update({c: jf[c].to_numpy(dtype=np.float64) for c in jf.columns})
+    out = dict(corner_metric_arrays(states, corner))
+    out.update(joint_angle_arrays(states, corner))
     out["coilover_length"] = np.array([s.coilover_length for s in states], dtype=np.float64)
     out["toggle_margin"] = np.array([s.toggle_margin for s in states], dtype=np.float64)
+    for name in ("theta_uca", "theta_lca", "psi"):
+        out[name] = np.array([getattr(s, name) for s in states], dtype=np.float64)
     return out
 
 

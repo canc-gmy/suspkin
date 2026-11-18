@@ -23,6 +23,8 @@ slightly off z = 0). Wheel travel is found per corner by a 1-D secant iteration.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -33,7 +35,7 @@ from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.models import Vehicle
 from suspkin.kinematics.arb import ArbState, solve_arb
-from suspkin.kinematics.corner import CornerState, solve_corner
+from suspkin.kinematics.corner import CornerState, _Ctx, solve_corner
 from suspkin.kinematics.rocker import KinematicsError
 
 Vec = NDArray[np.float64]
@@ -64,10 +66,19 @@ def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: flo
     """Tyre point lowest along ``-ground_normal`` (body frame)."""
     n = np.asarray(ground_normal, dtype=np.float64)
     s = np.asarray(state.spin_axis, dtype=np.float64)
-    up = n - (n @ s) * s
-    up = up / np.linalg.norm(up)
-    out: Vec = np.asarray(state.points["wheel_center"], dtype=np.float64) - tyre_radius * up
-    return out
+    wc = np.asarray(state.points["wheel_center"], dtype=np.float64)
+    n0, n1, n2 = float(n[0]), float(n[1]), float(n[2])
+    s0, s1, s2 = float(s[0]), float(s[1]), float(s[2])
+    k = n0 * s0 + n1 * s1 + n2 * s2
+    u0, u1, u2 = n0 - k * s0, n1 - k * s1, n2 - k * s2
+    nu = math.sqrt(u0 * u0 + u1 * u1 + u2 * u2)
+    return np.array(
+        [
+            float(wc[0]) - tyre_radius * (u0 / nu),
+            float(wc[1]) - tyre_radius * (u1 / nu),
+            float(wc[2]) - tyre_radius * (u2 / nu),
+        ]
+    )
 
 
 def cg_pivot(vehicle: Vehicle) -> Vec:
@@ -82,9 +93,13 @@ def body_rotation(roll: float, pitch: float) -> Vec:
     return r
 
 
-def _static_contact(corner: Corner) -> Vec:
+def _static_contact(corner: Corner, spin: Vec | None = None) -> Vec:
     cfg = corner.axle_cfg
-    s = wheel_spin_axis(corner.side, cfg.wheel.static_camber, cfg.wheel.static_toe)
+    s = (
+        wheel_spin_axis(corner.side, cfg.wheel.static_camber, cfg.wheel.static_toe)
+        if spin is None
+        else spin
+    )
     up = _E_Z - s[2] * s
     up = up / np.linalg.norm(up)
     out: Vec = np.asarray(corner.points["wheel_center"]) - cfg.wheel.tyre_radius * up
@@ -98,6 +113,7 @@ def _solve_corner_ground(
     z_static: float,
     rack: float,
     guess: CornerState | None,
+    ctx: _Ctx | None = None,
 ) -> tuple[CornerState, Vec, float]:
     """Secant iteration on travel so that the contact height equals ``z_static``."""
     radius = corner.axle_cfg.wheel.tyre_radius
@@ -110,11 +126,15 @@ def _solve_corner_ground(
     if guess is not None:
         t = guess.travel
     else:
-        g0 = float(n @ _static_contact(corner)) + offset - z_static
+        g0 = (
+            float(n @ _static_contact(corner, None if ctx is None else ctx.spin0))
+            + offset
+            - z_static
+        )
         t = -g0 / nz
     if abs(t) > _MAX_TRAVEL:
         raise KinematicsError(f"{corner.id}: wheel cannot reach the ground (travel {t:.3f} m)")
-    st = solve_corner(corner, t, rack, guess=guess)
+    st = solve_corner(corner, t, rack, guess=guess, _ctx=ctx)
     cp, g = height(st)
     t_prev, g_prev = t, g
     t = t - g / nz
@@ -123,7 +143,7 @@ def _solve_corner_ground(
             return st, cp, g
         if abs(t) > _MAX_TRAVEL:
             raise KinematicsError(f"{corner.id}: wheel cannot reach the ground (travel {t:.3f} m)")
-        st = solve_corner(corner, t, rack, guess=st)
+        st = solve_corner(corner, t, rack, guess=st, _ctx=ctx)
         cp, g = height(st)
         if abs(g) < _G_TOL:
             return st, cp, g
@@ -144,6 +164,7 @@ def solve_vehicle(
     rack: float = 0.0,
     pivot: ArrayLike | None = None,
     guess: VehicleState | None = None,
+    _ctxs: Mapping[CornerId, _Ctx] | None = None,
 ) -> VehicleState:
     """Solve all corners (and ARBs) for a prescribed body pose.
 
@@ -176,7 +197,8 @@ def solve_vehicle(
     worst = 0.0
     for cid in _ORDER:
         c = corners[cid]
-        z_static = float(_static_contact(c)[2])
+        ctx = _Ctx(c) if _ctxs is None else _ctxs[cid]
+        z_static = float(_static_contact(c, ctx.spin0)[2])
         st, cp, g = _solve_corner_ground(
             c,
             n,
@@ -184,6 +206,7 @@ def solve_vehicle(
             z_static,
             rack if c.axle == "front" else 0.0,
             None if guess is None else guess.corners[cid],
+            ctx,
         )
         cp = cp.copy()
         cp.setflags(write=False)

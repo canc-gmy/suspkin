@@ -45,7 +45,8 @@ def test_sources_exist_in_real_tables() -> None:
         cols = set(metrics_frame(st, corners[cid]).columns) | set(
             joint_angles_frame(st, corners[cid]).columns
         )
-        cols |= {"coilover_length", "toggle_margin"}  # taken from the solver state by the adapter
+        # taken from the solver state by the adapter
+        cols |= {"coilover_length", "toggle_margin", "theta_uca", "theta_lca", "psi"}
         arrays = _metric_arrays(st, corners[cid])
         for c in channels_for("front" if cid == "FL" else "rear"):
             assert c.source in cols, c.name

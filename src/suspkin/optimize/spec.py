@@ -24,6 +24,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    StrictBool,
     ValidationError,
     field_validator,
     model_validator,
@@ -78,7 +79,8 @@ _DEFAULT_SCALE: dict[str, float] = {
 
 def default_scale(dim: Dim) -> float | None:
     """Default normalisation scale (SI) of a dimension; ``None`` if it has none."""
-    return _DEFAULT_SCALE.get(normalize_dim(dim))
+    v = _DEFAULT_SCALE.get(dim)  # canonical names hit directly; aliases need normalising
+    return v if v is not None else _DEFAULT_SCALE.get(normalize_dim(dim))
 
 
 class StudyConfigError(ValueError):
@@ -1006,10 +1008,115 @@ class GridSpec(_Frozen):
     rack: AxisGrid | None = None
 
 
+class DatasetSpec(_Frozen):
+    """Initial Latin-hypercube dataset: samples per axle, seed and rows per shard file."""
+
+    n_initial: int = Field(default=20000, ge=1)
+    seed: int = 1
+    shard_size: int = Field(default=500, ge=1)
+    lhs_optimization: Literal["auto", "random-cd", "none"] = "auto"
+
+
+class TrainingSpec(_Frozen):
+    """Network training settings (the ``surrogate.training`` block)."""
+
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    max_epochs: int = Field(default=2000, ge=1)
+    patience: int = Field(default=100, ge=1)
+    num_threads: int | None = Field(default=None, ge=1)
+    finetune_lr_factor: float = Field(default=0.1, gt=0.0)
+
+
+class HpoSpec(_Frozen):
+    """Architecture search budget (the ``surrogate.hpo`` block); ``timeout`` in seconds (SI)."""
+
+    n_trials: int = Field(default=100, ge=1)
+    timeout: float | None = Field(default=4 * 3600.0, gt=0.0)
+    parallel: Literal["auto"] | StrictBool = "auto"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _units(cls, raw: Any) -> Any:
+        if isinstance(raw, Mapping) and raw.get("timeout") is not None:
+            out = dict(raw)
+            try:
+                out["timeout"] = _scalar(out["timeout"], "time")
+            except ValueError as exc:
+                raise ValueError(f"hpo timeout: {exc}") from exc
+            return out
+        return raw
+
+
+class InfillSpec(_Frozen):
+    """Infill points per active-learning iteration: extra candidates and perturbations."""
+
+    top: int = Field(default=0, ge=0)
+    perturb: int = Field(default=4, ge=0)
+
+
+class FinetuneSpec(_Frozen):
+    """Fine-tuning: epochs, weight of the new rows, earlier train rows replayed per iteration."""
+
+    epochs: int = Field(default=200, ge=1)
+    weight: float = Field(default=5.0, gt=0.0)
+    replay: int = Field(default=4096, ge=0)
+
+
+class TrustRegionSpec(_Frozen):
+    """Trust-region radius in the unit cube: initial, minimum and maximum."""
+
+    initial: float = Field(default=0.2, gt=0.0, le=1.0)
+    min: float = Field(default=0.01, gt=0.0, le=1.0)
+    max: float = Field(default=0.5, gt=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def _check(self) -> TrustRegionSpec:
+        if not self.min <= self.initial <= self.max:
+            raise ValueError("trust_region needs min <= initial <= max")
+        return self
+
+
+class StopSpec(_Frozen):
+    """Active-learning stopping: relative agreement ``eps_f`` and ``patience`` iterations."""
+
+    eps_f: float = Field(default=0.01, gt=0.0)
+    patience: int = Field(default=5, ge=1)
+
+
+class ActiveLearningSpec(_Frozen):
+    """Active-learning optimizer (``surrogate.active_learning``); ``time`` in seconds (SI)."""
+
+    max_iterations: int = Field(default=50, ge=1)
+    fom_evaluations: int = Field(default=2000, ge=1)
+    time: float | None = Field(default=None, gt=0.0)
+    surrogate_evaluations: int = Field(default=20000, ge=1)
+    infill: InfillSpec = Field(default_factory=InfillSpec)
+    finetune: FinetuneSpec = Field(default_factory=FinetuneSpec)
+    margin: float = Field(default=0.05, ge=0.0)
+    trust_region: TrustRegionSpec = Field(default_factory=TrustRegionSpec)
+    stop: StopSpec = Field(default_factory=StopSpec)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _units(cls, raw: Any) -> Any:
+        if isinstance(raw, Mapping) and raw.get("time") is not None:
+            out = dict(raw)
+            try:
+                out["time"] = _scalar(out["time"], "time")
+            except ValueError as exc:
+                raise ValueError(f"active_learning time: {exc}") from exc
+            return out
+        return raw
+
+
 class SurrogateSpec(_Frozen):
-    """Surrogate block of a study (later slices add dataset, training, hpo, ...)."""
+    """Surrogate block of a study: grid, dataset, training, search and active learning."""
 
     grid: GridSpec
+    dataset: DatasetSpec = Field(default_factory=DatasetSpec)
+    training: TrainingSpec = Field(default_factory=TrainingSpec)
+    hpo: HpoSpec = Field(default_factory=HpoSpec)
+    active_learning: ActiveLearningSpec = Field(default_factory=ActiveLearningSpec)
 
 
 # --------------------------------------------------------------------------------------

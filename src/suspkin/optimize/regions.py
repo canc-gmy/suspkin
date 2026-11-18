@@ -144,12 +144,33 @@ def sd_cylinder(points: ArrayLike, p0: ArrayLike, p1: ArrayLike, radius: float) 
     return out
 
 
-def _hull(vertices: ArrayLike) -> ConvexHull:
+_HULL_CACHE: dict[bytes, tuple[ConvexHull, F64]] = {}
+_HULL_CACHE_MAX = 256
+
+
+def _hull_tri(vertices: ArrayLike) -> tuple[ConvexHull, F64]:
+    """Convex hull and its boundary triangles, cached per vertex set (failures not cached)."""
     v = _vertices(vertices)
+    key = np.ascontiguousarray(v).tobytes()
+    hit = _HULL_CACHE.get(key)
+    if hit is None:
+        hull = _build_hull(v)
+        hit = (hull, v[hull.simplices])
+        if len(_HULL_CACHE) >= _HULL_CACHE_MAX:
+            _HULL_CACHE.clear()
+        _HULL_CACHE[key] = hit
+    return hit
+
+
+def _build_hull(v: F64) -> ConvexHull:
     try:
         return ConvexHull(v)
     except QhullError as exc:
         raise ValueError(_TWISTED_MSG) from exc
+
+
+def _hull(vertices: ArrayLike) -> ConvexHull:
+    return _hull_tri(vertices)[0]
 
 
 def _hex_volume(v: F64) -> float:
@@ -212,7 +233,7 @@ def sd_hexahedron(points: ArrayLike, vertices: ArrayLike) -> F64:
     boundary triangles of the convex hull.
     """
     p = np.asarray(points, dtype=np.float64)
-    hull = _hull(vertices)
+    hull, tri = _hull_tri(vertices)
     eq = hull.equations  # (F, 4): outward unit normal, offset
     plane = p @ eq[:, :3].T + eq[:, 3]  # (..., F)
     d = np.max(plane, axis=-1)
@@ -220,7 +241,6 @@ def sd_hexahedron(points: ArrayLike, vertices: ArrayLike) -> F64:
     out_mask = flat_d > 0.0
     if np.any(out_mask):
         flat_p = p.reshape(-1, 3)
-        tri = _vertices(vertices)[hull.simplices]
         flat_d = flat_d.copy()
         flat_d[out_mask] = _dist_to_triangles(flat_p[out_mask], tri)
         d = flat_d.reshape(np.shape(d))

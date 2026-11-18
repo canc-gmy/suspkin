@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
 
 import numpy as np
 import pandas as pd
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.models import Vehicle
-from suspkin.kinematics.corner import CornerState
+from suspkin.kinematics.corner import _Ctx
 from suspkin.kinematics.rocker import KinematicsError
-from suspkin.kinematics.vehicle import VehicleState, body_rotation, solve_vehicle
-from suspkin.metrics.centres import roll_centre_pair
-from suspkin.metrics.table import metrics_frame
+from suspkin.kinematics.vehicle import VehicleState, solve_vehicle
+from suspkin.metrics.batch import corner_arrays, roll_line_arrays
 
 _VARS = ("heave", "roll", "pitch", "rack")
 _CORNERS: tuple[CornerId, ...] = ("FL", "FR", "RL", "RR")
 _MAX_HALVINGS = 6
+_PARALLEL_TOL = 1e-9
+Arr = NDArray[np.float64]
 
 
 def _reach(
@@ -28,12 +28,13 @@ def _reach(
     prev: VehicleState,
     target: dict[str, float],
     pivot: ArrayLike | None = None,
+    ctxs: Mapping[CornerId, _Ctx] | None = None,
 ) -> VehicleState:
     """Solve ``target`` from ``prev``; halve the step in input space on failure."""
 
     def go(src: VehicleState, tgt: dict[str, float], depth: int) -> VehicleState:
         try:
-            return solve_vehicle(vehicle, corners, guess=src, pivot=pivot, **tgt)
+            return solve_vehicle(vehicle, corners, guess=src, pivot=pivot, _ctxs=ctxs, **tgt)
         except KinematicsError:
             if depth >= _MAX_HALVINGS:
                 raise
@@ -73,20 +74,26 @@ def sweep_vehicle(
     if vals.size == 0:
         return []
     corners = build_corners(vehicle)
+    ctxs = {cid: _Ctx(c) for cid, c in corners.items()}
     start = int(np.argmin(np.abs(vals)))
     out: dict[int, VehicleState] = {}
     first = {**fixed, name: float(vals[start])}
     try:
-        out[start] = solve_vehicle(vehicle, corners, pivot=pivot, **first)  # type: ignore[arg-type]
+        out[start] = solve_vehicle(vehicle, corners, pivot=pivot, _ctxs=ctxs, **first)  # type: ignore[arg-type]
     except KinematicsError:
         out[start] = _reach(
-            vehicle, corners, solve_vehicle(vehicle, corners, pivot=pivot), first, pivot
+            vehicle,
+            corners,
+            solve_vehicle(vehicle, corners, pivot=pivot, _ctxs=ctxs),
+            first,
+            pivot,
+            ctxs,
         )
     for direction in (1, -1):
         prev = out[start]
         i = start + direction
         while 0 <= i < vals.size:
-            prev = _reach(vehicle, corners, prev, {**fixed, name: float(vals[i])}, pivot)
+            prev = _reach(vehicle, corners, prev, {**fixed, name: float(vals[i])}, pivot, ctxs)
             out[i] = prev
             i += direction
     return [out[i] for i in range(vals.size)]
@@ -108,65 +115,124 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
     point of the state (tilted ground), not the body-vertical lowest point.
     """
     corners = build_corners(vehicle)
-    data: dict[str, object] = {k: [float(getattr(s, k)) for s in states] for k in _VARS}
-    parts = [pd.DataFrame(data)]
+    cols: dict[str, Arr] = {
+        k: np.array([float(getattr(s, k)) for s in states], dtype=np.float64) for k in _VARS
+    }
+    fv: dict[CornerId, tuple[Arr, Arr, Arr, Arr, Arr]] = {}
     for cid in _CORNERS:
-        mf = metrics_frame([_on_ground(s, cid) for s in states], corners[cid]).drop(
-            columns=["rack"]
-        )
-        mf = mf.add_prefix(f"{cid}_")
         cp = np.array([s.contact_points[cid] for s in states], dtype=np.float64).reshape(-1, 3)
-        cpf = pd.DataFrame({f"{cid}_cp_{a}": cp[:, i] for i, a in enumerate("xyz")})
-        parts += [mf, cpf]
-    parts.append(_ground_frame(states, corners))
+        # per-corner metrics use the ground contact point of the state (tilted ground)
+        mf, ic = corner_arrays([s.corners[cid] for s in states], corners[cid], contact_patch=cp)
+        for k, v in mf.items():
+            if k != "rack":
+                cols[f"{cid}_{k}"] = v
+        for i, a in enumerate("xyz"):
+            cols[f"{cid}_cp_{a}"] = cp[:, i]
+        rd = roll_line_arrays(cp[:, 1], cp[:, 2], ic)
+        fv[cid] = (cp[:, 0], cp[:, 1], cp[:, 2], rd[0], rd[1])
+    cols.update(_ground_arrays(states, corners, fv))
     for axle in ("front", "rear"):
-        parts.append(
-            pd.DataFrame(
-                {
-                    f"arb_{axle}_elastic": [
-                        np.nan if s.arb[axle] is None else float(s.arb[axle].elastic)  # type: ignore[union-attr]
-                        for s in states
-                    ]
-                }
-            )
+        cols[f"arb_{axle}_elastic"] = np.array(
+            [
+                np.nan if s.arb[axle] is None else float(s.arb[axle].elastic)  # type: ignore[union-attr]
+                for s in states
+            ],
+            dtype=np.float64,
         )
-    # copy() consolidates the column blocks (avoids pandas fragmentation warnings downstream)
-    return pd.concat(parts, axis=1).copy()
-
-
-def _on_ground(s: VehicleState, cid: CornerId) -> CornerState:
-    """Corner state whose ``contact_patch`` is the vehicle (tilted-ground) contact point."""
-    st = s.corners[cid]
-    return replace(st, points={**st.points, "contact_patch": s.contact_points[cid]})
-
-
-def _ground_frame(states: Sequence[VehicleState], corners: dict[CornerId, Corner]) -> pd.DataFrame:
-    """Ground-frame camber, steer and roll centre columns."""
-    cols: dict[str, list[float]] = {}
-
-    def add(name: str, v: float) -> None:
-        cols.setdefault(name, []).append(v)
-
-    for s in states:
-        rot = body_rotation(s.roll, s.pitch)
-        for cid in _CORNERS:
-            st = s.corners[cid]
-            sw = rot @ np.asarray(st.spin_axis, dtype=np.float64)
-            o = 1.0 if corners[cid].side == "left" else -1.0
-            add(f"{cid}_camber_ground", -float(np.arcsin(np.clip(sw[2], -1.0, 1.0))))
-            add(f"{cid}_steer_ground", float(np.arctan2(-o * sw[0], o * sw[1])))
-        for axle, (lc, rc) in (("front", ("FL", "FR")), ("rear", ("RL", "RR"))):
-            y_b, z_b = roll_centre_pair(_on_ground(s, lc), _on_ground(s, rc))  # type: ignore[arg-type]
-            if np.isfinite(y_b) and np.isfinite(z_b):
-                x_cp = 0.5 * (s.contact_points[lc][0] + s.contact_points[rc][0])  # type: ignore[index]
-                w = (
-                    rot @ (np.array([x_cp, y_b, z_b]) - s.pivot)
-                    + s.pivot
-                    + np.array([0.0, 0.0, s.heave])
-                )
-                add(f"rc_{axle}_y", float(y_b))
-                add(f"rc_{axle}_z", float(w[2]))
-            else:
-                add(f"rc_{axle}_y", float("nan"))
-                add(f"rc_{axle}_z", float("nan"))
     return pd.DataFrame(cols)
+
+
+def _rot_batch(roll: Arr, pitch: Arr) -> Arr:
+    """Batched ``body_rotation``: ``R_y(pitch) R_x(roll)``, shape ``(N, 3, 3)``."""
+
+    def axis_rot(k: Arr, ang: Arr) -> Arr:
+        out: Arr = (
+            np.eye(3)
+            + np.sin(ang)[:, None, None] * k
+            + (1.0 - np.cos(ang))[:, None, None] * (k @ k)
+        )
+        return out
+
+    kx = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+    ky = np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
+    out: Arr = axis_rot(ky, pitch) @ axis_rot(kx, roll)
+    return out
+
+
+def _ground_arrays(
+    states: Sequence[VehicleState],
+    corners: dict[CornerId, Corner],
+    fv: dict[CornerId, tuple[Arr, Arr, Arr, Arr, Arr]],
+) -> dict[str, Arr]:
+    """Ground-frame camber, steer and roll centre columns (vectorised over the states)."""
+    cols: dict[str, Arr] = {}
+    n = len(states)
+    roll = np.array([s.roll for s in states], dtype=np.float64)
+    pitch = np.array([s.pitch for s in states], dtype=np.float64)
+    heave = np.array([s.heave for s in states], dtype=np.float64)
+    pivot = np.array([s.pivot for s in states], dtype=np.float64).reshape(-1, 3)
+    rot = _rot_batch(roll, pitch)
+    for cid in _CORNERS:
+        spin = np.array([s.corners[cid].spin_axis for s in states], dtype=np.float64)
+        sw = np.einsum("nij,nj->ni", rot, spin.reshape(-1, 3))
+        o = 1.0 if corners[cid].side == "left" else -1.0
+        cols[f"{cid}_camber_ground"] = -np.arcsin(np.clip(sw[:, 2], -1.0, 1.0))
+        cols[f"{cid}_steer_ground"] = np.arctan2(-o * sw[:, 0], o * sw[:, 1])
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pairs: tuple[tuple[str, CornerId, CornerId], ...] = (
+            ("front", "FL", "FR"),
+            ("rear", "RL", "RR"),
+        )
+        for axle, lc, rc in pairs:
+            y_b, z_b = _roll_centre_pair_arrays(fv[lc], fv[rc])
+            ok = np.isfinite(y_b) & np.isfinite(z_b)
+            x_cp = 0.5 * (fv[lc][0] + fv[rc][0])
+            v = np.stack([x_cp, np.where(ok, y_b, 0.0), np.where(ok, z_b, 0.0)], axis=1)
+            w_z = np.einsum("nj,nj->n", rot[:, 2, :], v - pivot) + pivot[:, 2] + heave
+            cols[f"rc_{axle}_y"] = np.where(ok, y_b, np.nan)
+            cols[f"rc_{axle}_z"] = np.where(ok, w_z, np.nan)
+    assert all(v.shape == (n,) for v in cols.values())
+    return cols
+
+
+def _roll_centre_pair_arrays(
+    left: tuple[Arr, Arr, Arr, Arr, Arr], right: tuple[Arr, Arr, Arr, Arr, Arr]
+) -> tuple[Arr, Arr]:
+    """Vectorised ``roll_centre_pair`` from the (x, y, z, d_y, d_z) roll lines of both wheels."""
+    p1y, p1z, d1y, d1z = left[1], left[2], left[3], left[4]
+    p2y, p2z, d2y, d2z = right[1], right[2], right[3], right[4]
+    n = p1y.shape[0]
+    y = np.full(n, np.nan)
+    z = np.full(n, np.nan)
+    valid = np.isfinite(d1y) & np.isfinite(d1z) & np.isfinite(d2y) & np.isfinite(d2z)
+
+    def line(py: Arr, pz: Arr, dy: Arr, dz: Arr) -> tuple[Arr, Arr, Arr]:
+        # line_through_2d(p, p + d): the direction is re-derived from the rounded points
+        ey = (py + dy) - py
+        ez = (pz + dz) - pz
+        nrm = np.sqrt(ey * ey + ez * ez)
+        ny, nz = -ez / nrm, ey / nrm
+        return ny, nz, ny * py + nz * pz
+
+    a1, b1, c1 = line(p1y, p1z, d1y, d1z)
+    a2, b2, c2 = line(p2y, p2z, d2y, d2z)
+    det = a1 * b2 - b1 * a2
+    parallel = np.abs(det) < _PARALLEL_TOL * (
+        np.sqrt(a1 * a1 + b1 * b1) * np.sqrt(a2 * a2 + b2 * b2)
+    )
+    hit = valid & ~parallel
+    if hit.any():
+        mats = np.stack(
+            [np.stack([a1[hit], b1[hit]], axis=1), np.stack([a2[hit], b2[hit]], axis=1)], axis=1
+        )
+        sol = np.linalg.solve(mats, np.stack([c1[hit], c2[hit]], axis=1)[..., None])[..., 0]
+        y[hit] = sol[:, 0]
+        z[hit] = sol[:, 1]
+    coincident = (
+        valid
+        & parallel
+        & ~((np.abs(a2 * p1y + b2 * p1z - c2) > _PARALLEL_TOL) | (np.abs(d1y) < 1e-12))
+    )
+    y[coincident] = 0.0
+    z[coincident] = (p1z + d1z / d1y * (0.0 - p1y))[coincident]
+    return y, z
