@@ -14,8 +14,9 @@ export interface Camera {
 
 /** Constant: the 3D camera and axes keep their user state across data and theme changes. */
 export const SCENE_UIREVISION = "scene3d";
+const VIEW_EYE = { x: 1.6, y: -1.6, z: 0.9 };
 export const DEFAULT_CAMERA: Camera = {
-  eye: { x: 1.6, y: -1.6, z: 0.9 },
+  eye: VIEW_EYE,
   center: { x: 0, y: 0, z: 0 },
   up: { x: 0, y: 0, z: 1 },
 };
@@ -104,13 +105,95 @@ export function ghostTraces(data: PlotlyObject[], t: Pick<Tokens, "inkMuted">): 
     }));
 }
 
+/** Share of the canvas the car should fill (width or height, whichever limits) by default. */
+export const FRAME_FILL = 0.8;
+/** Plotly's 3D camera looks through a 45 degree vertical field of view. */
+const HALF_FOV_TAN = Math.tan(Math.PI / 8);
+/**
+ * Plotly draws the scene box (plus its tick labels) about 0.82 times the size the pinhole model
+ * predicts, measured in the browser, so the model is asked for that much more.
+ */
+const DRAWN_SCALE = 1;
+
+/**
+ * Default camera for a scene: the standard viewing direction, with the eye distance chosen so the
+ * scene box fills `FRAME_FILL` of the canvas (perspective included). Without a frame or a measured
+ * canvas it falls back to `DEFAULT_CAMERA`. The scene box has the aspect ratio as its side lengths.
+ */
+export function fitCamera(
+  frame: SceneFrame | null,
+  canvas: { width: number; height: number } | null,
+  fill: number = FRAME_FILL,
+): Camera {
+  if (!frame || !canvas || !(canvas.width > 0) || !(canvas.height > 0)) return DEFAULT_CAMERA;
+  const e = VIEW_EYE;
+  const len = Math.hypot(e.x, e.y, e.z);
+  const u: Vec3 = [e.x / len, e.y / len, e.z / len]; // from the centre towards the eye
+  const right = normalize([-u[1], u[0], 0]);
+  const up = cross(right, [-u[0], -u[1], -u[2]]);
+  const half = [frame.aspect.x / 2, frame.aspect.y / 2, frame.aspect.z / 2];
+  const corners: Vec3[] = [];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    corners.push([sx * half[0]!, sy * half[1]!, sz * half[2]!]);
+  }
+  const aspect = canvas.width / canvas.height;
+
+  // Perspective pins the centre to the middle of the canvas, but the near corners reach farther
+  // than the far ones. So the look-at point is shifted until the box is centred, and then the
+  // distance is searched until the box fills the wanted share of the canvas.
+  const solve = (d: number) => {
+    let sx = 0;
+    let sy = 0;
+    let ext = { x0: 0, x1: 0, y0: 0, y1: 0 };
+    for (let it = 0; it < 8; it++) {
+      const c0: Vec3 = [sx * right[0] + sy * up[0], sx * right[1] + sy * up[1], sx * right[2] + sy * up[2]];
+      ext = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+      for (const p of corners) {
+        const rel: Vec3 = [p[0] - c0[0], p[1] - c0[1], p[2] - c0[2]];
+        const k = 1 / ((d - dot(rel, u)) * HALF_FOV_TAN);
+        const px = dot(rel, right) * k;
+        const py = dot(rel, up) * k;
+        ext = { x0: Math.min(ext.x0, px), x1: Math.max(ext.x1, px), y0: Math.min(ext.y0, py), y1: Math.max(ext.y1, py) };
+      }
+      sx += ((ext.x0 + ext.x1) / 2) * d * HALF_FOV_TAN;
+      sy += ((ext.y0 + ext.y1) / 2) * d * HALF_FOV_TAN;
+    }
+    const cover = Math.max((ext.x1 - ext.x0) / 2 / aspect, (ext.y1 - ext.y0) / 2) * DRAWN_SCALE;
+    return { cover, centre: [sx * right[0] + sy * up[0], sx * right[1] + sy * up[1], sx * right[2] + sy * up[2]] as Vec3 };
+  };
+  let lo = Math.hypot(...half) * 1.01; // outside the box
+  let hi = lo * 64;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (solve(mid).cover > fill) lo = mid;
+    else hi = mid;
+  }
+  const c = solve(hi).centre;
+  const eye: Vec3 = [c[0] + hi * u[0], c[1] + hi * u[1], c[2] + hi * u[2]];
+  return { eye: { x: eye[0], y: eye[1], z: eye[2] }, center: { x: c[0], y: c[1], z: c[2] }, up: DEFAULT_CAMERA.up! };
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+function normalize(v: Vec3): Vec3 {
+  const n = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / n, v[1] / n, v[2] / n];
+}
+
 /**
  * The camera to put in the layout: the user's last camera (captured from `plotly_relayout`), or
  * the default on the first render and on an explicit reset. It is never taken from the server
  * figure, so a pose change cannot move it (Plotly alone drops it when the layout omits it).
  */
-export function cameraForLayout(o: { reset: boolean; saved: Camera | null }): Camera {
-  return o.reset ? DEFAULT_CAMERA : (o.saved ?? DEFAULT_CAMERA);
+export function cameraForLayout(o: { reset: boolean; saved: Camera | null; fallback?: Camera }): Camera {
+  const dflt = o.fallback ?? DEFAULT_CAMERA;
+  return o.reset ? dflt : (o.saved ?? dflt);
 }
 
 /** Camera carried by a `plotly_relayout` event, or null if the event did not touch it. */
@@ -130,6 +213,8 @@ export interface SceneFigureInput {
   highlight?: readonly Vec3[];
   /** Rotation-centre traces from `buildCentreTraces`, drawn last. */
   centres?: readonly PlotlyObject[];
+  /** Show the legend strip above the scene (default true). */
+  legend?: boolean;
 }
 
 export const RING_SIZE = 6;
@@ -164,7 +249,7 @@ export function ringTrace(points: readonly Vec3[], t: Pick<Tokens, "layoutBlue">
 /** Themed 3D figure: styling from the tokens, fixed ranges and aspect, optional ghost behind. */
 export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; layout: PlotlyObject } {
   const t = i.tokens;
-  const themed = themeScene(i.figure, t);
+  const themed = themeScene(i.figure, t, { legend: i.legend ?? true });
   const sc = themed.layout["scene"] as PlotlyObject;
   const axisOf = (name: "xaxis" | "yaxis" | "zaxis", idx: number): PlotlyObject => ({
     ...(sc[name] as PlotlyObject),

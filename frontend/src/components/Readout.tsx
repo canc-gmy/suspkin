@@ -36,6 +36,7 @@ function spokenText(p: Pick<Props, "xLabel" | "xUnit" | "x" | "table" | "formatX
  */
 export function Readout({ xLabel, xUnit, x, formatX, pinned, table, showPoints, onShowPoints, onPinX }: Props) {
   const inputId = useId();
+  const statusId = useId();
   const [draft, setDraft] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
   const [announce, setAnnounce] = useState("");
@@ -80,6 +81,8 @@ export function Readout({ xLabel, xUnit, x, formatX, pinned, table, showPoints, 
           className="readout-input"
           value={shown}
           placeholder="-"
+          aria-label={xUnit ? `${xLabel} [${xUnit}]` : xLabel}
+          aria-describedby={statusId}
           aria-invalid={invalid}
           onChange={(e) => {
             setDraft(e.target.value);
@@ -97,10 +100,10 @@ export function Readout({ xLabel, xUnit, x, formatX, pinned, table, showPoints, 
           }}
         />
         <span className="readout-unit">{xUnit}</span>
-        <span className={invalid ? "readout-status error" : "readout-status muted"}>{status}</span>
+        <span id={statusId} className={invalid ? "readout-status error" : "readout-status muted"} role={invalid ? "alert" : undefined}>{status}</span>
         <span className="spacer" />
         <label className="check">
-          <input type="checkbox" checked={showPoints} onChange={(e) => onShowPoints(e.target.checked)} />
+          <input type="checkbox" aria-label="Show solved points" checked={showPoints} onChange={(e) => onShowPoints(e.target.checked)} />
           Show solved points
         </label>
       </div>

@@ -156,7 +156,12 @@ export function plainLayout(t: Tokens): PlotlyObject {
  * Apply the theme to a server-built 3D scene: background, grid and axes from the tokens, and
  * the near-black geometry (wheels, hardpoints, contact patches) in ink so it reads on both sheets.
  */
-export function themeScene(fig: { data?: unknown; layout?: unknown }, t: Tokens): { data: PlotlyObject[]; layout: PlotlyObject } {
+export function themeScene(
+  fig: { data?: unknown; layout?: unknown },
+  t: Tokens,
+  opts: { legend?: boolean } = {},
+): { data: PlotlyObject[]; layout: PlotlyObject } {
+  const legendOn = opts.legend ?? true;
   const DARK = new Set(["#222222", "black", "#000000"]);
   const recolor = (obj: unknown): unknown => {
     if (!obj || typeof obj !== "object") return obj;
@@ -197,14 +202,16 @@ export function themeScene(fig: { data?: unknown; layout?: unknown }, t: Tokens)
       // one surface: paper, scene and axis walls share --sheet-raised, so there is no box or seam
       paper_bgcolor: t.sheetRaised,
       font: { family: t.fontUi, size: 12, color: t.ink },
-      margin: { l: 0, r: 0, t: 8, b: 0 },
-      // inside the canvas, top left: never clipped at the right edge at any width
+      // the legend is a compact row in a strip at the top of the canvas, above the scene, so it
+      // never covers the car; the strip is only reserved while the legend is on
+      margin: { l: 0, r: 0, t: legendOn ? 48 : 8, b: 0 },
+      showlegend: legendOn,
       legend: {
-        x: 0.01,
+        x: 0,
         xanchor: "left",
-        y: 0.99,
-        yanchor: "top",
-        orientation: "v",
+        y: 1,
+        yanchor: "bottom",
+        orientation: "h",
         font: { family: t.fontUi, size: 12, color: t.inkMuted },
         bgcolor: "rgba(0,0,0,0)",
       },

@@ -6,14 +6,18 @@ import {
   bestRow,
   constraintStats,
   countBy,
+  defaultPhase,
   describe,
+  distinctRows,
   evolutionBands,
   failedRows,
   feasibleRows,
+  filterPhase,
   mapStats,
   mean,
   objectiveStats,
   paramStats,
+  phasesOf,
   quantile,
   scoreHistogram,
   std,
@@ -271,5 +275,43 @@ suite("edge cases", () => {
   it("withAlpha", () => {
     expect(withAlpha("#23468F", 0.5)).toBe("rgba(35, 70, 143, 0.5)");
     expect(withAlpha("red", 0.5)).toBe("red");
+  });
+});
+
+suite("phases and distinct designs", () => {
+  /** 12 DE rows with distinct designs, then 30 SLSQP probes of the best design, 1e-8 apart. */
+  const rows: Row[] = [
+    ...Array.from({ length: 12 }, (_, i) => ({ f: 10 + i, source: "de" })),
+    ...Array.from({ length: 30 }, (_, i) => ({ f: 5 + i * 1e-9, source: "slsqp" })),
+  ];
+  const h = history(rows);
+  rows.forEach((_, i) => {
+    (h.columns["x_a"] ??= []).push(i < 12 ? i / 12 : 0.55 + i * 1e-8);
+  });
+  const d = mapStats(h);
+
+  it("lists phases in the order they first appear and starts on the first of several", () => {
+    expect(phasesOf(d)).toEqual(["de", "slsqp"]);
+    expect(defaultPhase(d)).toBe("de");
+    expect(defaultPhase(filterPhase(d, "de"))).toBeNull();
+  });
+
+  it("keeps only the rows of one phase and recomputes best so far", () => {
+    const de = filterPhase(d, "de");
+    expect(de.n).toBe(12);
+    expect(de.unit["x_a"]).toHaveLength(12);
+    expect(de.best[0]).toBe(10);
+    expect(de.best[11]).toBe(10);
+    expect(filterPhase(d, null)).toBe(d);
+  });
+
+  it("counts near-identical probes as one design in the top group", () => {
+    const feas = feasibleRows(d);
+    expect(distinctRows(d, feas).length).toBe(13); // 12 DE designs and one cluster of probes
+    const top = topRows(d, feas) as number[];
+    expect(top.length).toBe(5); // 10 % of 13 is below the minimum of 5
+    expect(top.filter((i) => d.source[i] === "slsqp")).toHaveLength(1);
+    const probes = filterPhase(d, "slsqp"); // one distinct design: no top group
+    expect(topRows(probes, feasibleRows(probes))).toBeNull();
   });
 });

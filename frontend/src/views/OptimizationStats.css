@@ -1,4 +1,9 @@
+.stats-samples {
+  margin-bottom: var(--space-1);
+}
+
 .stats-note {
+  max-width: 80ch;
   margin: 0 0 var(--space-2);
   color: var(--ink-muted);
   font-size: var(--text-12);

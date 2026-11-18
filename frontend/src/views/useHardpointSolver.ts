@@ -44,12 +44,23 @@ export function useHardpointSolver(edit: EditModel, points: readonly Hardpoint[]
       setSolving(true);
       setError(null);
       setStatus(null);
+      let closedPrev = false;
       try {
-        const d = await src.deriveDataset(sourceId, { edits }, signal);
-        if (!latest.isCurrent(seq)) return;
+        // Close the previous auto revision first, so the new one keeps the same label and letter
+        // ("B edited", never "B edited (2)").
         const prev = autoId.current;
+        if (isAuto && prev) {
+          autoId.current = null;
+          await src.closeDataset(prev).catch(() => undefined);
+          closedPrev = true;
+        }
+        const d = await src.deriveDataset(sourceId, { edits }, signal);
+        if (!latest.isCurrent(seq)) {
+          // an answer to an older edit: nobody tracks it, so it must not pile up as a revision
+          if (isAuto) await src.closeDataset(d.id).catch(() => undefined);
+          return;
+        }
         autoId.current = isAuto ? d.id : null;
-        if (isAuto && prev && prev !== d.id) await src.closeDataset(prev).catch(() => undefined);
         await qc.invalidateQueries({ queryKey: ["datasets"] });
         if (!latest.isCurrent(seq)) return;
         if (isAuto) {
@@ -59,6 +70,7 @@ export function useHardpointSolver(edit: EditModel, points: readonly Hardpoint[]
           dispatch({ type: "discard" });
         }
       } catch (e) {
+        if (closedPrev) await qc.invalidateQueries({ queryKey: ["datasets"] });
         if (isAbort(e) || !latest.isCurrent(seq)) return;
         setError(solveErrorText(e));
       } finally {

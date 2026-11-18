@@ -3,6 +3,7 @@ import type { Tokens } from "./plotlyTemplate";
 import {
   buildSceneFigure,
   cameraForLayout,
+  fitCamera,
   cameraFromRelayout,
   coordValues,
   DEFAULT_CAMERA,
@@ -140,12 +141,47 @@ describe("rings and surface", () => {
     expect(posedHardpoints(null)).toEqual({});
   });
 
-  it("uses one surface colour for paper and scene, and keeps the legend inside the canvas", () => {
+  it("uses one surface colour for paper and scene, and keeps the legend in a strip above the scene", () => {
     const fig = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA });
     const scene = fig.layout["scene"] as Record<string, unknown>;
     expect(fig.layout["paper_bgcolor"]).toBe(TOKENS.sheetRaised);
     expect(scene["bgcolor"]).toBe(TOKENS.sheetRaised);
     const legend = fig.layout["legend"] as Record<string, unknown>;
-    expect([legend["x"], legend["xanchor"], legend["yanchor"]]).toEqual([0.01, "left", "top"]);
+    expect([legend["x"], legend["xanchor"], legend["yanchor"], legend["orientation"]]).toEqual([0, "left", "bottom", "h"]);
+    expect(fig.layout["showlegend"]).toBe(true);
+    const bare = buildSceneFigure({ figure: FIGURE, ghost: null, tokens: TOKENS, frame: null, camera: DEFAULT_CAMERA, legend: false });
+    expect(bare.layout["showlegend"]).toBe(false);
+    expect((bare.layout["margin"] as Record<string, number>)["t"]).toBeLessThan((fig.layout["margin"] as Record<string, number>)["t"]!);
+  });
+});
+
+describe("default framing", () => {
+  const frame = { ranges: [], aspect: { x: 1, y: 0.4, z: 0.25 } } as unknown as Parameters<typeof fitCamera>[0];
+  const dist = (c: ReturnType<typeof fitCamera>) =>
+    Math.hypot(c.eye!.x - c.center!.x, c.eye!.y - c.center!.y, c.eye!.z - c.center!.z);
+
+  it("falls back to the default camera without a frame or a measured canvas", () => {
+    expect(fitCamera(null, { width: 800, height: 600 })).toEqual(DEFAULT_CAMERA);
+    expect(fitCamera(frame, null)).toEqual(DEFAULT_CAMERA);
+    expect(fitCamera(frame, { width: 0, height: 600 })).toEqual(DEFAULT_CAMERA);
+  });
+
+  it("keeps the viewing direction: the eye stays on the default ray from the look-at point", () => {
+    const c = fitCamera(frame, { width: 1200, height: 600 });
+    const d0 = DEFAULT_CAMERA.eye!;
+    const n0 = Math.hypot(d0.x, d0.y, d0.z);
+    const v = { x: c.eye!.x - c.center!.x, y: c.eye!.y - c.center!.y, z: c.eye!.z - c.center!.z };
+    const n = Math.hypot(v.x, v.y, v.z);
+    expect(v.x / n).toBeCloseTo(d0.x / n0, 9);
+    expect(v.y / n).toBeCloseTo(d0.y / n0, 9);
+    expect(v.z / n).toBeCloseTo(d0.z / n0, 9);
+    expect(c.up).toEqual(DEFAULT_CAMERA.up);
+  });
+
+  it("moves closer for a smaller fill, and farther for a narrower canvas", () => {
+    const wide = fitCamera(frame, { width: 1200, height: 600 });
+    const narrow = fitCamera(frame, { width: 300, height: 600 });
+    expect(dist(narrow)).toBeGreaterThan(dist(wide));
+    expect(dist(fitCamera(frame, { width: 1200, height: 600 }, 0.5))).toBeGreaterThan(dist(wide));
   });
 });

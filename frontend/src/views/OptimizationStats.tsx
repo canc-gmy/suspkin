@@ -1,14 +1,18 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { HistoryData } from "../api/types";
 import { PlotlyChart } from "../components/PlotlyChart";
+import { Segmented } from "../components/Segmented";
 import {
   F_FAIL,
   bestRow,
   constraintStats,
+  defaultPhase,
   evolutionBands,
+  filterPhase,
   mapStats,
   objectiveStats,
   paramStats,
+  phasesOf,
   scoreHistogram,
   summarize,
   windowSize,
@@ -221,7 +225,7 @@ function ParamsPanel({ d }: { d: StatsData }) {
   return (
     <>
       <p className="stats-note">
-        Values in {d.paramUnit}. Top 10 % is the best tenth of the feasible samples by f_total (at least 5). The chart scales each parameter to
+        Values in {d.paramUnit}. Top 10 % is the best tenth of the distinct feasible designs by f_total (at least 5). The chart scales each parameter to
         the range explored.
       </p>
       <PlotlyChart
@@ -354,53 +358,78 @@ function EvolutionPanel({ d }: { d: StatsData }) {
   );
 }
 
+/** "de" reads "DE only", "slsqp" reads "SLSQP only": phase names are short acronyms. */
+export const phaseLabel = (p: string): string => `${/^[a-z]{2,6}$/.test(p) ? p.toUpperCase() : p} only`;
+
 /** Statistics of one optimizer history: how all samples scored and where good designs concentrate. */
 export function OptimizationStats({ history }: { history: HistoryData }) {
-  const d = useMemo(() => mapStats(history), [history]);
+  const all = useMemo(() => mapStats(history), [history]);
+  const phases = useMemo(() => phasesOf(all), [all]);
+  // a run with several phases starts on its first one, the global search (gradient phases add
+  // many near-identical probes that would dominate every statistic); undefined = not chosen yet
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const phase = chosen !== undefined && (chosen === null || phases.includes(chosen)) ? chosen : defaultPhase(all);
+  const d = useMemo(() => filterPhase(all, phase), [all, phase]);
   const anyFeasible = useMemo(() => summarize(d).feasibleCount > 0, [d]);
   const best = bestRow(d);
-  if (d.n === 0) return <p className="muted">The history is empty.</p>;
+  if (all.n === 0) return <p className="muted">The history is empty.</p>;
   return (
     <>
+      {phases.length > 1 && (
+        <div className="toolbar stats-samples">
+          <span className="muted">Samples</span>
+          <Segmented<string>
+            label="Samples"
+            value={phase ?? "all"}
+            options={[{ value: "all", label: "All phases" }, ...phases.map((p) => ({ value: p, label: phaseLabel(p) }))]}
+            onChange={(v) => setChosen(v === "all" ? null : v)}
+          />
+          <span className="muted" role="status">{`${d.n} of ${all.n} evaluations`}</span>
+        </div>
+      )}
       <p className="stats-note">
         Failed evaluations (status not ok, or f_total at the {F_FAIL} penalty) are counted but left out of every mean, quantile and axis.
-        Standard deviations use n - 1. f is the normalised objective as stored
+        Standard deviations use n - 1. Top 10 % counts each distinct design once, so finite-difference probes do not fill it.
+        f is the normalised objective as stored
         {d.mode === "pareto"
           ? "; in pareto mode f_total is only the stored sum of the objectives and the optimizer ranks by the objective vector."
           : "; f_total is the weighted sum of the objectives."}
         {best !== null ? ` Best design: evaluation ${d.evalId[best]}.` : ""}
       </p>
-      {!anyFeasible && (
+      {d.n === 0 && <p className="muted">No evaluations in this phase. Choose another phase.</p>}
+      {d.n > 0 && !anyFeasible && (
         <p className="error" role="status">
           {NO_FEASIBLE}
         </p>
       )}
-      <div className="panel-grid">
-        <section className="panel" aria-label="Summary">
-          <h3 className="panel-title">Summary</h3>
-          <SummaryTable d={d} />
-        </section>
-        <section className="panel" aria-label="Score distribution">
-          <h3 className="panel-title">Score distribution</h3>
-          <ScoreChart d={d} />
-        </section>
-        <section className="panel" aria-label="Objectives">
-          <h3 className="panel-title">Objectives</h3>
-          {anyFeasible ? <ObjectivesPanel d={d} /> : <p className="muted">{NO_FEASIBLE}</p>}
-        </section>
-        <section className="panel" aria-label="Design parameters">
-          <h3 className="panel-title">Design parameters</h3>
-          {anyFeasible ? <ParamsPanel d={d} /> : <p className="muted">{NO_FEASIBLE}</p>}
-        </section>
-        <section className="panel" aria-label="Constraints">
-          <h3 className="panel-title">Constraints</h3>
-          <ConstraintsPanel d={d} />
-        </section>
-        <section className="panel" aria-label="Evolution">
-          <h3 className="panel-title">Evolution</h3>
-          <EvolutionPanel d={d} />
-        </section>
-      </div>
+      {d.n > 0 && (
+        <div className="panel-grid">
+          <section className="panel" aria-label="Summary">
+            <h3 className="panel-title">Summary</h3>
+            <SummaryTable d={d} />
+          </section>
+          <section className="panel" aria-label="Score distribution">
+            <h3 className="panel-title">Score distribution</h3>
+            <ScoreChart d={d} />
+          </section>
+          <section className="panel" aria-label="Objectives">
+            <h3 className="panel-title">Objectives</h3>
+            {anyFeasible ? <ObjectivesPanel d={d} /> : <p className="muted">{NO_FEASIBLE}</p>}
+          </section>
+          <section className="panel" aria-label="Design parameters">
+            <h3 className="panel-title">Design parameters</h3>
+            {anyFeasible ? <ParamsPanel d={d} /> : <p className="muted">{NO_FEASIBLE}</p>}
+          </section>
+          <section className="panel" aria-label="Constraints">
+            <h3 className="panel-title">Constraints</h3>
+            <ConstraintsPanel d={d} />
+          </section>
+          <section className="panel" aria-label="Evolution">
+            <h3 className="panel-title">Evolution</h3>
+            <EvolutionPanel d={d} />
+          </section>
+        </div>
+      )}
     </>
   );
 }

@@ -135,6 +135,7 @@ export function OpenDialog() {
                       <label className="file-row">
                         <input
                           type="checkbox"
+                          aria-label={`Open ${e.name}`}
                           checked={selected.includes(e.path)}
                           onChange={() => toggle(e.path)}
                         />

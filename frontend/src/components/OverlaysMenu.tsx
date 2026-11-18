@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Disclosure } from "./Disclosure";
 import { toggleCentreKind, toggleRegionRole } from "../lib/centresMenu";
 import {
   CENTRE_KINDS,
@@ -26,50 +26,19 @@ export function OverlaysMenu({
   onRegions: (next: Set<RegionRole>) => void;
   hasStudy: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
-  const panelId = useId();
   const count = centres.size + (hasStudy ? regions.size : 0);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      button.current?.focus();
-    };
-    const onDown = (e: MouseEvent) => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("mousedown", onDown);
-    };
-  }, [open]);
-
   return (
-    <div className="centres-menu" ref={root}>
-      <button
-        ref={button}
-        type="button"
-        className="btn secondary"
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        onClick={() => setOpen(!open)}
-      >
-        {count > 0 ? `Overlays (${count})` : "Overlays"}
-      </button>
-      {open && (
-        <div id={panelId} className="centres-panel">
+    <Disclosure label={count > 0 ? `Overlays (${count})` : "Overlays"}>
+      {() => (
+        <>
           <div role="group" aria-label="Rotation centres" className="centres-group">
             <span className="centres-heading">Rotation centres</span>
             {CENTRE_KINDS.map((k) => (
               <label key={k} className="field">
                 <input
                   type="checkbox"
+                  aria-label={CENTRE_LABELS[k]}
                   checked={centres.has(k)}
                   onChange={(e) => onCentres(toggleCentreKind(centres, k, e.target.checked))}
                 />
@@ -88,6 +57,7 @@ export function OverlaysMenu({
               <label key={k} className="field">
                 <input
                   type="checkbox"
+                  aria-label={REGION_LABELS[k]}
                   checked={hasStudy && regions.has(k)}
                   disabled={!hasStudy}
                   onChange={(e) => onRegions(toggleRegionRole(regions, k, e.target.checked))}
@@ -96,8 +66,8 @@ export function OverlaysMenu({
               </label>
             ))}
           </div>
-        </div>
+        </>
       )}
-    </div>
+    </Disclosure>
   );
 }

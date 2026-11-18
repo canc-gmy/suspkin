@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlotlyHTMLElement } from "plotly.js-dist-min";
 import type { DatasetInfo, PoseInput } from "../api";
 import { useHardpoints, useHealth, useRegions, useScene, useSource } from "../api/hooks";
+import { Disclosure } from "../components/Disclosure";
 import { OverlaysMenu } from "../components/OverlaysMenu";
 import { loadCentreKinds, loadRegionRoles, saveCentreKinds, saveRegionRoles } from "../lib/centresMenu";
 import { changedSceneNames } from "../lib/hardpoints";
@@ -14,7 +15,7 @@ import {
   buildSceneFigure,
   cameraForLayout,
   cameraFromRelayout,
-  DEFAULT_CAMERA,
+  fitCamera,
   frameBox,
   parseCentres,
   posedHardpoints,
@@ -41,6 +42,17 @@ function loadPlotly(): Promise<PlotlyModule["default"]> {
 type Relayout = { relayout: (el: HTMLElement, update: Record<string, unknown>) => Promise<unknown> };
 
 const MIN_CANVAS = 320;
+/** Below this width the legend starts closed, so the canvas keeps its room on a phone. */
+const WIDE_VIEWPORT = 900;
+/** Height of the strip above the scene while the legend is on (matches the layout margin). */
+const LEGEND_STRIP = 48;
+
+/** Camera that frames the whole car in the canvas as it is now (see `fitCamera`). */
+function framedCamera(el: HTMLElement | null, frame: Parameters<typeof fitCamera>[0], legend: boolean): Camera {
+  const r = el?.getBoundingClientRect();
+  // the scene sits below the strip reserved for the legend
+  return fitCamera(frame, r ? { width: r.width, height: r.height - (legend ? LEGEND_STRIP : 8) } : null);
+}
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
@@ -72,6 +84,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
   const poseSi = poseToSi(readOnly ? ZERO_POSE : debounced, poseInputs);
   const scene = useScene(id, poseSi);
   const [ghostOn, setGhostOn] = useState(false);
+  const [legendOn, setLegendOn] = useState(() => typeof window === "undefined" || window.innerWidth >= WIDE_VIEWPORT);
   const ghostId = ghostOn && reference && reference !== id && datasets.some((d) => d.id === reference) ? reference : null;
   const ghost = useScene(ghostId, poseSi);
   const staticScene = useScene(id, poseToSi(ZERO_POSE, poseInputs));
@@ -144,7 +157,8 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         frame,
         highlight,
         centres: [...regionTraces, ...centres.traces],
-        camera: cameraForLayout({ reset: false, saved: savedCamera.current }),
+        camera: cameraForLayout({ reset: false, saved: savedCamera.current, fallback: framedCamera(el, frame, legendOn) }),
+        legend: legendOn,
       });
       const gd = await P.react(el, fig.data, fig.layout, {
         responsive: true,
@@ -162,13 +176,14 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
     return () => {
       cancelled = true;
     };
-  }, [figure, ghostFigure, frame, theme, highlight, centres, regionTraces]);
+  }, [figure, ghostFigure, frame, theme, highlight, centres, regionTraces, legendOn]);
 
   const resetView = () => {
     const el = host.current;
     if (!el || !rendered.current) return;
-    savedCamera.current = DEFAULT_CAMERA;
-    void loadPlotly().then((P) => (P as unknown as Relayout).relayout(el, { "scene.camera": DEFAULT_CAMERA }));
+    const camera = framedCamera(el, frame, legendOn);
+    savedCamera.current = camera;
+    void loadPlotly().then((P) => (P as unknown as Relayout).relayout(el, { "scene.camera": camera }));
   };
 
   // canvas height: from the bottom of the toolbar block to the bottom of the viewport
@@ -224,6 +239,7 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <label className="field">
           <span>Revision</span>
           <select
+            aria-label="Revision"
             value={id ?? ""}
             onChange={(e) => {
               setSelected(e.target.value);
@@ -244,6 +260,8 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
         <button type="button" className="btn secondary" onClick={resetView}>
           Reset view
         </button>
+      </div>
+      <div className="toolbar options-bar">
         <OverlaysMenu
           centres={centreKinds}
           onCentres={(next) => {
@@ -257,12 +275,29 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
           }}
           hasStudy={hasStudy}
         />
+        <button type="button" className="btn secondary" aria-pressed={legendOn} onClick={() => setLegendOn(!legendOn)}>
+          Legend
+        </button>
+        {centres.notes.length > 0 && (
+          <Disclosure label={`Notes (${centres.notes.length})`}>
+            {() => (
+              <ul className="centres-notes" aria-label="Centres outside the view">
+                {centres.notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            )}
+          </Disclosure>
+        )}
         <label className="field">
-          <input type="checkbox" checked={ghostOn} onChange={(e) => setGhostOn(e.target.checked)} />
+          <input type="checkbox" aria-label="Show reference ghost" checked={ghostOn} onChange={(e) => setGhostOn(e.target.checked)} />
           <span>Show reference ghost</span>
         </label>
         <label className="field" title={isRef ? "Same as the reference" : undefined}>
-          <input type="checkbox" checked={highlightOn && !isRef} disabled={isRef} onChange={(e) => setHighlightOn(e.target.checked)} />
+          <input
+            type="checkbox"
+            aria-label="Highlight changes"
+            checked={highlightOn && !isRef} disabled={isRef} onChange={(e) => setHighlightOn(e.target.checked)} />
           <span>Highlight changes</span>
         </label>
       </div>
@@ -287,13 +322,6 @@ export function Scene3D({ datasets }: { datasets: DatasetInfo[] }) {
           </label>
         ))}
       </div>
-      {centres.notes.length > 0 && (
-        <ul className="centres-notes" aria-label="Centres outside the view">
-          {centres.notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-      )}
       {readOnly && <p className="muted">Static pose in snapshots.</p>}
       {error && (
         <p className="error" role="alert">

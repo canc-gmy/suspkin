@@ -154,7 +154,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
         />
         <label className="field">
           <span>Filter points</span>
-          <input type="text" value={text} placeholder="uca_outer" onChange={(e) => setText(e.target.value)} />
+          <input type="text" aria-label="Filter points" value={text} placeholder="uca_outer" onChange={(e) => setText(e.target.value)} />
         </label>
         <span className="muted" role="status">{`${rows.length} of ${all.length} rows`}</span>
       </div>
@@ -169,7 +169,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
               Discard edits
             </button>
             <label className="check">
-              <input type="checkbox" checked={solver.auto} onChange={(e) => solver.setAuto(e.target.checked)} />
+              <input type="checkbox" aria-label="Auto-solve" checked={solver.auto} onChange={(e) => solver.setAuto(e.target.checked)} />
               <span>Auto-solve</span>
             </label>
             <span className="muted" role="status">
@@ -180,7 +180,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
           <>
             <label className="field">
               <span>Edit revision</span>
-              <select value={pickId ?? ""} disabled={readOnly || pickable.length === 0} onChange={(e) => setPick(e.target.value)}>
+              <select aria-label="Edit revision" value={pickId ?? ""} disabled={readOnly || pickable.length === 0} onChange={(e) => setPick(e.target.value)}>
                 {pickable.map((id) => (
                   <option key={id} value={id}>
                     {label(id)}
@@ -235,6 +235,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
             <label className="field">
               <span>Revision</span>
               <select
+                aria-label="Revision to save"
                 value={saveTarget}
                 onChange={(e) => {
                   setSaveId(e.target.value);
@@ -251,7 +252,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
           )}
           <label className="field">
             <span>File name</span>
-            <input type="text" value={fileName} onChange={(e) => setFileName(e.target.value)} />
+            <input type="text" aria-label="File name" value={fileName} onChange={(e) => setFileName(e.target.value)} />
           </label>
           <button type="submit" className="btn secondary" disabled={!fileName.trim()}>
             Save
@@ -324,6 +325,7 @@ export function HardpointsView({ datasets }: { datasets: DatasetInfo[] }) {
                           <label className="check hp-rightonly">
                             <input
                               type="checkbox"
+                              aria-label={`Right side only for ${r.point}`}
                               checked={isRightOnly(editing, base, r)}
                               onChange={(e) => dispatch({ type: "rightOnly", axle: r.axle, point: r.point, on: e.target.checked })}
                             />

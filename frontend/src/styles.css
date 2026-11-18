@@ -119,6 +119,13 @@ input {
   display: none;
 }
 
+/* on a phone the top strip keeps to two rows: the "Resolution" caption goes, its control keeps a name */
+@media (max-width: 479px) {
+  .resolution > .muted {
+    display: none;
+  }
+}
+
 @media (max-width: 899px) {
   .drawer-toggle {
     display: inline-block;
@@ -349,7 +356,7 @@ table.ruled {
 
 .design-label {
   flex: 1 1 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word; /* long names break after an underscore first (see TitleBlock) */
 }
 
 .legend-note {
@@ -451,6 +458,7 @@ input.readout-input[aria-invalid="true"] {
   align-items: center;
   gap: 6px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .check input {
@@ -616,6 +624,7 @@ input.readout-input[aria-invalid="true"] {
 }
 
 .panel-note {
+  max-width: 80ch;
   margin: 0 0 var(--space-1);
   color: var(--ink-muted);
   font-size: var(--text-12);
@@ -852,6 +861,7 @@ input.cell-input {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  white-space: nowrap; /* a label never wraps inside its own control; the toolbar wraps between controls */
 }
 
 select {
@@ -863,7 +873,7 @@ select {
 
 .sliders {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-2);
 }

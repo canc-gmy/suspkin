@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { DatasetInfo } from "../api";
 import { useCloseDataset, usePatchDataset, useSource } from "../api/hooks";
 import { READ_ONLY_TIP } from "../api/snapshotSource";
@@ -92,7 +92,7 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
           ) : (
             <span className="design-name">
               <span className="design-label" title={d.source}>
-                {d.label}
+                {breakable(d.label)}
               </span>
               {d.resolution_fixed === true && typeof d.steps === "number" && (
                 <span className="design-meta">{`${d.steps} points, stored`}</span>
@@ -187,4 +187,14 @@ export function TitleBlock({ datasets, palette, theme }: Props) {
       <p className="legend-note">Solid left/front, dashed right/rear</p>
     </div>
   );
+}
+
+/** The label with a break opportunity after each underscore, so file-style names wrap between words. */
+function breakable(label: string): ReactNode {
+  return label.split(/(?<=_)/).map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ));
 }

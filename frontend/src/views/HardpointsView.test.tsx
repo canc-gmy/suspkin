@@ -119,8 +119,16 @@ describe("HardpointsView auto-solve", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       let n = 0;
-      const derive = vi.fn(() => Promise.resolve(info(`e${++n}`, "car edited", "edited")));
-      const src = mockSource({ deriveDataset: derive });
+      const log: string[] = [];
+      const derive = vi.fn(() => {
+        log.push("derive");
+        return Promise.resolve(info(`e${++n}`, "car edited", "edited"));
+      });
+      const close = vi.fn((id: string) => {
+        log.push(`close ${id}`);
+        return Promise.resolve();
+      });
+      const src = mockSource({ deriveDataset: derive, closeDataset: close });
       renderView(src, [info("a1", "car")]);
       fireEvent.click(await screen.findByRole("button", { name: "Edit as new revision" }));
       fireEvent.click(screen.getByLabelText("Auto-solve"));
@@ -136,6 +144,9 @@ describe("HardpointsView auto-solve", () => {
       await vi.advanceTimersByTimeAsync(700);
       expect(derive).toHaveBeenCalledTimes(2);
       await waitFor(() => expect(src.closeDataset).toHaveBeenCalledWith("e1"));
+      // the previous auto revision is closed before the next one is registered, so the label
+      // stays "car edited" and never becomes "car edited (2)"
+      expect(log).toEqual(["derive", "close e1", "derive"]);
     } finally {
       vi.useRealTimers();
     }

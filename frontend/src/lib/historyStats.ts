@@ -26,6 +26,8 @@ export interface StatsData {
   /** Design parameters: physical `p_*` in mm when present, else the unit-cube `x_*`. */
   params: Record<string, Num[]>;
   paramUnit: "mm" | "unit cube";
+  /** Unit-cube design variables (`x_*` columns), used to tell near-identical designs apart. */
+  unit: Record<string, Num[]>;
   best: Num[];
   mode: string | null;
   bestEvalId: number | null;
@@ -68,6 +70,7 @@ export function mapStats(h: HistoryData): StatsData {
     g,
     params,
     paramUnit: usePhysical ? "mm" : "unit cube",
+    unit: Object.fromEntries(names.filter((c) => c.startsWith("x_")).map((c) => [c, numCol(c)])),
     best: pick(h.best_so_far, null),
     mode: typeof res?.mode === "string" ? res.mode : null,
     bestEvalId: num(res?.best_eval_id),
@@ -152,14 +155,95 @@ export function okRows(d: StatsData): number[] {
   return failed.map((x, i) => (x ? -1 : i)).filter((i) => i >= 0);
 }
 
+/** Designs closer than this (Euclidean, unit cube) count as the same design. */
+export const SAME_DESIGN = 1e-6;
+
 /**
- * The best `TOP_FRACTION` of `rows` by f_total (at least `minN` rows). Returns null when fewer
- * than `minN` rows are available.
+ * `rows` sorted best first by f_total, with near-identical designs removed (unit-cube distance
+ * below `SAME_DESIGN`): a gradient phase evaluates many finite-difference probes of one design, and
+ * they must not fill the top group. The best row of each cluster is kept.
+ */
+export function distinctRows(d: StatsData, rows: readonly number[]): number[] {
+  const sorted = [...rows].sort((a, b) => (d.fTotal[a] as number) - (d.fTotal[b] as number) || a - b);
+  const cols = Object.values(d.unit);
+  if (cols.length === 0) return sorted;
+  const kept: number[] = [];
+  for (const i of sorted) {
+    const same = kept.some((k) => {
+      let sq = 0;
+      for (const c of cols) sq += ((c[i] ?? 0) - (c[k] ?? 0)) ** 2;
+      return sq < SAME_DESIGN ** 2;
+    });
+    if (!same) kept.push(i);
+  }
+  return kept;
+}
+
+/**
+ * The best `TOP_FRACTION` of the distinct designs among `rows` by f_total (at least `minN`).
+ * Returns null when fewer than `minN` distinct designs are available.
  */
 export function topRows(d: StatsData, rows: readonly number[], fraction = TOP_FRACTION, minN = TOP_MIN): number[] | null {
-  if (rows.length < minN) return null;
-  const k = Math.min(rows.length, Math.max(minN, Math.ceil(fraction * rows.length)));
-  return [...rows].sort((a, b) => (d.fTotal[a] as number) - (d.fTotal[b] as number) || a - b).slice(0, k);
+  const distinct = distinctRows(d, rows);
+  if (distinct.length < minN) return null;
+  const k = Math.min(distinct.length, Math.max(minN, Math.ceil(fraction * distinct.length)));
+  return distinct.slice(0, k);
+}
+
+// ---- phases -------------------------------------------------------------------------
+
+const phaseOf = (d: StatsData, i: number): string => d.source[i] || "unknown";
+
+/** Optimizer phases (the `source` column) in the order they first appear. */
+export function phasesOf(d: StatsData): string[] {
+  const seen: string[] = [];
+  for (let i = 0; i < d.n; i++) {
+    const p = phaseOf(d, i);
+    if (!seen.includes(p)) seen.push(p);
+  }
+  return seen;
+}
+
+/**
+ * The phase the Statistics view starts on: the first phase of a run with several (the global
+ * search, which explores the space), or null (all samples) for a single-phase run.
+ */
+export function defaultPhase(d: StatsData): string | null {
+  const phases = phasesOf(d);
+  return phases.length > 1 ? (phases[0] as string) : null;
+}
+
+/** Running minimum of f_total over the feasible, non-failed rows: the best-so-far curve. */
+function bestSoFar(d: StatsData): Num[] {
+  const failed = failedRows(d);
+  let best: number | null = null;
+  return d.fTotal.map((f, i) => {
+    if (d.feasible[i] && !failed[i] && f !== null && (best === null || f < best)) best = f;
+    return best;
+  });
+}
+
+/** Only the rows of one phase (null keeps all of them); the best-so-far curve is recomputed for them. */
+export function filterPhase(d: StatsData, phase: string | null): StatsData {
+  if (phase === null) return d;
+  const keep = d.evalId.map((_, i) => i).filter((i) => phaseOf(d, i) === phase);
+  const sub = <T,>(xs: readonly T[]): T[] => keep.map((i) => xs[i] as T);
+  const cols = (m: Record<string, Num[]>) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, sub(v)]));
+  const out: StatsData = {
+    ...d,
+    n: keep.length,
+    evalId: sub(d.evalId),
+    fTotal: sub(d.fTotal),
+    feasible: sub(d.feasible),
+    status: sub(d.status),
+    source: sub(d.source),
+    seconds: sub(d.seconds),
+    f: cols(d.f),
+    g: cols(d.g),
+    params: cols(d.params),
+    unit: cols(d.unit),
+  };
+  return { ...out, best: bestSoFar(out) };
 }
 
 /** Row of the best design: `result.best_eval_id` when present, else the feasible minimum of f_total. */
