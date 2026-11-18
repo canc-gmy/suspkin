@@ -699,8 +699,11 @@ on random designs. Proposed tolerances, within roll ±2 deg:
 
 - **Sampler:** Latin hypercube in the unit cube of each axle (`scipy.stats.qmc`,
   `optimization="random-cd"`), seeded, baseline as row 0.
-- **Size:** `n_initial` per axle, default 20 000. That is about 25 min per axle with 7
-  workers at about 0.5 s per corner sample.
+- **Size:** `n_initial` per axle, default 20 000. Measured in S0 with the v0.8 tables:
+  front sample (41 × 21 grid) 2.65 s, rear 0.16 s, so 20 000 front samples take about
+  2.1 h on 7 workers. The S1 extractor computes only the registry channels, vectorised
+  over all states of a sample (target ≥ 5× faster than `metrics_frame` +
+  `joint_angles_frame`, equal to them within 1e-9).
 - **FOM per sample:** corner sweeps on the §13.4 grid for the left corner of that axle,
   through the existing parallel pool, with the budget and resume rules of O18.
 - **Infeasible samples** (the corner does not assemble, or the solver fails) are kept
@@ -828,7 +831,7 @@ surrogate:
 
 | Slice | Content | Depends on | Agent |
 |---|---|---|---|
-| S0 | Profile one FOM evaluation (solve vs metric tables vs evaluator). Go/no-go: a surrogate evaluation must be ≥ 100× cheaper | – | coder |
+| S0 | Profile one FOM evaluation (solve vs metric tables vs evaluator). Go/no-go: a surrogate evaluation must be ≥ 100× cheaper. **Done** (`scripts/profile_fom.py`), see §13.15 | – | coder |
 | S1 | Grid and channel registry; FOM curve extractor for one corner (design → `Y`, mask) | S0 | coder |
 | S2 | Analytic vehicle layer + layer-error validation against the FOM | S1 | coder + reviewer |
 | S3 | LHS sampler, sharded dataset, `surrogate sample`, resume | S1 | coder |
@@ -862,3 +865,35 @@ S2, S3 and S4 run in parallel after S1.
   measured on its own (§13.5), and the final design is FOM-verified anyway.
 - **torch with spawn workers on Windows:** torch is imported only in training and
   surrogate processes, never in the FOM workers.
+
+### 13.15 S0 result (2026-11-18)
+
+Measured with `scripts/profile_fom.py` on the baseline of `fs_reference_optimize.yaml`,
+one process:
+
+| Item | Value |
+|---|---|
+| One FOM evaluation | 0.72–0.82 s (696 corner solves) |
+| Corner solving | 47 % |
+| Metric tables (pandas, per-state dicts) | 38 % |
+| Vehicle-sweep overhead | 10 % |
+| Constraint and objective logic | 0.4 % (3 ms) |
+| `vehicle_summary` (roll and heave sweeps inside) | about 85 % of the cumulative time |
+| Per state: solve / `metrics_frame` / joint angles | 0.46 ms / 1.9 ms / 0.95 ms |
+
+Hotspots by own time are small-array numpy calls (`cross`, `norm`, `moveaxis`).
+
+Decision: **go**. A batched MLP forward pass costs microseconds per design on the GPU.
+The constraint and objective logic costs 3 ms. A vectorised vehicle layer in numpy
+should stay under 1 ms per design in a batch. That leaves about 5 ms per design,
+which is more than 100× cheaper than 0.75 s.
+
+Conditions:
+
+- S5 must not build pandas tables per design: the surrogate path feeds the evaluator
+  arrays, or a vectorised evaluator is added.
+- S1 vectorises channel extraction (§13.6), because the tables cost about 6× the solve
+  per state.
+
+Side finding, outside v0.9: the same vectorisation applied to the FOM tables and to
+`vehicle_summary` would make every v0.8 evaluation about 2× faster.
