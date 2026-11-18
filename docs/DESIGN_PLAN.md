@@ -29,7 +29,7 @@ against objectives under geometric constraints.
 
 - Quasi-static force solver (link loads).
 - FEM structural analysis of members.
-- Neural-network surrogate of forces and stresses (the kinematic surrogate is planned for v0.9, §13).
+- Neural-network surrogate of forces and stresses (the kinematic surrogate is planned for v1.1, §13).
 - Elasto-kinematics / compliance (K&C).
 
 ---
@@ -524,13 +524,13 @@ The package name `suspkin` is a placeholder.
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
 | v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
 | **v1.0.0** (current, done) | Stable kinematics | Docs complete, regression suite frozen |
-| v0.9.0 (planned, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
+| v1.1.0 (planned, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
 
 **Future phases (not planned in detail yet)**:
 
 - **v1.x Forces**: quasi-static link forces from tyre load cases.
 - **v2.x FEM**: 3D beam/truss FEM of members (stress, pushrod buckling); load cases from the force solver.
-- **v3.x Surrogate of stresses**: extend the v0.9 kinematic surrogate (§13) with force and stress outputs.
+- **v3.x Surrogate of stresses**: extend the v1.1 kinematic surrogate (§13) with force and stress outputs.
 
 ---
 
@@ -545,7 +545,7 @@ The package name `suspkin` is a placeholder.
 | D5 | Frame and units | ISO 8855, SI |
 | D6 | Motions | All: corner bump/rebound, heave, roll, pitch, steer, combined |
 | D7 | Metrics | Every metric in §5 |
-| D8 | FEM / NN | FEM deferred to future phases. Kinematic NN surrogate planned for v0.9.0 (§13, S1–S14). |
+| D8 | FEM / NN | FEM deferred to future phases. Kinematic NN surrogate planned for v1.1.0 (§13, S1–S14). |
 | O1 | Validation data | User **may** have real hardpoints. v0.x uses a reference FS geometry + analytical tests. The YAML schema must accept user hardpoints directly so their data drops in as a regression case later. |
 | O2 | Pushrod mount | Solver supports `upright`, `lca` and `uca`. **Reference car (from v0.2): pushrod on the UCA, both axles**, rod in compression going up to a rocker mounted above the UCA (changed 2026-11-17, was upright). |
 | O3 | ARB | **Both axles**. Type chosen per axle in YAML (decided 2026-11-17 for v0.4): `torsional` (round arms, bar twist GJ/L **in series with arm bending** 3EI/L³), `blade` (torsion tube + flat blade arms with an orientation angle: flat = soft, edge-on = stiff), `beam` (transverse bending bar: heave-free central slider, clamped in rotation; roll bends the two halves as cantilevers). Replaces the earlier single `flexural` type. |
@@ -576,7 +576,7 @@ The package name `suspkin` is a placeholder.
 | D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |
 | D10 | Corner solver | Own damped Newton with analytic Jacobian replaces `scipy.optimize.root` as the primary corner solver (decided 2026-11-17); scipy `hybr` with the same Jacobian stays as fallback, and far guesses go through staged continuation from the guess. Why: finite-difference `hybr` needed about 15 residual evaluations per solve with numpy overhead on 3-vectors; Newton needs about 3 on the reference car and a scalar evaluation is much cheaper, with results identical to 1e-9. Continuation gained a linear predictor and a 0.05 rad branch-jump guard that triggers step halving (extra work in rack sweeps near lock). |
-| S1 | Surrogate scope | v0.9.0 brings the NN surrogate forward from v3.x, for kinematics only (no stresses). Every reported design is FOM-verified (§13). Symmetric variables only; asymmetric variables deferred (decided 2026-11-18). |
+| S1 | Surrogate scope | v1.1.0 (was planned as v0.9.0 before v1.0.0 shipped) brings the NN surrogate forward from v3.x, for kinematics only (no stresses). Every reported design is FOM-verified (§13). Symmetric variables only; asymmetric variables deferred (decided 2026-11-18). |
 | S2 | Axle split (proposed) | Two independent models, front and rear. Inputs = the axle's design variables in the unit cube; vehicle data are not inputs. |
 | S3 | Outputs (proposed) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as (cos, sin) to avoid the ±π wrap. |
 | S4 | Derived quantities (decided 2026-11-18) | Rates (gains, motion ratios, wheel and ride rates) are finite differences of predicted curves, not network outputs. |
@@ -593,7 +593,7 @@ The package name `suspkin` is a placeholder.
 
 ---
 
-## 13. Surrogate model and active learning (v0.9.0, planned)
+## 13. Surrogate model and active learning (v1.1.0, planned)
 
 Status: **DRAFT**. Decided 2026-11-18: S1 (symmetric only), S4 (derived rates), S10 (variant A). The other S decisions in §12 are proposed.
 
@@ -614,7 +614,12 @@ Rules:
   roll gradient, Ackermann …) are **not** predicted. An analytic layer computes them
   from the corner curves of the networks (§13.5).
 
-### 13.2 Scope of v0.9.0
+### 13.2 Scope of v1.1.0
+
+Stability (`docs/guides/stability.md`): the `surrogate` study block is a new optional
+block of study schema 1, allowed in a minor release. The Python package
+`suspkin.surrogate` is **experimental**, like `suspkin.optimize`: its API may change in
+minor releases, and it is not exported in `suspkin.__all__`.
 
 In: symmetric variables on both axles, LHS dataset, two MLPs with Optuna architecture
 search, analytic vehicle layer, active-learning optimizer, benchmark against direct DE.
@@ -838,7 +843,7 @@ surrogate:
 | S4 | MLP, training, Optuna search, front/rear in parallel, `surrogate train` / `validate` | S1 | coder + reviewer |
 | S5 | `SurrogateProblem`: x → networks → curves → vehicle layer → evaluator → f, g | S2, S4 | coder |
 | S6 | Active-learning driver, trust region, run outputs, AL plots (f_NN vs f_FOM, residual per iteration) | S5 | coder + reviewer |
-| S7 | Benchmark study with all hardpoints free, docs, CHANGELOG, tag `v0.9.0` | S6 | chore + reviewer |
+| S7 | Benchmark study with all hardpoints free, docs, CHANGELOG, tag `v1.1.0` | S6 | chore + reviewer |
 
 S2, S3 and S4 run in parallel after S1.
 
@@ -895,5 +900,5 @@ Conditions:
 - S1 vectorises channel extraction (§13.6), because the tables cost about 6× the solve
   per state.
 
-Side finding, outside v0.9: the same vectorisation applied to the FOM tables and to
+Side finding, outside v1.1: the same vectorisation applied to the FOM tables and to
 `vehicle_summary` would make every v0.8 evaluation about 2× faster.
