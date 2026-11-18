@@ -5,6 +5,8 @@ It computes kinematic curves (camber, toe, caster, anti-dive/anti-squat, roll ce
 motion ratios, steering geometry) from hardpoint geometry and turns them into
 vehicle-dynamics plots and reports. Planned later: geometry optimization, FEM
 checks of key parts, and a neural-network surrogate for fast design sweeps.
+Geometry optimization (v0.8) is available: multi-objective and weighted-sum studies on the
+constraint specification.
 
 ## Conventions
 
@@ -40,13 +42,35 @@ uv run suspkin report configs/vehicles/fs_reference.yaml --compare other.yaml --
 
 A study YAML in `configs/studies/` points to a vehicle and lists the design variables and
 constraints (see [DESIGN_PLAN section 7](docs/DESIGN_PLAN.md) and
-[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-study-v07)). `check` evaluates the
+[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08)). `check` evaluates the
 baseline vehicle against every constraint and prints PASS/FAIL per row; `--plot` writes the 3D
 view of the variable domains and keep-outs.
 
 ```bash
 uv run suspkin check configs/studies/fs_reference_constraints.yaml --plot results/study.png
 ```
+
+### Optimization
+
+A study with an `objectives` list and an `optimizer` block is optimised by `suspkin optimize`.
+The run folder holds the study and vehicle copies, `history.csv` (one row per evaluation),
+`best.yaml` (or `pareto/` in pareto mode), `result.json`, `meta.json`, `figures/` and a
+before/after `report/`. The demo study takes a few minutes.
+
+```bash
+uv run suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo
+```
+
+Resume an interrupted run from its history (the folder must contain `history.csv`; the budget
+counts only new evaluations):
+
+```bash
+uv run suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo --resume
+```
+
+The `nsga2` method needs pymoo: `pip install suspkin[opt]` or `uv sync --extra opt`. The other
+methods (`de`, `slsqp`, `trust-constr`, `de+slsqp`) use scipy only. See
+[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08) for the math and outputs.
 
 ## Development
 

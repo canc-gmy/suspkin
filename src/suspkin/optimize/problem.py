@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.optimize.design import DesignSpace
-from suspkin.optimize.evaluate import Evaluation, evaluate
+from suspkin.optimize.evaluate import Evaluation, evaluate, failed_evaluation
 from suspkin.optimize.history import (
     CacheEntry,
     EvalCache,
@@ -60,7 +60,10 @@ def _init_worker(study_path: str) -> None:
 
 def _eval_with(space: DesignSpace, x: F64) -> tuple[Evaluation, float]:
     t0 = _now()
-    ev = evaluate(space, x)
+    try:
+        ev = evaluate(space, x)
+    except Exception as exc:  # a crashing design must not abort the run
+        ev = failed_evaluation(space, f"{type(exc).__name__}: {exc}")
     return ev, _now() - t0
 
 
@@ -113,6 +116,7 @@ class Problem:
         self.history_path = self.run_dir / "history.csv"
         self.cache = EvalCache()
         self._next_id = 0
+        self.valid_from = 0  # history rows with a smaller eval_id are stale (changed study)
         if resume and self.history_path.exists() and self.history_path.stat().st_size > 0:
             df = read_history(self.history_path)
             self.cache = EvalCache.from_history(df, self.space, study)
@@ -135,6 +139,11 @@ class Problem:
         """Number of design parameters."""
         return self.space.n
 
+    @property
+    def next_id(self) -> int:
+        """The ``eval_id`` the next new evaluation gets."""
+        return self._next_id
+
     def exhausted(self) -> bool:
         """True if the evaluation or time budget is used up."""
         if self.max_evals is not None and self.n_evals >= self.max_evals:
@@ -144,7 +153,7 @@ class Problem:
     def close(self) -> None:
         """Shut the pool down and close the history file."""
         if self._pool is not None:
-            self._pool.shutdown()
+            self._pool.shutdown(wait=True, cancel_futures=True)
             self._pool = None
         self._writer.close()
 
@@ -179,14 +188,11 @@ class Problem:
         """Evaluate rows of ``X``; returns ``(F, G, f_total, max_g, feasible)`` arrays.
 
         Cached points are free; duplicates inside the batch are evaluated once. New points
-        are appended to the history in input order. Raises :class:`BudgetExhausted` if the
-        budget is already used up when the batch starts; a batch crossing the limit completes.
+        are appended to the history in input order. Raises :class:`BudgetExhausted` if some
+        points need evaluating and the budget is already used up when the batch starts (a
+        fully cached batch never raises); a batch crossing the limit completes.
         """
         xm = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        if self.exhausted():
-            raise BudgetExhausted(
-                f"budget exhausted ({self.n_evals} evaluations, {self.elapsed:.1f} s)"
-            )
         keys = [cache_key(x) for x in xm]
         misses: list[int] = []
         seen: set[tuple[float, ...]] = set()
@@ -194,6 +200,10 @@ class Problem:
             if k not in self.cache and k not in seen:
                 seen.add(k)
                 misses.append(i)
+        if misses and self.exhausted():
+            raise BudgetExhausted(
+                f"budget exhausted ({self.n_evals} evaluations, {self.elapsed:.1f} s)"
+            )
         outs = self._run([xm[i] for i in misses])
         for i, (ev, secs) in zip(misses, outs, strict=True):
             self._writer.append(self._next_id, xm[i], ev, secs, source)

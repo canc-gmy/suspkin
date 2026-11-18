@@ -103,5 +103,6 @@ optimizer:
   seed: 1                # reproducible runs
   workers: auto          # CPU count - 1 processes
   budget: {evaluations: 300, time: 15 min}   # demo budget; use thousands for a real run
-  start: baseline        # SLSQP starts from the baseline (or the best history point with `best`)
+  start: baseline        # only for slsqp / trust-constr (baseline or `best` history point);
+                         # de+slsqp ignores it and always polishes from the best history point
   options: {}            # passthrough: popsize, maxiter, ftol, fd_step ...

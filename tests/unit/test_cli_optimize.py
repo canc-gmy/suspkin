@@ -2,6 +2,9 @@
 
 import os
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -72,3 +75,23 @@ def test_optimize_no_feasible_exit_1(tmp_path: Path) -> None:
     args = ["optimize", str(study), "--out", str(tmp_path / "r"), "--evaluations", "15"]
     res = runner.invoke(app, [*args, "--method", "de", *BASE])
     assert res.exit_code == 1, res.output
+
+
+def test_optimize_workers_accepts_auto_and_rejects_junk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import suspkin.optimize.drivers as drv
+
+    seen: list[Any] = []
+
+    def fake(*a: Any, **k: Any) -> Any:
+        seen.append(k["workers"])
+        raise ValueError("stop")
+
+    monkeypatch.setattr(drv, "run_optimization", fake)
+    assert runner.invoke(app, ["optimize", str(FIX), "--workers", "auto"]).exit_code == 2
+    assert runner.invoke(app, ["optimize", str(FIX), "--workers", "3"]).exit_code == 2
+    assert seen == ["auto", 3]
+    assert runner.invoke(app, ["optimize", str(FIX), "--workers", "x"]).exit_code == 2
+    assert runner.invoke(app, ["optimize", str(FIX), "--workers", "0"]).exit_code == 2
+    assert seen == ["auto", 3]

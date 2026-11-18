@@ -266,13 +266,13 @@ Plot code consumes the tidy result tables only. It never calls the solver.
 ## 7. Optimization
 
 v0.7.0 delivers the study specification, the constraint evaluator and `suspkin check`.
-Objectives and optimizers follow in v0.8.0 (section 11). The design variables and
+Objectives and optimizers were delivered in v0.8.0 (sections 7.10–7.14, milestone in section 11). The design variables and
 constraints are decided in O9-O14 (section 12). Everything runs on the pure kinematic core,
 so the optimizer will call the same design-space and `evaluate` API.
 
 Code: [optimize/](../src/suspkin/optimize/), [metrics/joints.py](../src/suspkin/metrics/joints.py),
 [plotting/regions.py](../src/suspkin/plotting/regions.py). Module reference and math:
-[ARCHITECTURE.md section 14](ARCHITECTURE.md#14-optimization-study-v07).
+[ARCHITECTURE.md section 14](ARCHITECTURE.md#14-optimization-v07v08).
 
 ### 7.1 Study file
 
@@ -379,12 +379,65 @@ only the study and the design space, and it runs no solve.
 
 ### 7.9 Deferred to v0.8.0
 
+Implemented in v0.8.0 (see 7.10–7.14), except the surrogate, which stays deferred to v3.x:
+
 - Objectives: target curves or scalars (bump steer, camber gain, roll centre height and migration,
   motion ratio, anti-dive), combined by weighted sum or as a Pareto front.
 - Optimizers: `pymoo` NSGA-II (multi-objective); `scipy.optimize` SLSQP and differential evolution
   (single objective).
 - Outputs: optimized YAML, Pareto front plot, before/after comparison report.
 - The neural-network surrogate (v3.x) plugs in behind the same evaluator interface.
+
+### 7.10 Objectives (v0.8.0, implemented)
+
+Objectives are evaluated on the same sweep cache as the constraints ([evaluate.py](../src/suspkin/optimize/evaluate.py)).
+
+| Type | Raw value (SI) |
+|---|---|
+| `curve` | RMS of `metric − target(x)` over the window (default: overlap of the target x range with the sweep); linear interpolation of the target |
+| `target` | `\|value − target\|` at `at` of a sweep, or of a summary metric when no sweep is given |
+| `minimize` / `maximize` | `of`: `value` (at `at`), `slope`, `max`, `min`, `max_abs` or `mean` over `where`; or a summary metric |
+| `linearity` | RMS residual of a least-squares line over `where` |
+
+- Normalised value: `f = raw / scale`. The scale is the user `scale`, else `default_scale(dim)`; a `target` objective without either uses `|target|`. A missing scale on a dimension without a default is rejected at load.
+- `maximize` is stored as `−raw`.
+- `weight` (default 1) is used only in weighted mode: `f_total = Σ wᵢ fᵢ`.
+- A failed objective gets `f = F_FAIL = 1e3` (section 12, O19).
+
+### 7.11 Optimizer block (v0.8.0, implemented)
+
+`optimizer:` keys: `mode` (`weighted` | `pareto`), `method` (`nsga2` | `de` | `slsqp` | `trust-constr` | `de+slsqp`), `seed`, `workers` (int or `auto` = CPU count − 1), `budget` (`evaluations`, `time`), `start` (`baseline` | `best`, read by the local methods), `options` (passthrough: `pop_size`, `popsize`, `maxiter`, `ftol`, `xtol`, `gtol`, `fd_step`, DE strategy keys). `pareto` with any method other than `nsga2` is rejected when the run starts.
+
+### 7.12 Drivers (v0.8.0, implemented)
+
+All methods work in the unit cube `[0, 1]^n` through the `Problem` (cache, history, budget) ([drivers.py](../src/suspkin/optimize/drivers.py)).
+
+- **nsga2** (pymoo, `opt` extra): constraints as `n_ieq_constr` with `G ≤ 0` feasible; weighted mode is one objective (`f_total`), pareto mode has one per objective. Population `max(20, 4n)` unless `pop_size` is given; generations `max_evals // pop_size` (or 10 000 without an evaluation budget). The budget stops the run through `BudgetExhausted`.
+- **de** (scipy `differential_evolution`): vectorised, deferred updating, no polish. Constraints are one `NonlinearConstraint(g, −∞, 0)`. The population is the Latin hypercube (or the warm start on resume).
+- **slsqp** and **trust-constr** (scipy `minimize`): start from `start` (baseline or best history point). SLSQP gets `ineq: −g` with its Jacobian. trust-constr gets `NonlinearConstraint(g, −∞, 0)` with its Jacobian and a BFGS Hessian. Both use the forward-difference Jacobian of section 7.13.
+- **de+slsqp**: DE gets 80 % of the remaining evaluations and wall time, then SLSQP polishes from the best history point (feasible with minimal `f_total`, else least `max_g`). This method reads the best history point, not the `start` key.
+
+### 7.13 Parallel runs, cache, budget and resume (v0.8.0, implemented)
+
+- **Pool**: a `ProcessPoolExecutor` with the `spawn` context; each worker loads the study once in its initializer. With one worker, evaluation runs in-process.
+- **Cache**: keyed on `x` rounded to 12 decimals. Cached points are free, and duplicates inside one batch are evaluated once.
+- **Budget**: `evaluations` counts new evaluations and `time` is wall seconds. A batch that starts within budget completes even if it crosses the limit; `BudgetExhausted` is raised for a batch that starts after the limit.
+- **Jacobian**: forward differences with step `1e-3` (backward where `x + h > 1`); the base point and the `n` perturbed points form one parallel batch.
+- **History**: `history.csv` is appended row by row and flushed (section 12, O18).
+- **Resume**: `--resume` with `--out` on a folder that contains `history.csv`. The cache is rebuilt from the history, `eval_id` continues, the budget counts only new evaluations, and the population is warm-started from the best history rows (feasible first, by `f_total`) and filled with Latin hypercube points. A history whose columns differ from the study is rejected.
+
+### 7.14 Run outputs and report (v0.8.0, implemented)
+
+Run folder (default `results/opt/<study>_<YYYYmmdd-HHMMSS>`, or `--out`):
+
+- `study.yaml`, `vehicle.yaml` (copies; the study then points at `vehicle.yaml`), `meta.json` (package version, git hash, seed, method, mode, start and end times, evaluation counts, workers, resumed) and `history.csv`.
+- `best.yaml`: the best feasible point, or the least infeasible one if none is feasible (weighted mode).
+- `pareto/pareto_<k>.yaml` and `pareto.csv`: the feasible non-dominated designs (pareto mode).
+- `result.json`: best `x`, `f`, `g` and a summary per objective and constraint, baseline vs best.
+- `figures/`: convergence, Pareto front, parallel coordinates and constraint margins (pure readers of `history.csv`).
+- `report/`: `build_report` of the baseline and the optimized vehicle. In pareto mode the table shows the knee point (minimum normalised distance to the ideal point).
+
+The CLI is `suspkin optimize STUDY.yaml [--out DIR] [--resume] [--workers N] [--evaluations N] [--time "30 min"] [--method M] [--no-report]` (exit 0 ok, 1 no feasible design, 2 study or argument error).
 
 ---
 
@@ -469,7 +522,7 @@ The package name `suspkin` is a placeholder.
 | v0.5.0 | Vehicle level | Heave / roll / pitch / combined; anti-features, roll, steering (§5.4, 5.7, 5.8) |
 | v0.6.0 | Plots and report | Full figure set, 3D viewer, report, data export |
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
-| v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
+| **v0.8.0** (current) | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
 | v1.0.0 | Stable kinematics | Docs complete, regression suite frozen |
 
 **Future phases (not planned in detail yet)**:
@@ -504,6 +557,13 @@ The package name `suspkin` is a placeholder.
 | O12 | Symmetry | A variable moves the left point and the right side mirrors it. `asymmetric: true` moves one side only, through `right_overrides`. |
 | O13 | Constraint types | Curve: `band`, `slope`, `value`, `reach`. Geometric: `inside`, `outside`, `distance`, `relation`, `joint_angle`. Scalar: `summary` (from `vehicle_summary`). |
 | O14 | Scope | v0.7.0: spec, evaluator, `suspkin check` and a region 3D plot; no optimizer. v0.8.0: objectives and optimizers (pymoo NSGA-II; scipy SLSQP/DE). |
+| O15 | Objective types | `curve` (RMS error to a target curve), `target` (\|value − target\|), `minimize` / `maximize` (of value, slope, max, min, max_abs or mean over a range), `linearity` (RMS residual of a straight-line fit over a range). |
+| O16 | Optimizer mode | `weighted` (Σ wᵢ·fᵢ, one objective) or `pareto` (separate fᵢ; NSGA-II only). |
+| O17 | Methods | `nsga2` (pymoo, `opt` extra), `de` (scipy differential evolution), `slsqp`, `trust-constr` (scipy minimize), `de+slsqp` (DE, then SLSQP polish from the best feasible point). |
+| O18 | Parallel, budget, resume | Multiprocessing pool (`workers: auto` = CPU − 1). Budget = evaluation count plus wall time. The history CSV is append-only, so a run can resume: the cache skips evaluated points and the population is warm-started from history. |
+| O19 | Failures | An unsolved or infeasible design gets g = G_FAIL on every constraint, and every objective gets the finite penalty F_FAIL = 1e3. |
+| O20 | Reproducibility | `seed` in the YAML. The run folder stores study.yaml, vehicle.yaml and meta.json (package version, git hash, seed, method, times, evaluation count). |
+| O21 | Outputs | Optimized vehicle YAML (best, or every Pareto point), history.csv, plots (convergence, Pareto front, parallel coordinates, constraint margins) and a before/after report through `build_report`. |
 | O7 | Package name | `suspkin` |
 | D9 | Body rotation pivot | Default pivot for body pitch (and roll) = vehicle **CG** (x = −a, y = 0, z = h_cg), decided 2026-11-17. Overridable per call. |
 | O8 | GitHub + CI | **Yes**. User creates an empty GitHub repo and gives the URL. Then: add remote, push `main` + tags, add a GitHub Actions workflow (ruff + mypy + pytest). |

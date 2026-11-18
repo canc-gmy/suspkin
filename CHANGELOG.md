@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-18
+
+### Added
+
+- Objectives (`suspkin.optimize.evaluate`): `curve` (RMS error to a target curve), `target`
+  (|value - target|), `minimize` / `maximize` (value, slope, max, min, max_abs or mean over a
+  range, or a summary metric) and `linearity` (RMS residual of a straight-line fit). Each has
+  a normalised `f = raw / scale`; `f_total` is the weighted sum in weighted mode.
+- Optimizer block in the study YAML (`optimize.spec`): `mode` (`weighted` or `pareto`),
+  `method`, `seed`, `workers` (int or `auto`), `budget` (evaluations and wall time), `start`
+  and method `options`; `time` unit (s, min, h).
+- Optimizer drivers (`optimize.drivers`): `nsga2` (pymoo, `opt` extra), `de` (scipy
+  differential evolution), `slsqp`, `trust-constr` and `de+slsqp` (DE, then SLSQP polish).
+- Parallel problem (`optimize.problem`): process pool (spawn), batch evaluation, cache keyed
+  on the rounded design vector, evaluation and wall-time budget (`BudgetExhausted`), and a
+  forward-difference Jacobian.
+- Append-only history CSV (`optimize.history`) with a reader, the evaluation cache and
+  resume (`--resume`): the cache skips evaluated points and the population is warm-started
+  from history.
+- Run outputs (`optimize.outputs`): run folder with `study.yaml`, `vehicle.yaml`,
+  `meta.json`, `history.csv`, `best.yaml` or `pareto/` with `pareto.csv`, `result.json`,
+  `figures/` and a before/after `report/`.
+- Optimization plots (`plotting.optimization`): convergence, Pareto front, parallel
+  coordinates and constraint margins.
+- `suspkin optimize STUDY.yaml [--out] [--resume] [--workers] [--evaluations] [--time]
+  [--method] [--no-report]` command.
+- Demo study `configs/studies/fs_reference_optimize.yaml`.
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

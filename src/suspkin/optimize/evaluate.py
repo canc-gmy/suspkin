@@ -39,7 +39,9 @@ Semantics per constraint type:
 * ``joint_angle``: worst ``joint_angle`` over the sweep states (``axis`` override honoured).
 
 Default scales make ``g`` a "margin in display-sized units" (mm, 0.1 deg, ...), so ``g`` is
-not comparable across constraints of different dimensions; v0.8 will revisit the weighting.
+not comparable across constraints of different dimensions. Objectives are weighted through
+`scale` and `weight`; constraints stay hard constraints (``g <= 0``), so ``g`` scaling only
+affects margins, the display and the SLSQP conditioning, never the cost.
 
 Failures: a :class:`~suspkin.kinematics.KinematicsError` (or a non-finite value, a missing
 column or point) marks the constraint ``unsolved`` with ``g = G_FAIL``; an invalid design
@@ -116,7 +118,15 @@ from suspkin.optimize.spec import (
 from suspkin.sweeps import states_to_frame, sweep_vehicle, vehicle_frame
 from suspkin.units import Dim, display_factor, display_unit, slope_dim
 
-__all__ = ["F_FAIL", "G_FAIL", "ConstraintResult", "Evaluation", "ObjectiveResult", "evaluate"]
+__all__ = [
+    "F_FAIL",
+    "G_FAIL",
+    "ConstraintResult",
+    "Evaluation",
+    "ObjectiveResult",
+    "evaluate",
+    "failed_evaluation",
+]
 
 F64 = NDArray[np.float64]
 Status = Literal["pass", "fail", "unsolved", "infeasible", "disabled"]
@@ -503,7 +513,7 @@ def _eval_one(c: Constraint, ctx: _Ctx) -> ConstraintResult:
             g, val = _worst(ys, lo, hi, _scale(user, mdim, lo, hi))
             return res(g, val, mdim, lo, hi)
         sdim = slope_dim(mdim, sweep_input_dim(sw))
-        slope = float(np.polyfit(xs, ys, 1)[0])
+        slope = float(_fit_line(xs, ys)[0])
         g, val = _worst(slope, lo, hi, _scale(user, sdim, lo, hi))
         return res(g, val, sdim, lo, hi)
 
@@ -600,7 +610,7 @@ def _constraint_dim(c: Constraint, ctx: _Ctx) -> Dim:
     return "length"
 
 
-def _failed(c: Constraint, ctx: _Ctx, status: Status) -> ConstraintResult:
+def _failed(c: Constraint, ctx: _Ctx, status: Status, detail: str = "") -> ConstraintResult:
     return ConstraintResult(
         c.name,
         c.type,
@@ -610,7 +620,16 @@ def _failed(c: Constraint, ctx: _Ctx, status: Status) -> ConstraintResult:
         G_FAIL,
         status,
         _constraint_dim(c, ctx),
+        detail,
     )
+
+
+def _fit_line(xs: F64, ys: F64) -> F64:
+    """Least-squares line ``[slope, intercept]``; needs at least 2 distinct x values."""
+    if np.unique(xs).size < 2:
+        raise _Unsolved("window has fewer than 2 distinct x values (slope/linearity undefined)")
+    out: F64 = np.polyfit(xs, ys, 1)
+    return out
 
 
 def _trapz_mean(xs: F64, ys: F64) -> float:
@@ -653,13 +672,13 @@ def _eval_objective(o: Objective, ctx: _Ctx) -> ObjectiveResult:
                 tgt = np.interp(xs, np.array(o.target.x), np.array(o.target.y))
                 raw = float(np.sqrt(np.mean((ys - tgt) ** 2)))
             elif isinstance(o, LinearityObjective):
-                resid = ys - np.polyval(np.polyfit(xs, ys, 1), xs)
+                resid = ys - np.polyval(_fit_line(xs, ys), xs)
                 raw = float(np.sqrt(np.mean(resid**2)))
             else:
                 assert isinstance(o, ExtremumObjective)
                 detail = o.of
                 stat = {
-                    "slope": lambda: float(np.polyfit(xs, ys, 1)[0]),
+                    "slope": lambda: float(_fit_line(xs, ys)[0]),
                     "max": lambda: float(np.max(ys)),
                     "min": lambda: float(np.min(ys)),
                     "max_abs": lambda: float(np.max(np.abs(ys))),
@@ -672,12 +691,14 @@ def _eval_objective(o: Objective, ctx: _Ctx) -> ObjectiveResult:
     return ObjectiveResult(o.name, o.type, raw, f, o.weight, "ok", dim, detail)
 
 
-def _failed_objective(o: Objective, ctx: _Ctx, status: ObjStatus) -> ObjectiveResult:
+def _failed_objective(
+    o: Objective, ctx: _Ctx, status: ObjStatus, detail: str = ""
+) -> ObjectiveResult:
     try:
         dim = objective_dim(ctx.study_sweeps, o)
     except (KeyError, ValueError):
         dim = "length"
-    return ObjectiveResult(o.name, o.type, float("nan"), F_FAIL, o.weight, status, dim)
+    return ObjectiveResult(o.name, o.type, float("nan"), F_FAIL, o.weight, status, dim, detail)
 
 
 def evaluate(
@@ -725,8 +746,8 @@ def evaluate(
         else:
             try:
                 results.append(_eval_one(c, ctx))
-            except _Unsolved:
-                results.append(_failed(c, ctx, "unsolved"))
+            except _Unsolved as exc:
+                results.append(_failed(c, ctx, "unsolved", str(exc)))
     objectives: list[ObjectiveResult] = []
     for o in study.objectives:
         if infeasible:
@@ -734,6 +755,29 @@ def evaluate(
             continue
         try:
             objectives.append(_eval_objective(o, ctx))
-        except _Unsolved:
-            objectives.append(_failed_objective(o, ctx, "unsolved"))
+        except _Unsolved as exc:
+            objectives.append(_failed_objective(o, ctx, "unsolved", str(exc)))
     return Evaluation(tuple(results), tuple(objectives))
+
+
+def failed_evaluation(space: DesignSpace, detail: str) -> Evaluation:
+    """All-failed evaluation (``unsolved``, ``G_FAIL`` / ``F_FAIL``) carrying ``detail``."""
+    study = space.study
+    ctx = _Ctx(dict(study.sweeps), space.baseline)
+    results = tuple(
+        _failed(c, ctx, "unsolved", detail)
+        if c.enabled
+        else ConstraintResult(
+            c.name,
+            c.type,
+            float("nan"),
+            getattr(c, "min", None),
+            getattr(c, "max", None),
+            float("nan"),
+            "disabled",
+            _constraint_dim(c, ctx),
+        )
+        for c in study.constraints
+    )
+    objs = tuple(_failed_objective(o, ctx, "unsolved", detail) for o in study.objectives)
+    return Evaluation(results, objs)

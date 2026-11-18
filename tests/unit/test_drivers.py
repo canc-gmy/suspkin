@@ -76,7 +76,7 @@ def test_de_slsqp_respects_budget(tmp_path: Path) -> None:
     assert res.n_evals == len(df)
     # one population (8) or one finite-difference gradient (3) may cross the limit
     assert res.n_evals <= 40 + 8
-    assert set(df["source"]) <= {"de", "slsqp", "lookup"}
+    assert set(df["source"]) <= {"de", "slsqp"}
     assert res.f_total <= res.baseline.f_total + 1e-12
 
 
@@ -186,3 +186,123 @@ def test_run_folder_is_self_contained_and_resumable_from_copy(tmp_path: Path) ->
     )
     assert again.resumed
     assert again.n_total > res.n_total
+
+
+def test_de_rows_are_labelled_de(tmp_path: Path) -> None:
+    res = _run(tmp_path, method="de")
+    src = set(read_history(res.out_dir / "history.csv")["source"])
+    assert "de" in src
+    assert "lookup" not in src
+
+
+def test_worker_exception_is_recorded_not_fatal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from suspkin.optimize import DesignSpace
+    from suspkin.optimize.evaluate import F_FAIL, G_FAIL
+    from suspkin.optimize.spec import load_study
+
+    def boom(*a: Any, **k: Any) -> Any:
+        raise ZeroDivisionError("boom")
+
+    monkeypatch.setattr(problem_mod, "evaluate", boom)
+    study, veh = load_study(FIX)
+    ev, _ = problem_mod._eval_with(DesignSpace(study, veh), None)  # type: ignore[arg-type]
+    assert all(r.status == "unsolved" and r.g == G_FAIL for r in ev.results)
+    assert all(o.f == F_FAIL and "ZeroDivisionError: boom" in o.detail for o in ev.objectives)
+    res = _run(tmp_path, method="de", evaluations=16)
+    df = read_history(res.out_dir / "history.csv")
+    assert len(df) > 0
+    assert set(df["status"]) == {"unsolved"}
+    assert not df["feasible"].any()
+    assert (res.out_dir / "result.json").is_file()
+
+
+def test_interrupt_still_writes_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = problem_mod.evaluate
+    calls: list[int] = []
+
+    def flaky(*a: Any, **k: Any) -> Any:
+        calls.append(1)
+        if len(calls) > 12:
+            raise KeyboardInterrupt
+        return real(*a, **k)
+
+    monkeypatch.setattr(problem_mod, "evaluate", flaky)
+    with pytest.raises(KeyboardInterrupt):
+        _run(tmp_path, method="de", evaluations=100, report=True)
+    out = tmp_path / "run"
+    assert (out / "result.json").is_file()
+    assert (out / "meta.json").is_file()
+    assert (out / "best.yaml").is_file()
+    assert not (out / "report").exists()
+
+
+def test_cached_batch_never_raises_budget(tmp_path: Path) -> None:
+    import numpy as np
+
+    from suspkin.optimize import BudgetExhausted, Problem
+
+    pts = np.array([[0.2, 0.3], [0.6, 0.7]])
+    with Problem(FIX, tmp_path / "p", workers=1, evaluations=2) as prob:
+        prob.evaluate_batch(pts)
+        assert prob.exhausted()
+        prob.evaluate_batch(pts)  # all cached: no raise
+        with pytest.raises(BudgetExhausted):
+            prob.evaluate_batch(np.array([[0.9, 0.1]]))
+
+
+def test_best_row_requires_status_ok() -> None:
+    import pandas as pd
+
+    from suspkin.optimize.outputs import best_row
+
+    df = pd.DataFrame(
+        {
+            "feasible": [True, True],
+            "status": ["unsolved", "ok"],
+            "f_total": [0.0, 5.0],
+            "max_g": [-1.0, -1.0],
+        }
+    )
+    assert best_row(df) == 1
+
+
+def test_study_copy_fallback_rewrite() -> None:
+    import yaml
+
+    from suspkin.optimize.outputs import _point_study_at_vehicle
+
+    out = _point_study_at_vehicle("schema: 1\nvehicle:\n  ../x/v.yaml\nvariables: []\n")
+    assert yaml.safe_load(out)["vehicle"] == "vehicle.yaml"
+    keep = _point_study_at_vehicle("# note\nschema: 1\nvehicle: ../v.yaml  # c\n")
+    assert "# note" in keep
+    assert yaml.safe_load(keep)["vehicle"] == "vehicle.yaml"
+
+
+def test_resume_with_changed_study_drops_cache(tmp_path: Path) -> None:
+    study_a = _variant(tmp_path)
+    first = run_optimization(
+        study_a, tmp_path / "run", workers=1, evaluations=20, method="de", report=False
+    )
+    h1 = read_history(first.out_dir / "history.csv")
+    study_b = _variant(tmp_path, ("min: 0.3, max: 1.5", "min: 0.35, max: 1.5"))
+    msgs: list[str] = []
+    second = run_optimization(
+        study_b,
+        tmp_path / "run",
+        resume=True,
+        workers=1,
+        evaluations=20,
+        method="de",
+        report=False,
+        echo=msgs.append,
+    )
+    h2 = read_history(second.out_dir / "history.csv")
+    assert any("changed" in m for m in msgs)
+    assert list(h2["eval_id"]) == list(range(len(h2)))
+    assert second.n_evals == len(h2) - len(h1) > 0
+    meta = json.loads((second.out_dir / "meta.json").read_text(encoding="utf-8"))
+    assert meta["valid_from_eval_id"] == len(h1)
+    # the best point comes from new rows only
+    assert second.best_eval_id is not None and second.best_eval_id >= len(h1)

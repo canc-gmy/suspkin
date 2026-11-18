@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -13,6 +14,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import yaml
 from numpy.typing import NDArray
 
 import suspkin
@@ -30,6 +32,8 @@ __all__ = [
     "git_hash",
     "pareto_rows",
     "ranked_rows",
+    "read_meta",
+    "study_hash",
     "write_outputs",
 ]
 
@@ -37,9 +41,17 @@ __all__ = [
 # --------------------------------------------------------------------------- selection
 
 
+def _ok_feasible(history: pd.DataFrame) -> np.ndarray[Any, np.dtype[np.bool_]]:
+    """Feasible rows whose evaluation status is ``ok`` (no unsolved objective or sweep)."""
+    feas = history["feasible"].to_numpy(dtype=bool)
+    if "status" in history.columns:
+        feas = feas & (history["status"].to_numpy() == "ok")
+    return feas
+
+
 def ranked_rows(history: pd.DataFrame) -> np.ndarray[Any, np.dtype[np.intp]]:
     """Row positions ordered best first: feasible by ``f_total``, then infeasible by ``max_g``."""
-    feas = history["feasible"].to_numpy(dtype=bool)
+    feas = _ok_feasible(history)
     ft = np.nan_to_num(history["f_total"].to_numpy(dtype=float), nan=np.inf)
     mg = np.nan_to_num(history["max_g"].to_numpy(dtype=float), nan=np.inf)
     # lexsort: last key is primary
@@ -57,7 +69,7 @@ def pareto_rows(history: pd.DataFrame, study: Study) -> np.ndarray[Any, np.dtype
     """Row positions of the feasible non-dominated, x-unique designs (objective columns ``f_*``)."""
     cols = [f"f_{n}" for n in objective_names(study)]
     xcols = [c for c in history.columns if c.startswith("x_")]
-    feas = np.flatnonzero(history["feasible"].to_numpy(dtype=bool))
+    feas = np.flatnonzero(_ok_feasible(history))
     if feas.size == 0:
         return np.array([], dtype=np.intp)
     objs = history[cols].to_numpy(dtype=float)[feas]
@@ -217,16 +229,50 @@ def write_outputs(
     )
 
 
+def _point_study_at_vehicle(text: str) -> str:
+    """Set the top-level ``vehicle:`` key to ``vehicle.yaml``, keeping comments if possible."""
+    pat = re.compile(r"(?m)^vehicle:[ \t]*[^\s#][^\n]*$")
+    if len(pat.findall(text)) == 1:
+        out = pat.sub("vehicle: vehicle.yaml", text, count=1)
+        try:
+            data = yaml.safe_load(out)
+        except yaml.YAMLError:
+            data = None
+        if isinstance(data, dict) and data.get("vehicle") == "vehicle.yaml":
+            return out
+    data = yaml.safe_load(text)
+    data["vehicle"] = "vehicle.yaml"
+    return yaml.safe_dump(data, sort_keys=False)
+
+
 def copy_inputs(study_path: Path, vehicle_path: Path, out_dir: Path) -> None:
     """Copy the study and vehicle into the run folder; the study then points at ``vehicle.yaml``."""
     out_dir.mkdir(parents=True, exist_ok=True)
     dst_study, dst_vehicle = out_dir / "study.yaml", out_dir / "vehicle.yaml"
-    text = study_path.read_text(encoding="utf-8")
-    text = re.sub(r"(?m)^vehicle:.*$", "vehicle: vehicle.yaml", text, count=1)
+    text = _point_study_at_vehicle(study_path.read_text(encoding="utf-8"))
     if vehicle_path.resolve() != dst_vehicle.resolve():
         shutil.copyfile(vehicle_path, dst_vehicle)
     if study_path.resolve() != dst_study.resolve():
         dst_study.write_text(text, encoding="utf-8")
+
+
+def study_hash(study: Study) -> str:
+    """SHA-256 of the canonical JSON of the constraint and objective definitions."""
+    payload = {
+        "constraints": [c.model_dump(mode="json") for c in study.constraints],
+        "objectives": [o.model_dump(mode="json") for o in study.objectives],
+    }
+    blob = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
+def read_meta(run_dir: Path) -> dict[str, Any]:
+    """``meta.json`` of a run folder (empty dict when missing or unreadable)."""
+    try:
+        data = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def make_meta(

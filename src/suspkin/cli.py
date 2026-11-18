@@ -651,7 +651,8 @@ def optimize(
         bool, typer.Option("--resume", help="Continue the run in --out from its history.csv.")
     ] = False,
     workers: Annotated[
-        int | None, typer.Option("--workers", help="Worker processes (default: study value).")
+        str | None,
+        typer.Option("--workers", help="Worker processes: an integer or auto (default: study)."),
     ] = None,
     evaluations: Annotated[
         int | None, typer.Option("--evaluations", help="Evaluation budget override.")
@@ -679,11 +680,19 @@ def optimize(
 
     try:
         seconds = None if time is None else parse_quantity(time, "time")
+        n_workers: int | str | None = None
+        if workers is not None:
+            if workers.strip().lower() == "auto":
+                n_workers = "auto"
+            else:
+                n_workers = int(workers)
+                if n_workers < 1:
+                    raise ValueError("--workers must be >= 1 or auto")
         res = run_optimization(
             study_yaml,
             out,
             resume=resume,
-            workers=workers,
+            workers=n_workers,
             evaluations=evaluations,
             time=seconds,
             method=method,
@@ -747,6 +756,6 @@ def optimize(
         f"best {'yes' if best.feasible else 'no'}"
     )
     typer.echo(str(res.out_dir))
-    if not best.feasible:
+    if not res.feasible:
         typer.echo("error: no feasible design found", err=True)
         raise typer.Exit(code=1)

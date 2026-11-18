@@ -583,3 +583,13 @@ def test_missing_point_in_states_is_unsolved(
     fake = SimpleNamespace(states=[SimpleNamespace(points={})])
     monkeypatch.setattr(evaluate_mod._Ctx, "sweep_corner_data", lambda self, name: fake)
     assert _one(space, c).status == "unsolved"
+
+
+def test_fit_line_needs_two_distinct_x() -> None:
+    import numpy as np
+
+    from suspkin.optimize.evaluate import _fit_line, _Unsolved
+
+    with pytest.raises(_Unsolved, match="fewer than 2 distinct"):
+        _fit_line(np.array([0.01, 0.01]), np.array([1.0, 2.0]))
+    assert _fit_line(np.array([0.0, 1.0]), np.array([1.0, 3.0]))[0] == pytest.approx(2.0)

@@ -3,6 +3,13 @@
 Every method works in the unit cube ``[0, 1]^n`` through a :class:`Problem` (cache, history,
 budget). A method that runs into :class:`BudgetExhausted` just stops; the result is always
 taken from the history (best feasible ``f_total``, else least ``max_g``).
+
+``start`` (``baseline`` | ``best``) applies only to the ``slsqp`` and ``trust-constr`` methods;
+``de+slsqp`` always polishes from the best point in the history.
+
+Caution: the finite-difference gradients are unreliable near the failure cliff (``F_FAIL`` /
+``G_FAIL`` plateaus around unsolved or infeasible designs), so SLSQP / trust-constr work best
+as a polish from a feasible start.
 """
 # ruff: noqa: N803, N806
 
@@ -25,13 +32,15 @@ from scipy.stats import qmc
 
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.evaluate import Evaluation, evaluate
-from suspkin.optimize.history import CacheEntry, cache_key, read_history
+from suspkin.optimize.history import CacheEntry, EvalCache, cache_key, read_history
 from suspkin.optimize.outputs import (
     best_row,
     copy_inputs,
     make_meta,
     pareto_rows,
     ranked_rows,
+    read_meta,
+    study_hash,
     write_outputs,
 )
 from suspkin.optimize.problem import BudgetExhausted, Problem
@@ -79,7 +88,11 @@ class RunResult:
 
 
 def _history(problem: Problem) -> pd.DataFrame:
-    return read_history(problem.history_path)
+    """History rows valid for this run (stale rows of a changed study are dropped)."""
+    df = read_history(problem.history_path)
+    if problem.valid_from > 0:
+        df = df[df["eval_id"] >= problem.valid_from].reset_index(drop=True)
+    return df
 
 
 def _x_of(df: pd.DataFrame, space: DesignSpace) -> F64:
@@ -127,11 +140,11 @@ def _clip(x: ArrayLike) -> F64:
     return out
 
 
-def _lookup(problem: Problem, X: F64) -> list[CacheEntry]:
+def _lookup(problem: Problem, X: F64, source: str) -> list[CacheEntry]:
     """Cache entries of rows of ``X`` (evaluating the rows that are missing)."""
     keys = [cache_key(x) for x in X]
     if any(k not in problem.cache for k in keys):
-        problem.evaluate_batch(X, "lookup")
+        problem.evaluate_batch(X, source)
     return [problem.cache[k] for k in keys]
 
 
@@ -217,7 +230,7 @@ def _run_de(
         # scipy probes the constraint once with a single 1-D point, then with (n, S) blocks
         single = np.ndim(XT) == 1
         X = _clip(np.asarray(XT).reshape(n, -1).T)
-        ents = _lookup(problem, X)
+        ents = _lookup(problem, X, source)
         g = np.array([e.g_vector for e in ents], dtype=np.float64).T
         return g[:, 0] if single else g
 
@@ -450,11 +463,30 @@ def run_optimization(
     vehicle_path = study_path.parent / study.vehicle
     copy_inputs(study_path, vehicle_path, run_dir)
 
+    old_meta = read_meta(run_dir) if resume else {}
     t0 = _time.perf_counter()
+    error: BaseException | None = None
     with Problem(
         study_path, run_dir, resume=resume, workers=workers, evaluations=evaluations, time=time
     ) as problem:
         space = problem.space
+        shash = study_hash(study)
+        valid_from = 0
+        if resume:
+            valid_from = int(old_meta.get("valid_from_eval_id", 0) or 0)
+            if old_meta.get("study_hash") not in (None, shash):
+                valid_from = problem.next_id
+                if echo is not None:
+                    echo(
+                        "warning: constraints/objectives changed since the last run; "
+                        "cached results are dropped and old points are re-evaluated on demand"
+                    )
+            if valid_from > 0:
+                problem.valid_from = valid_from
+                hist = read_history(problem.history_path)
+                problem.cache = EvalCache.from_history(
+                    hist[hist["eval_id"] >= valid_from].reset_index(drop=True), space, study
+                )
         if echo is not None:
             ng = sum(1 for c in study.constraints if c.enabled)
             bud = []
@@ -482,13 +514,67 @@ def run_optimization(
                 _run_local(problem, opt, m, _start_point(problem, opt))
         except BudgetExhausted:
             pass
+        except BaseException as exc:  # e.g. BrokenProcessPool, KeyboardInterrupt
+            error = exc
         n_new = problem.n_evals
         workers_used = problem.workers
         budget_e, budget_t = problem.max_evals, problem.max_time
     seconds = _time.perf_counter() - t0
     ended = datetime.now().astimezone()
 
-    df = read_history(run_dir / "history.csv")
+    result: RunResult | None = None
+    try:
+        result = _finish(
+            run_dir=run_dir,
+            study=study,
+            study_path=study_path,
+            space=space,
+            opt=opt,
+            baseline=baseline,
+            baseline_x=baseline_x,
+            valid_from=valid_from,
+            shash=shash,
+            started=started,
+            ended=ended,
+            seconds=seconds,
+            n_new=n_new,
+            workers_used=workers_used,
+            resume=resume,
+            report=report and error is None,
+            budget=(budget_e, budget_t),
+        )
+    except Exception:
+        if error is None:
+            raise
+    if error is not None:
+        raise error
+    assert result is not None
+    return result
+
+
+def _finish(
+    *,
+    run_dir: Path,
+    study: Study,
+    study_path: Path,
+    space: DesignSpace,
+    opt: Optimizer,
+    baseline: Evaluation,
+    baseline_x: F64,
+    valid_from: int,
+    shash: str,
+    started: datetime,
+    ended: datetime,
+    seconds: float,
+    n_new: int,
+    workers_used: int,
+    resume: bool,
+    report: bool,
+    budget: tuple[int | None, float | None],
+) -> RunResult:
+    """Select the best design from the history and write the run folder."""
+    full = read_history(run_dir / "history.csv")
+    df = full[full["eval_id"] >= valid_from].reset_index(drop=True) if valid_from else full
     pareto_idx: np.ndarray[Any, np.dtype[np.intp]] | None = None
     best_id: int | None = None
     if len(df):
@@ -515,10 +601,12 @@ def run_optimization(
         started=started,
         ended=ended,
         n_evals=n_new,
-        n_total=len(df),
+        n_total=len(full),
         workers=workers_used,
         resumed=resume,
     )
+    meta["study_hash"] = shash
+    meta["valid_from_eval_id"] = valid_from
     report_path = write_outputs(
         run_dir,
         study=study,
@@ -539,17 +627,17 @@ def run_optimization(
         mode=opt.mode,
         workers=workers_used,
         n_evals=n_new,
-        n_total=len(df),
+        n_total=len(full),
         seconds=seconds,
         resumed=resume,
         best_x=best_x,
         best_eval_id=best_id,
-        feasible=best_eval.feasible,
+        feasible=best_eval.feasible and all(o.status == "ok" for o in best_eval.objectives),
         f_total=best_eval.f_total,
         baseline=baseline,
         best=best_eval,
         n_pareto=0 if pareto_idx is None else int(pareto_idx.size),
         report_path=report_path,
-        budget_evaluations=budget_e,
-        budget_time=budget_t,
+        budget_evaluations=budget[0],
+        budget_time=budget[1],
     )
