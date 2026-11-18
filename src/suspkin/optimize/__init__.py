@@ -1,4 +1,7 @@
-"""Optimization study spec: regions, metric registry, study loader, evaluator, objectives."""
+"""Optimization study spec: regions, metric registry, study loader, evaluator, objectives.
+
+Experimental: API may change in minor releases; the study YAML schema 1 is stable.
+"""
 
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.drivers import RunResult, run_optimization

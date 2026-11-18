@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 Vec3 = tuple[float, float, float]
 
+SUPPORTED_SCHEMA = 1
+
 HARDPOINT_NAMES: tuple[str, ...] = (
     "uca_front",
     "uca_rear",
@@ -360,9 +362,21 @@ class Vehicle(_Frozen):
     (checked within 0.02 m).
     """
 
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+    schema_version: int = Field(default=SUPPORTED_SCHEMA, alias="schema")
     vehicle: VehicleParams
     front: Axle
     rear: Axle
+
+    @field_validator("schema_version")
+    @classmethod
+    def _check_schema(cls, v: int) -> int:
+        if v != SUPPORTED_SCHEMA:
+            raise ValueError(
+                f"unsupported vehicle schema {v}; this suspkin supports {SUPPORTED_SCHEMA}"
+            )
+        return v
 
     @model_validator(mode="after")
     def _check(self) -> Vehicle:

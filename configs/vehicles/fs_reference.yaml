@@ -9,6 +9,7 @@
 #   pushrod on the UPPER wishbone (both axles), in compression, rocker above the UCA
 #   ARB: torsional bar (round steel arms) at the front, blade-arm torsion tube at the rear
 
+schema: 1
 vehicle:
   name: fs_reference
   mass: 290.0              # kg, including driver

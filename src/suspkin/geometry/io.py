@@ -41,5 +41,5 @@ def _plain(obj: Any) -> Any:
 
 def save_vehicle(vehicle: Vehicle, path: str | Path) -> None:
     """Write a vehicle to YAML (tuples as lists, model key order)."""
-    data = _plain(vehicle.model_dump(mode="python"))
+    data = _plain(vehicle.model_dump(mode="python", by_alias=True))
     Path(path).write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")

@@ -1,3 +1,4 @@
+schema: 1
 vehicle:
   name: minimal_fs
   mass: 280.0
