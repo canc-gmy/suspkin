@@ -1,0 +1,12 @@
+# Study with a surrogate grid block (minimal vehicle), used by the surrogate tests.
+schema: 1
+vehicle: ../minimal_vehicle.yaml
+
+variables:
+  - point: front.tie_inner
+    domain: {offset: {x: [-15 mm, 15 mm], z: [-15 mm, 15 mm]}}
+
+surrogate:
+  grid:
+    travel: {min: -30 mm, max: 30 mm, points: 41}
+    rack: {min: -25 mm, max: 25 mm, points: 21}

@@ -968,6 +968,51 @@ def _prep_objective(raw: Any, sweeps: Mapping[str, Any]) -> Any:
 
 
 # --------------------------------------------------------------------------------------
+# surrogate
+# --------------------------------------------------------------------------------------
+
+
+class AxisGrid(_Frozen):
+    """Uniform 1-D grid ``[min, max]`` with ``points`` nodes (SI), containing 0 (static pose)."""
+
+    min: float
+    max: float
+    points: int = Field(ge=3)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _units(cls, raw: Any) -> Any:
+        if not isinstance(raw, Mapping):
+            return raw
+        out = dict(raw)
+        for k in ("min", "max"):
+            if k in out:
+                out[k] = _scalar(out[k], "length")
+        return out
+
+    @model_validator(mode="after")
+    def _check(self) -> AxisGrid:
+        if not self.min < self.max:
+            raise ValueError("grid min must be below max")
+        if not self.min <= 0.0 <= self.max:
+            raise ValueError("grid must contain 0 (the static pose)")
+        return self
+
+
+class GridSpec(_Frozen):
+    """Output grid of the surrogate: wheel travel and (front axle only) rack."""
+
+    travel: AxisGrid
+    rack: AxisGrid | None = None
+
+
+class SurrogateSpec(_Frozen):
+    """Surrogate block of a study (later slices add dataset, training, hpo, ...)."""
+
+    grid: GridSpec
+
+
+# --------------------------------------------------------------------------------------
 # study
 # --------------------------------------------------------------------------------------
 
@@ -992,6 +1037,7 @@ class Study(_Frozen):
     constraints: tuple[Constraint, ...] = ()
     objectives: tuple[Objective, ...] = ()
     optimizer: Optimizer | None = None
+    surrogate: SurrogateSpec | None = None
 
     @model_validator(mode="before")
     @classmethod
