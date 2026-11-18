@@ -60,4 +60,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
-markers = ["perf: wall-clock performance guard (machine dependent, generous limits)"]
+markers = [
+    "perf: wall-clock performance guard (machine dependent, generous limits)",
+    "examples: runs the scripts in examples/ (slow, subprocess)",
+]
