@@ -3,13 +3,16 @@ import type { Tokens } from "./plotlyTemplate";
 import { buildSceneFigure, cameraForLayout, fitCamera, sceneFrame, type Bounds } from "./scene3d";
 import {
   buildGridTraces,
+  buildPlaneAnnotations,
   buildPlaneTraces,
   clampPlaneOffset,
   FADE_BANDS,
   gridGeometry,
   LABEL_GAP,
+  LABEL_REACH,
   niceStep,
   planeGeometry,
+  PLANE_MARGIN,
   planeRange,
   worldFrame,
   WORLD_SPAN,
@@ -81,11 +84,11 @@ describe("world box and grid", () => {
     expect([...opacities].sort((a, b) => b - a)).toEqual(opacities);
   });
 
-  it("puts the tick labels in metres outside the car box", () => {
+  it("puts the tick labels in metres outside the car box, within the framed extent", () => {
     const g = gridGeometry(worldFrame(CAR), CAR);
     const gap = LABEL_GAP * 1.8;
-    expect(g.row).toBeLessThan(CAR.min[1] - gap + 1e-9);
-    expect(g.column).toBeGreaterThan(CAR.max[0] + gap - 1e-9);
+    expect(g.row).toBeCloseTo(CAR.min[1] - gap);
+    expect(g.column).toBeCloseTo(CAR.max[0] + gap);
     const xl = g.labels.filter((l) => l.y === g.row);
     const yl = g.labels.filter((l) => l.x === g.column);
     expect(xl.length).toBeGreaterThan(2);
@@ -95,7 +98,26 @@ describe("world box and grid", () => {
       expect(inside).toBe(false);
       expect(l.text).toMatch(/^-?\d+\.\d$/);
     }
+    for (const l of xl) {
+      expect(l.x).toBeGreaterThanOrEqual(CAR.min[0] - LABEL_REACH * 1.8 - 1e-9);
+      expect(l.x).toBeLessThanOrEqual(CAR.max[0] + LABEL_REACH * 1.8 + 1e-9);
+    }
+    for (const l of yl) {
+      expect(l.y).toBeGreaterThanOrEqual(CAR.min[1] - LABEL_REACH * 1.4 - 1e-9);
+      expect(l.y).toBeLessThanOrEqual(CAR.max[1] + LABEL_REACH * 1.4 + 1e-9);
+    }
+  });
+
+  it("titles each row next to its ticks, just outside them and inside the framed extent", () => {
+    const g = gridGeometry(worldFrame(CAR), CAR);
     expect(g.titles.map((t) => t.text)).toEqual(["x [m]", "y [m]"]);
+    const [tx, ty] = g.titles as [(typeof g.titles)[0], (typeof g.titles)[0]];
+    expect(tx.y).toBeLessThan(g.row);
+    expect(tx.y).toBeGreaterThan(CAR.min[1] - 0.45 * 1.8);
+    expect(tx.x).toBeCloseTo((CAR.min[0] + CAR.max[0]) / 2);
+    expect(ty.x).toBeGreaterThan(g.column);
+    expect(ty.x).toBeLessThan(CAR.max[0] + 0.45 * 1.8);
+    expect(ty.y).toBeCloseTo(0);
   });
 
   it("builds inert traces in the grid tokens", () => {
@@ -129,12 +151,30 @@ describe("reference plane", () => {
     }
   });
 
-  it("labels at a far corner of the outline", () => {
-    const g = planeGeometry("xy", 0, CAR);
-    const xs = g.corners.map((c) => c[0]);
-    const ys = g.corners.map((c) => c[1]);
-    expect(g.label.at[0]).toBe(Math.min(...xs));
-    expect(g.label.at[1]).toBe(Math.max(...ys));
+  it("labels near the corner nearest the default camera, half the margin outside the car box", () => {
+    const half = (k: number) => ((CAR.max[k]! - CAR.min[k]!) * PLANE_MARGIN) / 2;
+    // near end per axis: high x, low y, high z (the top, clear of the ground tick labels)
+    const near = (k: number) => (k === 1 ? CAR.min[1]! - half(1) : CAR.max[k]! + half(k));
+    for (const [kind, n] of [["xy", 2], ["xz", 1], ["yz", 0]] as const) {
+      const g = planeGeometry(kind, 0, CAR);
+      // the horizontal plane's near corner is the lowest point on screen: its label takes the middle of the near edge
+      const mid = (CAR.min[0]! + CAR.max[0]!) / 2;
+      for (const k of [0, 1, 2].filter((i) => i !== n)) expect(g.label.at[k]).toBeCloseTo(kind === "xy" && k === 0 ? mid : near(k));
+      // still inside the plane rectangle, and on the camera side of its centre
+      for (const k of [0, 1, 2].filter((i) => i !== n)) {
+        const vals = g.corners.map((c) => c[k]!);
+        expect(g.label.at[k]!).toBeGreaterThan(Math.min(...vals));
+        expect(g.label.at[k]!).toBeLessThan(Math.max(...vals));
+      }
+    }
+  });
+
+  it("sets the plane label as a 14 px ink scene annotation at the label anchor", () => {
+    expect(buildPlaneAnnotations("none", 0, CAR, TOKENS)).toEqual([]);
+    const [lab] = buildPlaneAnnotations("xy", 120, CAR, TOKENS);
+    expect(lab).toMatchObject({ text: "z = 120 mm", showarrow: false, font: { size: 14, color: "#111", family: "Barlow" } });
+    const at = planeGeometry("xy", 120, CAR).label.at;
+    expect([lab!["x"], lab!["y"], lab!["z"]]).toEqual(at);
   });
 
   it("takes the slider range from the car box, plus 10 %", () => {
@@ -146,13 +186,13 @@ describe("reference plane", () => {
     expect(clampPlaneOffset("xy", 12.4, CAR)).toBe(12);
   });
 
-  it("draws surface, outline and label in the layout blue, nothing for none", () => {
+  it("draws surface and outline in the layout blue, nothing for none", () => {
     expect(buildPlaneTraces("none", 0, CAR, TOKENS)).toEqual([]);
     const tr = buildPlaneTraces("xz", 0, CAR, TOKENS);
-    expect(tr.map((t) => t["type"])).toEqual(["mesh3d", "scatter3d", "scatter3d"]);
+    expect(tr.map((t) => t["type"])).toEqual(["mesh3d", "scatter3d"]);
     expect(tr[0]).toMatchObject({ color: "#00f", hoverinfo: "skip" });
     expect(tr[0]!["opacity"] as number).toBeLessThan(0.3);
-    expect(tr[2]!["text"]).toEqual(["y = 0 mm"]);
+    expect(buildPlaneAnnotations("xz", 0, CAR, TOKENS)[0]!["text"]).toBe("y = 0 mm");
   });
 });
 
@@ -170,7 +210,7 @@ describe("camera is independent of the grid and the plane", () => {
       expect(sc(f)["aspectratio"]).toEqual(sc(a)["aspectratio"]);
       for (const ax of ["xaxis", "yaxis", "zaxis"]) expect(sc(f)[ax]!["range"]).toEqual(sc(a)[ax]!["range"]);
     }
-    expect(b.data.length).toBe(a.data.length + 3);
+    expect(b.data.length).toBe(a.data.length + 2);
   });
 
   it("hides the Plotly axes and uses the world box", () => {

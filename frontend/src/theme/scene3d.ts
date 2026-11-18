@@ -1,5 +1,5 @@
 import { themeScene, type PlotlyObject, type Tokens } from "./plotlyTemplate";
-import { buildGridTraces, buildPlaneTraces, worldFrame, type PlaneKind, type World } from "./sceneGrid";
+import { buildGridTraces, buildPlaneAnnotations, buildPlaneTraces, worldFrame, type PlaneKind, type World } from "./sceneGrid";
 
 export type Vec3 = [number, number, number];
 export interface Bounds {
@@ -284,6 +284,8 @@ export function buildSceneFigure(i: SceneFigureInput): { data: PlotlyObject[]; l
   const car = frameBox(i.frame);
   const grid = world && car ? buildGridTraces(world, car, t) : [];
   const plane = car && i.plane ? buildPlaneTraces(i.plane.kind, i.plane.offsetMm, car, t) : [];
+  const planeLabel = car && i.plane ? buildPlaneAnnotations(i.plane.kind, i.plane.offsetMm, car, t) : [];
+  if (planeLabel.length > 0) scene["annotations"] = planeLabel;
   return {
     data: [
       ...grid,

@@ -43,11 +43,14 @@ export const FADE_BANDS: readonly { from: number; opacity: number }[] = [
   { from: 0.45, opacity: 0.4 },
   { from: 0.6, opacity: 0.15 },
 ];
-/** Tick labels sit this far outside the car box, as a share of the car's longest horizontal side. */
-export const LABEL_GAP = 0.25;
-export const GRID_LABEL_SIZE = 11;
-/** The plane label is drawn at the far edge, where perspective shrinks it, so it is a little larger. */
-export const PLANE_LABEL_SIZE = 13;
+/** Tick rows sit this far outside the car box, as a share of the car's longest horizontal side. */
+export const LABEL_GAP = 0.15;
+/** Axis titles sit this much further out than the tick row, same share. */
+export const TITLE_GAP = 0.08;
+/** Ticks are labelled only up to this share of the car's size beyond its box: what the default framing shows. */
+export const LABEL_REACH = 0.2;
+export const GRID_LABEL_SIZE = 12;
+export const PLANE_LABEL_SIZE = 14;
 export const GRID_UNIT = "m";
 
 /** The 1, 2 or 5 times a power of ten (or 10) nearest to `raw`. */
@@ -71,7 +74,7 @@ export interface GridGeometry {
   segments: { minor: GridSegment[][]; major: GridSegment[][] };
   /** Tick labels: position (x, y) and text. x labels sit on one row, y labels on one column. */
   labels: { x: number; y: number; text: string }[];
-  /** Axis titles at the end of each label row. */
+  /** Axis titles, one step outside the middle of each label row. */
   titles: { x: number; y: number; text: string }[];
   /** The row (y of the x labels) and the column (x of the y labels). */
   row: number;
@@ -128,10 +131,10 @@ export function gridGeometry(world: World, car: Bounds, z = 0): GridGeometry {
 
   const side = Math.max(car.max[0] - car.min[0], car.max[1] - car.min[1]);
   const gap = LABEL_GAP * side;
-  // the viewer looks from +x, -y: the row below the car and the column at its right are nearest
+  // the viewer looks from +x, -y, at the near corner: the rows go on the near sides (low y, high x),
+  // close to the car, within the framed area
   const row = car.min[1] - gap;
   const column = car.max[0] + gap;
-  const reach = 2 * gap;
   const labels: GridGeometry["labels"] = [];
   const titles: GridGeometry["titles"] = [];
   const ticks = (lo: number, hi: number): number[] => {
@@ -139,12 +142,15 @@ export function gridGeometry(world: World, car: Bounds, z = 0): GridGeometry {
     for (let k = Math.ceil((lo + eps) / major); k <= Math.floor((hi - eps) / major); k++) out.push(k * major);
     return out;
   };
-  const xt = ticks(Math.max(xr[0], car.min[0] - reach), Math.min(xr[1], car.max[0] + reach));
-  const yt = ticks(Math.max(yr[0], car.min[1] - reach), Math.min(yr[1], car.max[1] + reach));
+  const reach = (k: number) => LABEL_REACH * (car.max[k]! - car.min[k]!);
+  const xt = ticks(Math.max(xr[0], car.min[0] - reach(0)), Math.min(xr[1], car.max[0] + reach(0)));
+  const yt = ticks(Math.max(yr[0], car.min[1] - reach(1)), Math.min(yr[1], car.max[1] + reach(1)));
+  const titleGap = TITLE_GAP * side;
   for (const v of xt) labels.push({ x: v, y: row, text: formatTick(v, major) });
   for (const v of yt) labels.push({ x: column, y: v, text: formatTick(v, major) });
-  if (xt.length > 0) titles.push({ x: xt[xt.length - 1]! + major, y: row, text: `x [${GRID_UNIT}]` });
-  if (yt.length > 0) titles.push({ x: column, y: yt[yt.length - 1]! + major, text: `y [${GRID_UNIT}]` });
+  // titles sit next to the ticks nearest the car centre, one step outside their row or column
+  if (xt.length > 0) titles.push({ x: (car.min[0] + car.max[0]) / 2, y: row - titleGap, text: `x [${GRID_UNIT}]` });
+  if (yt.length > 0) titles.push({ x: column + titleGap, y: (car.min[1] + car.max[1]) / 2, text: `y [${GRID_UNIT}]` });
   return { z, major, minor, segments, labels, titles, row, column };
 }
 
@@ -201,7 +207,7 @@ export function buildGridTraces(world: World, car: Bounds, t: Tokens, z = 0): Pl
     });
   }
   if (g.labels.length > 0) out.push(textTrace(g.labels, z, t.inkMuted, t.fontUi));
-  if (g.titles.length > 0) out.push(textTrace(g.titles, z, t.ink, t.fontUi));
+  if (g.titles.length > 0) out.push(textTrace(g.titles, z, t.inkMuted, t.fontUi));
   return out;
 }
 
@@ -271,16 +277,23 @@ export function planeGeometry(kind: Exclude<PlaneKind, "none">, offsetMm: number
     return p;
   };
   const corners = [at(a0, b0), at(a1, b0), at(a1, b1), at(a0, b1)];
-  // far corner from the default viewpoint (+x, -y, +z): low x, high y, high z
-  const far = (k: number, lo: number, hi: number) => (k === 1 || k === 2 ? hi : lo);
+  // Label at the plane corner nearest the default viewpoint (+x, -y), at the top for the vertical
+  // planes (clear of the ground tick labels), pulled in to half the plane margin outside the car box
+  // so it stays in the framed area. The horizontal plane's near corner is the lowest point on screen, so
+  // there the label goes to the middle of the near edge.
+  const nearEnd = (k: number): -1 | 1 => (k === 1 ? -1 : 1);
+  const anchor = (k: number, lo: number, hi: number): number => {
+    const half = ((hi - lo) * PLANE_MARGIN) / (1 + 2 * PLANE_MARGIN) / 2;
+    return nearEnd(k) === 1 ? hi - half : lo + half;
+  };
   return {
     corners,
     outline: [...corners, corners[0]!],
-    label: { at: at(far(a, a0, a1), far(b, b0, b1)), text: `${AXIS_NAME[n]} = ${Math.round(offsetMm)} mm` },
+    label: { at: at(n === 2 ? (a0 + a1) / 2 : anchor(a, a0, a1), anchor(b, b0, b1)), text: `${AXIS_NAME[n]} = ${Math.round(offsetMm)} mm` },
   };
 }
 
-/** Translucent plane, its outline and its label, in the layout blue; inert. Empty for "none". */
+/** Translucent plane and its outline in the layout blue; inert. Empty for "none". */
 export function buildPlaneTraces(kind: PlaneKind, offsetMm: number, car: Bounds, t: Tokens): PlotlyObject[] {
   if (kind === "none") return [];
   const g = planeGeometry(kind, offsetMm, car);
@@ -311,17 +324,27 @@ export function buildPlaneTraces(kind: PlaneKind, offsetMm: number, car: Bounds,
       showlegend: false,
       hoverinfo: "skip",
     },
+  ];
+}
+
+/**
+ * The plane label as a 3D scene annotation (14 px `--ink`). An annotation, not a text trace: Plotly
+ * draws a moved gl3d text trace far too small, and the offset slider moves it.
+ */
+export function buildPlaneAnnotations(kind: PlaneKind, offsetMm: number, car: Bounds, t: Tokens): PlotlyObject[] {
+  if (kind === "none") return [];
+  const { label } = planeGeometry(kind, offsetMm, car);
+  return [
     {
-      type: "scatter3d",
-      mode: "text",
-      x: [g.label.at[0]],
-      y: [g.label.at[1]],
-      z: [g.label.at[2]],
-      text: [g.label.text],
-      textposition: "middle center",
-      textfont: { family: t.fontUi, size: PLANE_LABEL_SIZE, color: t.layoutBlue },
-      showlegend: false,
-      hoverinfo: "skip",
+      x: label.at[0],
+      y: label.at[1],
+      z: label.at[2],
+      text: label.text,
+      showarrow: false,
+      xanchor: "center",
+      yanchor: "middle",
+      captureevents: false,
+      font: { family: t.fontUi, size: PLANE_LABEL_SIZE, color: t.ink },
     },
   ];
 }
