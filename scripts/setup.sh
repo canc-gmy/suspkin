@@ -72,13 +72,13 @@ if [ -d .git ] && [ -f .pre-commit-config.yaml ]; then
   "${UV[@]}" run pre-commit install || fail "pre-commit install failed"
 fi
 
-# 5. Frontend (optional, needs Node 20+)
+# 5. Frontend (optional, needs Node 22.12+)
 if [ "$NO_FRONTEND" -eq 1 ]; then
   step "Skipping frontend build (--no-frontend)"
 elif [ ! -f frontend/package.json ]; then
   echo "No frontend/package.json, skipping frontend build"
 elif ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  echo "node/npm not found, skipping frontend build (the web app UI needs Node 20+)"
+  echo "node/npm not found, skipping frontend build (the web app UI needs Node 22.12+)"
 else
   step "Building the frontend"
   (cd frontend && npm ci && npm run build && npm run build:single) || fail "frontend build failed"

@@ -10,7 +10,7 @@ stable surface ([Stability and versioning](stability.md)); the API and the UI ma
 uv sync --extra app --extra viz
 ```
 
-Node 20+ is needed only to build the frontend (the Python side runs without it, but then the
+Node 22.12+ is needed only to build the frontend (the Python side runs without it, but then the
 server has no UI to serve):
 
 ```bash

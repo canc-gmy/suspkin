@@ -140,7 +140,7 @@ Interactive figures, overlay of several results and a shareable HTML snapshot. S
 
 ```bash
 uv sync --extra app --extra viz
-(cd frontend && npm ci && npm run build && npm run build:single)   # Node 20+
+(cd frontend && npm ci && npm run build && npm run build:single)   # Node 22.12+
 uv run suspkin app configs/vehicles/fs_reference.yaml
 uv run suspkin app-export configs/vehicles/fs_reference.yaml --out compare.html
 ```

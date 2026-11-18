@@ -33,7 +33,7 @@ large changes to the UI must stay cheap after the first iteration.
 
 ## Consequences
 
-- Node 20+ is needed to build the frontend; Python-only users are not affected.
+- Node 22.12+ is needed to build the frontend; Python-only users are not affected.
 - The static build is git-ignored and built in CI and for releases; the Python tests do not need
   it.
 - The app is experimental: no stability promise, and it stays on the branch until it is mature.

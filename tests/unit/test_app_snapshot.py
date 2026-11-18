@@ -28,7 +28,7 @@ from suspkin.app.snapshot import (
     export_snapshot,
 )
 from suspkin.cli import app as cli_app
-from tests.unit.helpers import FIXTURE
+from tests.unit.helpers import FIXTURE, plain
 
 
 class TestClient(_TestClient):
@@ -187,8 +187,8 @@ def test_app_export_cli_help() -> None:
     res = CliRunner().invoke(cli_app, ["app-export", "--help"])
     assert res.exit_code == 0
     for word in ("--out", "--workspace", "--no-scene"):
-        assert word in res.output
-    assert "--dev" in CliRunner().invoke(cli_app, ["app", "--help"]).output
+        assert word in plain(res.output)
+    assert "--dev" in plain(CliRunner().invoke(cli_app, ["app", "--help"]).output)
 
 
 def test_export_route(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:

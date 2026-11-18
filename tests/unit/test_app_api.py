@@ -22,7 +22,7 @@ from suspkin.cli import app as cli_app
 from suspkin.geometry import load_vehicle
 from suspkin.plotting.spec import FIGURES
 from suspkin.report import build_report, run_standard_studies, save_bundle
-from tests.unit.helpers import FIXTURE
+from tests.unit.helpers import FIXTURE, plain
 
 PARAMS = {"steps": 5, "travel": 0.02, "roll_deg": 1.0}
 
@@ -301,7 +301,7 @@ def test_cli_app_help() -> None:
     r = CliRunner().invoke(cli_app, ["app", "--help"])
     assert r.exit_code == 0
     for opt in ("--port", "--host", "--workspace", "--no-browser"):
-        assert opt in r.output
+        assert opt in plain(r.output)
 
 
 def test_openapi_dump(tmp_path: Path) -> None:

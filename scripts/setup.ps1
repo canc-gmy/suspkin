@@ -90,13 +90,13 @@ if ((Test-Path '.git') -and (Test-Path '.pre-commit-config.yaml')) {
     Run ($uv + @('run', 'pre-commit', 'install')) 'pre-commit install'
 }
 
-# 5. Frontend (optional, needs Node 20+)
+# 5. Frontend (optional, needs Node 22.12+)
 if ($NoFrontend) {
     Step 'Skipping frontend build (-NoFrontend)'
 } elseif (-not (Test-Path 'frontend/package.json')) {
     Write-Host 'No frontend/package.json, skipping frontend build'
 } elseif (-not ((Has 'node') -and (Has 'npm'))) {
-    Write-Host 'node/npm not found, skipping frontend build (the web app UI needs Node 20+)'
+    Write-Host 'node/npm not found, skipping frontend build (the web app UI needs Node 22.12+)'
 } else {
     Step 'Building the frontend'
     Push-Location 'frontend'
