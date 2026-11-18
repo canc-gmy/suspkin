@@ -1,6 +1,7 @@
 """Optimization study spec: regions, metric registry, study loader, evaluator, objectives."""
 
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
+from suspkin.optimize.drivers import RunResult, run_optimization
 from suspkin.optimize.evaluate import (
     F_FAIL,
     G_FAIL,
@@ -24,6 +25,8 @@ __all__ = [
     "InfeasibleDesign",
     "ObjectiveResult",
     "Problem",
+    "RunResult",
     "evaluate",
     "read_history",
+    "run_optimization",
 ]

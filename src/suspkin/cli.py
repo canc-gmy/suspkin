@@ -630,3 +630,123 @@ def check(
         raise typer.Exit(code=2) from exc
     if strict and not (ev.feasible and baseline_ok):
         raise typer.Exit(code=1)
+
+
+def _compare_table(
+    title: str, head: tuple[str, ...], rows: Sequence[tuple[str, ...]], right: set[int]
+) -> None:
+    typer.echo("")
+    typer.echo(title)
+    _echo_table(head, rows, right)
+
+
+@app.command()
+def optimize(
+    study_yaml: Annotated[Path, typer.Argument(help="Study YAML with objectives and optimizer.")],
+    out: Annotated[
+        Path | None,
+        typer.Option("--out", help="Run folder (default results/opt/<study>_<timestamp>)."),
+    ] = None,
+    resume: Annotated[
+        bool, typer.Option("--resume", help="Continue the run in --out from its history.csv.")
+    ] = False,
+    workers: Annotated[
+        int | None, typer.Option("--workers", help="Worker processes (default: study value).")
+    ] = None,
+    evaluations: Annotated[
+        int | None, typer.Option("--evaluations", help="Evaluation budget override.")
+    ] = None,
+    time: Annotated[
+        str | None, typer.Option("--time", help='Wall-time budget override, e.g. "30 min".')
+    ] = None,
+    method: Annotated[
+        str | None,
+        typer.Option("--method", help="nsga2 | de | slsqp | trust-constr | de+slsqp."),
+    ] = None,
+    no_report: Annotated[
+        bool, typer.Option("--no-report", help="Skip the before/after report.")
+    ] = False,
+) -> None:
+    """Optimise a study's design variables against its objectives and constraints.
+
+    Writes a run folder (history.csv, best.yaml, result.json, figures, report). Exit code 2
+    on a study or argument error, 1 if no feasible design was found, 0 otherwise.
+    """
+    from suspkin.optimize.drivers import RunError, run_optimization
+    from suspkin.optimize.history import HistoryError
+    from suspkin.optimize.spec import StudyConfigError
+    from suspkin.units import parse_quantity
+
+    try:
+        seconds = None if time is None else parse_quantity(time, "time")
+        res = run_optimization(
+            study_yaml,
+            out,
+            resume=resume,
+            workers=workers,
+            evaluations=evaluations,
+            time=seconds,
+            method=method,
+            report=not no_report,
+            echo=typer.echo,
+        )
+    except (StudyConfigError, RunError, HistoryError, ValueError, OSError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=2) from exc
+
+    base, best = res.baseline, res.best
+    typer.echo(
+        f"done: {res.n_evals} new evaluations ({res.n_total} in history), "
+        f"{res.seconds:.1f} s, {res.workers} workers"
+    )
+    if res.mode == "pareto":
+        typer.echo(f"Pareto set: {res.n_pareto} designs; table shows the knee point")
+    o0: list[Any] = list(base.objectives_display_frame().itertuples(index=False))
+    o1: list[Any] = list(best.objectives_display_frame().itertuples(index=False))
+    orows = [
+        (
+            str(a.name),
+            _cell(float(a.raw)),
+            _cell(float(b.raw)),
+            str(a.unit) or "-",
+            _cell(float(a.f), "{:.3f}"),
+            _cell(float(b.f), "{:.3f}"),
+        )
+        for a, b in zip(o0, o1, strict=True)
+    ]
+    _compare_table(
+        "objectives",
+        ("objective", "baseline", "best", "unit", "f base", "f best"),
+        orows,
+        {1, 2, 4, 5},
+    )
+    typer.echo(f"f_total: baseline {base.f_total:.3f} -> best {best.f_total:.3f}")
+    c0: list[Any] = list(base.display_frame().itertuples(index=False))
+    c1: list[Any] = list(best.display_frame().itertuples(index=False))
+    crows = [
+        (
+            str(a.name),
+            _cell(float(a.value)),
+            _cell(float(b.value)),
+            str(a.unit) or "-",
+            _cell(float(a.g), "{:.3f}"),
+            _cell(float(b.g), "{:.3f}"),
+            "PASS" if b.status == "pass" else str(b.status).upper(),
+        )
+        for a, b in zip(c0, c1, strict=True)
+        if a.status != "disabled"
+    ]
+    _compare_table(
+        "constraints",
+        ("constraint", "baseline", "best", "unit", "g base", "g best", "status"),
+        crows,
+        {1, 2, 4, 5},
+    )
+    typer.echo(
+        f"feasible: baseline {'yes' if base.feasible else 'no'}, "
+        f"best {'yes' if best.feasible else 'no'}"
+    )
+    typer.echo(str(res.out_dir))
+    if not best.feasible:
+        typer.echo("error: no feasible design found", err=True)
+        raise typer.Exit(code=1)
