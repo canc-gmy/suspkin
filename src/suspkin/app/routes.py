@@ -6,22 +6,26 @@ import json
 import math
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
 
 from suspkin import __version__
-from suspkin.app.datasets import Dataset, DatasetManager
+from suspkin.app.datasets import Dataset, DatasetManager, RunInfo
 from suspkin.app.models import (
     BrowseEntry,
     BrowseOut,
     DatasetOut,
     DatasetPatch,
+    ExportOut,
+    ExportRequest,
     HealthOut,
     HistoryOut,
     OpenRequest,
     TableOut,
 )
 from suspkin.kinematics import KinematicsError, solve_vehicle
+from suspkin.plotting.optimization import best_so_far, knee_index, pareto_mask
 from suspkin.plotting.spec import spec_json
 
 __all__ = ["make_router"]
@@ -45,6 +49,68 @@ def _column(s: pd.Series[Any]) -> list[Any]:
     if pd.api.types.is_numeric_dtype(s) and not pd.api.types.is_bool_dtype(s):
         return [v if math.isfinite(v) else None for v in s.astype(float).tolist()]
     return [None if (isinstance(v, float) and math.isnan(v)) else v for v in s.tolist()]
+
+
+def analyse_history(
+    history: pd.DataFrame,
+) -> tuple[list[str], list[float | None], list[bool], dict[str, list[bool]], int | None]:
+    """Objectives, best-so-far, Pareto masks (all objectives, per pair) and knee ``eval_id``.
+
+    Masks are per history row over the feasible rows with finite objectives. The knee is the
+    knee of the all-objective front.
+    """
+    n = len(history)
+    objs = [str(c) for c in history.columns if str(c).startswith("f_") and c != "f_total"]
+    if n == 0 or "f_total" not in history.columns or "feasible" not in history.columns:
+        return objs, [None] * n, [False] * n, {}, None
+    feas = history["feasible"].to_numpy(dtype=bool)
+    order = np.argsort(history["eval_id"].to_numpy(dtype=float), kind="stable")
+    ft = history["f_total"].to_numpy(dtype=float)
+    best = np.full(n, np.nan)
+    best[order] = best_so_far(ft[order], feas[order])
+    best_out = [float(v) if math.isfinite(v) else None for v in best]
+    mask = np.zeros(n, dtype=bool)
+    pairs: dict[str, list[bool]] = {}
+    knee: int | None = None
+    if len(objs) >= 2:
+        vals = history[objs].to_numpy(dtype=float)
+        ok = feas & np.all(np.isfinite(vals), axis=1)
+        idx = np.flatnonzero(ok)
+        if idx.size:
+            mask[idx[pareto_mask(vals[idx])]] = True
+            front = np.flatnonzero(mask)
+            knee = int(history["eval_id"].iloc[int(front[knee_index(vals[front])])])
+        for i in range(len(objs)):
+            for j in range(i + 1, len(objs)):
+                m2 = np.zeros(n, dtype=bool)
+                if idx.size:
+                    m2[idx[pareto_mask(vals[idx][:, [i, j]])]] = True
+                pairs[f"{objs[i]}|{objs[j]}"] = [bool(v) for v in m2]
+    return objs, best_out, [bool(v) for v in mask], pairs, knee
+
+
+def history_out(run: RunInfo) -> HistoryOut:
+    """The history response of an opened optimizer run (columns plus the analysis)."""
+    objectives, best, front, pairs, knee = analyse_history(run.history)
+    return HistoryOut(
+        run_id=run.run_id,
+        columns={str(c): _column(run.history[c]) for c in run.history.columns},
+        meta=run.meta,
+        result=run.result,
+        objectives=objectives,
+        best_so_far=best,
+        pareto_all=front,
+        pareto_pairs=pairs,
+        knee_eval_id=knee,
+    )
+
+
+def scene_json(ds: Dataset) -> dict[str, Any]:
+    """Plotly 3D figure JSON of a dataset at the static pose (raises ImportError without plotly)."""
+    from suspkin.plotting.interactive import interactive_figure
+
+    out: dict[str, Any] = json.loads(interactive_figure(ds.vehicle).to_json())
+    return out
 
 
 def make_router(manager: DatasetManager) -> APIRouter:
@@ -119,9 +185,23 @@ def make_router(manager: DatasetManager) -> APIRouter:
 
     @r.get("/runs/{run_id}/history", response_model=HistoryOut)
     def history(run_id: str) -> HistoryOut:
-        run = manager.run(run_id)
-        cols = {str(c): _column(run.history[c]) for c in run.history.columns}
-        return HistoryOut(run_id=run_id, columns=cols, meta=run.meta, result=run.result)
+        return history_out(manager.run(run_id))
+
+    @r.post("/export", response_model=ExportOut)
+    def export(req: ExportRequest | None = None) -> ExportOut:
+        """Write a snapshot of the open datasets into the workspace."""
+        import time
+
+        from suspkin.app.snapshot import export_dataset_snapshot
+
+        out = (req.out if req else None) or time.strftime("suspkin_snapshot_%Y%m%d_%H%M%S.html")
+        target = manager.resolve(out)
+        if target.suffix.lower() != ".html":
+            raise HTTPException(400, "the snapshot file name must end in .html")
+        if not manager.list():
+            raise HTTPException(400, "open at least one revision before exporting")
+        size = export_dataset_snapshot(manager, target)
+        return ExportOut(path=manager.rel(target), size=size)
 
     @r.get("/browse", response_model=BrowseOut)
     def browse(dir: str = "") -> BrowseOut:

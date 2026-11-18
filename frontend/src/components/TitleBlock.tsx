@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { DatasetInfo } from "../api";
-import { useCloseDataset, usePatchDataset } from "../api/hooks";
+import { useCloseDataset, usePatchDataset, useSource } from "../api/hooks";
+import { READ_ONLY_TIP } from "../api/snapshotSource";
 import { useUi } from "../state/store";
 import { revisionColor, type Theme } from "../theme/revisions";
 
@@ -27,6 +28,7 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
   const toggle = useUi((s) => s.toggleVisible);
   const setReference = useUi((s) => s.setReference);
   const clearFresh = useUi((s) => s.clearFresh);
+  const readOnly = useSource().readOnly;
   const patch = usePatchDataset();
   const close = useCloseDataset();
   const [editing, setEditing] = useState(false);
@@ -96,6 +98,8 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
                 type="button"
                 className="link-btn"
                 aria-label={`Rename revision ${letter}`}
+                disabled={readOnly}
+                title={readOnly ? READ_ONLY_TIP : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   setDraft(d.label);
@@ -108,6 +112,8 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
                 type="button"
                 className="link-btn"
                 aria-label={`Close revision ${letter}`}
+                disabled={readOnly}
+                title={readOnly ? READ_ONLY_TIP : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   close.mutate(d.id, { onError: (err) => setError(`Could not close ${d.label}: ${err.message}`) });
@@ -142,6 +148,7 @@ function Row({ d, color, error, setError }: { d: DatasetInfo; color: string; err
 /** The drawing title block: a ruled table of revisions (letter, design, reference). */
 export function TitleBlock({ datasets, palette, theme }: Props) {
   const setOpenDialog = useUi((s) => s.setOpenDialog);
+  const readOnly = useSource().readOnly;
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
   return (
@@ -169,9 +176,11 @@ export function TitleBlock({ datasets, palette, theme }: Props) {
           ))}
         </tbody>
       </table>
-      <button type="button" className="btn secondary" onClick={() => setOpenDialog(true)}>
-        Open files
-      </button>
+      <span title={readOnly ? READ_ONLY_TIP : undefined}>
+        <button type="button" className="btn secondary" disabled={readOnly} onClick={() => setOpenDialog(true)}>
+          Open files
+        </button>
+      </span>
       <p className="legend-note">Solid left/front, dashed right/rear</p>
     </div>
   );

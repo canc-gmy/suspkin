@@ -47,7 +47,7 @@ suspkin = "suspkin.cli:app"
 [tool.hatch.build.targets.wheel]
 packages = ["src/suspkin"]
 # built frontend (git-ignored) must still ship in the wheel
-artifacts = ["src/suspkin/app/static/**"]
+artifacts = ["src/suspkin/app/static/**", "src/suspkin/app/static_single/**"]
 
 [tool.ruff]
 line-length = 100

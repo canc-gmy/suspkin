@@ -555,3 +555,64 @@ tr.fresh {
     animation: none;
   }
 }
+
+/* ---- 3D and optimization views ---------------------------------------------------- */
+.status {
+  padding: 0 var(--space-2);
+  min-height: 0;
+}
+
+.status:not(:empty) {
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--rule);
+}
+
+.status .error {
+  margin: 0;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+select {
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.slider {
+  display: block;
+}
+
+.slider-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: var(--weight-label);
+}
+
+.slider-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--layout-blue);
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+}

@@ -13,9 +13,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { pickSource } from "./api";
 import { SourceContext } from "./api/hooks";
-import { bindTheme } from "./state/store";
+import { bindHash, bindTheme } from "./state/store";
 
 bindTheme();
+bindHash();
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 const source = pickSource();
 

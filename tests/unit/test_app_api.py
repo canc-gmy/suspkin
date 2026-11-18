@@ -193,7 +193,7 @@ def test_bundle_and_report_folder(client: TestClient, ws: Path) -> None:
 def test_optimizer_run_folder(client: TestClient, ws: Path) -> None:
     run = _make_run(ws)
     ds = _open(client, run.name)
-    assert [d["label"] for d in ds] == ["baseline", "best", "knee"]
+    assert [d["label"] for d in ds] == ["run1 baseline", "run1 best", "run1 knee"]
     assert {d["run_id"] for d in ds} == {ds[0]["run_id"]} and ds[0]["run_id"]
     assert all(d["kind"] == "run" for d in ds)
     h = client.get(f"{API}/runs/{ds[0]['run_id']}/history").json()
@@ -208,7 +208,10 @@ def test_optimizer_run_folder(client: TestClient, ws: Path) -> None:
 
 def test_optimizer_run_without_pareto(client: TestClient, ws: Path) -> None:
     run = _make_run(ws, pareto=False)
-    assert [d["label"] for d in _open(client, run.name)] == ["baseline", "best"]
+    assert [d["label"] for d in _open(client, run.name)] == [
+        f"{run.name} baseline",
+        f"{run.name} best",
+    ]
 
 
 def test_scene(client: TestClient) -> None:

@@ -21,9 +21,13 @@ interface Props {
   ariaLabel: string;
   filename: string;
   height?: number;
+  /** Extra modebar buttons after the PNG download (default: reset axes). */
+  buttons?: string[];
   /** x value under the cursor, or null when the cursor leaves. */
   onHoverX?: (x: number | null) => void;
 }
+
+const DEFAULT_BUTTONS = ["resetScale2d"];
 
 type PlotlyModule = typeof import("plotly.js-dist-min");
 let plotlyPromise: Promise<PlotlyModule["default"]> | null = null;
@@ -42,7 +46,7 @@ function hoveredX(e: unknown): number | null {
 
 /** A single Plotly chart rendered with `Plotly.react` (no wrapper library). */
 export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
-  { build, ariaLabel, filename, height = 320, onHoverX },
+  { build, ariaLabel, filename, height = 320, buttons = DEFAULT_BUTTONS, onHoverX },
   ref,
 ) {
   const host = useRef<HTMLDivElement>(null);
@@ -62,7 +66,7 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
       hoverAt: (x) => {
         const el = host.current;
         if (!el || !attached.current) return;
-        void loadPlotly().then((P) => P.Fx.hover(el, { xval: x }));
+        void loadPlotly().then((P) => P.Fx.hover(el, { xval: x }, "x2y"));
       },
       clearHover: () => {
         const el = host.current;
@@ -104,7 +108,7 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
         responsive: true,
         displaylogo: false,
         displayModeBar: "hover",
-        modeBarButtons: [[pngButton, "resetScale2d"]],
+        modeBarButtons: [[pngButton, ...buttons]],
       });
       if (cancelled || attached.current) return;
       attached.current = true;
@@ -114,7 +118,7 @@ export const PlotlyChart = forwardRef<ChartHandle, Props>(function PlotlyChart(
     return () => {
       cancelled = true;
     };
-  }, [build, theme, filename, height]);
+  }, [build, theme, filename, height, buttons]);
 
   useEffect(() => {
     const el = host.current;

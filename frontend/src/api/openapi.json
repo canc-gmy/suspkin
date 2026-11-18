@@ -394,6 +394,52 @@
         }
       }
     },
+    "/api/v1/export": {
+      "post": {
+        "summary": "Export",
+        "description": "Write a snapshot of the open datasets into the workspace.",
+        "operationId": "export_api_v1_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ExportRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Req"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/browse": {
       "get": {
         "summary": "Browse",
@@ -603,6 +649,46 @@
         "title": "DatasetPatch",
         "description": "Editable dataset attributes."
       },
+      "ExportOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Workspace-relative path of the written file."
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "description": "File size in bytes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "ExportOut",
+        "description": "Result of a snapshot export."
+      },
+      "ExportRequest": {
+        "properties": {
+          "out": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out",
+            "description": "Workspace-relative output file (default: timestamped name)."
+          }
+        },
+        "type": "object",
+        "title": "ExportRequest",
+        "description": "Export the open datasets as a self-contained HTML snapshot."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -679,6 +765,60 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Result"
+          },
+          "objectives": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Objectives",
+            "description": "History columns of the objectives (``f_*``, no total)."
+          },
+          "best_so_far": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Best So Far",
+            "description": "Running best feasible ``f_total`` per history row."
+          },
+          "pareto_all": {
+            "items": {
+              "type": "boolean"
+            },
+            "type": "array",
+            "title": "Pareto All",
+            "description": "Per history row: feasible and non-dominated in all objectives (needs >= 2 objectives)."
+          },
+          "pareto_pairs": {
+            "additionalProperties": {
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Pareto Pairs",
+            "description": "Per objective pair ``'f_a|f_b'`` (objective order): per history row, feasible and non-dominated in those two objectives only."
+          },
+          "knee_eval_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knee Eval Id",
+            "description": "``eval_id`` of the front knee."
           }
         },
         "type": "object",

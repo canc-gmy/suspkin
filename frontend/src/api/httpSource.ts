@@ -20,6 +20,7 @@ type Ret<K extends Method> = DataSource[K] extends (...args: never[]) => infer R
 
 export class HttpSource implements DataSource {
   readonly kind = "http" as const;
+  readonly readOnly = false;
 
   private readonly base: string;
 
@@ -83,6 +84,9 @@ export class HttpSource implements DataSource {
   }
   getHistory(runId: string): Ret<"getHistory"> {
     return this.request(`/runs/${encodeURIComponent(runId)}/history`);
+  }
+  exportSnapshot(out?: string): Ret<"exportSnapshot"> {
+    return this.request("/export", this.json("POST", out ? { out } : {}));
   }
   browse(dir: string): Ret<"browse"> {
     return this.request(`/browse?dir=${encodeURIComponent(dir)}`);

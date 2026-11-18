@@ -22,6 +22,8 @@ function mockSource(): DataSource {
   const fail = () => Promise.reject(new Error("not used"));
   return {
     kind: "http",
+    readOnly: false,
+    exportSnapshot: fail,
     getHealth: fail,
     getFigures: fail,
     listDatasets: fail,

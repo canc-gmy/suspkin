@@ -145,6 +145,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export
+         * @description Write a snapshot of the open datasets into the workspace.
+         */
+        post: operations["export_api_v1_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/browse": {
         parameters: {
             query?: never;
@@ -248,6 +268,33 @@ export interface components {
             /** Color */
             color?: number | null;
         };
+        /**
+         * ExportOut
+         * @description Result of a snapshot export.
+         */
+        ExportOut: {
+            /**
+             * Path
+             * @description Workspace-relative path of the written file.
+             */
+            path: string;
+            /**
+             * Size
+             * @description File size in bytes.
+             */
+            size: number;
+        };
+        /**
+         * ExportRequest
+         * @description Export the open datasets as a self-contained HTML snapshot.
+         */
+        ExportRequest: {
+            /**
+             * Out
+             * @description Workspace-relative output file (default: timestamped name).
+             */
+            out?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -290,6 +337,33 @@ export interface components {
             result: {
                 [key: string]: unknown;
             };
+            /**
+             * Objectives
+             * @description History columns of the objectives (``f_*``, no total).
+             */
+            objectives?: string[];
+            /**
+             * Best So Far
+             * @description Running best feasible ``f_total`` per history row.
+             */
+            best_so_far?: (number | null)[];
+            /**
+             * Pareto All
+             * @description Per history row: feasible and non-dominated in all objectives (needs >= 2 objectives).
+             */
+            pareto_all?: boolean[];
+            /**
+             * Pareto Pairs
+             * @description Per objective pair ``'f_a|f_b'`` (objective order): per history row, feasible and non-dominated in those two objectives only.
+             */
+            pareto_pairs?: {
+                [key: string]: boolean[];
+            };
+            /**
+             * Knee Eval Id
+             * @description ``eval_id`` of the front knee.
+             */
+            knee_eval_id?: number | null;
         };
         /**
          * OpenRequest
@@ -611,6 +685,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_v1_export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportOut"];
                 };
             };
             /** @description Validation Error */

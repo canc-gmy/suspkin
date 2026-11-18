@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useDatasets, useFigures, useHealth } from "./api/hooks";
+import { useDatasets, useExportSnapshot, useFigures, useHealth, useSource } from "./api/hooks";
 import { OpenDialog } from "./components/OpenDialog";
 import { SummaryTable } from "./components/SummaryTable";
 import { TitleBlock } from "./components/TitleBlock";
@@ -7,7 +7,8 @@ import { groupLabel, groupsOf } from "./lib/panels";
 import { useUi } from "./state/store";
 import { EmptyState } from "./views/EmptyState";
 import { FigureView } from "./views/FigureView";
-import { Placeholder } from "./views/Placeholder";
+import { OptimizationView } from "./views/OptimizationView";
+import { Scene3D } from "./views/Scene3D";
 import { Tabs, type TabDef } from "./views/Tabs";
 
 const EXTRA_TABS: TabDef[] = [
@@ -27,6 +28,8 @@ export function App() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const readOnly = useSource().readOnly;
+  const exportSnapshot = useExportSnapshot();
   const health = useHealth();
   const figures = useFigures();
   const datasets = useDatasets();
@@ -73,9 +76,9 @@ export function App() {
       </section>
     );
   } else if (active === "scene3d") {
-    content = <Placeholder title="3D" />;
+    content = <Scene3D datasets={list} />;
   } else if (active === "optimization") {
-    content = <Placeholder title="Optimization" />;
+    content = <OptimizationView datasets={list} />;
   } else {
     content = <FigureView group={active} spec={spec} datasets={list} />;
   }
@@ -96,11 +99,18 @@ export function App() {
         >
           Revisions
         </button>
-        <button type="button" className="btn secondary" onClick={() => setOpenDialog(true)}>
-          Open files
-        </button>
-        <span title="Comes in a later version">
-          <button type="button" className="btn secondary" disabled>
+        <span title={readOnly ? "Read-only snapshot" : undefined}>
+          <button type="button" className="btn secondary" disabled={readOnly} onClick={() => setOpenDialog(true)}>
+            Open files
+          </button>
+        </span>
+        <span title={readOnly ? "Read-only snapshot" : empty ? "Open a revision first" : undefined}>
+          <button
+            type="button"
+            className="btn secondary"
+            disabled={readOnly || empty || exportSnapshot.isPending}
+            onClick={() => exportSnapshot.mutate(undefined)}
+          >
             Export snapshot
           </button>
         </span>
@@ -113,6 +123,12 @@ export function App() {
           {"◐"}
         </button>
       </header>
+      <div className="status" role="status">
+        {exportSnapshot.isSuccess && <span>{`Snapshot exported to ${exportSnapshot.data.path}`}</span>}
+        {exportSnapshot.isError && (
+          <span className="error">{`Could not export the snapshot: ${exportSnapshot.error.message}`}</span>
+        )}
+      </div>
       <div className="body">
         <aside id="titleblock" className={drawerOpen ? "titleblock open" : "titleblock"} aria-label="Title block">
           {spec && list ? (

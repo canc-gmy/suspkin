@@ -34,3 +34,4 @@ site/
 
 # Web app frontend build output
 src/suspkin/app/static/
+src/suspkin/app/static_single/

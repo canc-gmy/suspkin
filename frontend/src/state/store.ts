@@ -48,6 +48,12 @@ export function initialTheme(): Theme {
     : "light";
 }
 
+/** Tab named in the URL hash (`#optimization`), so a view can be linked or reloaded. */
+function initialTab(): string | null {
+  const h = typeof location === "undefined" ? "" : location.hash.replace(/^#/, "");
+  return h || null;
+}
+
 export const useUi = create<UiState>()((set) => ({
   order: [],
   letters: {},
@@ -55,7 +61,7 @@ export const useUi = create<UiState>()((set) => ({
   reference: null,
   fresh: {},
   synced: false,
-  tab: null,
+  tab: initialTab(),
   axle: "front",
   mode: "overlay",
   theme: initialTheme(),
@@ -116,6 +122,24 @@ export function bindTheme(): () => void {
   return useUi.subscribe((s, prev) => {
     if (s.theme !== prev.theme) apply(s.theme);
   });
+}
+
+/** Keep the tab and the URL hash in step: hash changes switch tab, tab changes rewrite the hash. */
+export function bindHash(): () => void {
+  const fromHash = () => {
+    const h = location.hash.replace(/^#/, "");
+    if (h && h !== useUi.getState().tab) useUi.getState().setTab(h);
+  };
+  window.addEventListener("hashchange", fromHash);
+  const unsub = useUi.subscribe((s, prev) => {
+    if (s.tab !== prev.tab && s.tab !== null && location.hash !== `#${s.tab}`) {
+      history.replaceState(null, "", `#${s.tab}`);
+    }
+  });
+  return () => {
+    window.removeEventListener("hashchange", fromHash);
+    unsub();
+  };
 }
 
 /** Visible dataset ids in open order. */

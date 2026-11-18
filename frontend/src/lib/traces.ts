@@ -22,6 +22,8 @@ export interface PanelPlot {
   legend: boolean;
   xTitle: string;
   yTitle: string;
+  /** Unified-hover heading parts: "<label> 12 mm". */
+  xHover: { label: string; unit: string };
   /** Points not drawn because the curve is undefined there (instant centre at infinity). */
   icDropped: number;
 }
@@ -103,6 +105,7 @@ export function buildPanel(
       traces.push({
         type: "scatter",
         mode: "lines",
+        xaxis: "x2",
         x: xs,
         y: ys,
         name: rev.letter,
@@ -125,6 +128,7 @@ export function buildPanel(
         traces.push({
           type: "scatter",
           mode: "markers",
+          xaxis: "x2",
           x: [0],
           y: [y0],
           hoverinfo: "skip",
@@ -141,6 +145,7 @@ export function buildPanel(
       traces.push({
         type: "scatter",
         mode: "lines",
+        xaxis: "x2",
         x: [null],
         y: [null],
         name: s.label,
@@ -151,12 +156,16 @@ export function buildPanel(
     }
   }
 
+  // the visible x axis needs a trace of its own (the data sits on the hover axis x2)
+  traces.push({ type: "scatter", mode: "none", x: [null], y: [null], hoverinfo: "skip", showlegend: false });
+
   const first = panel.series[0];
   const baseY = panel.y_label || (first?.unit ? `[${first.unit}]` : "");
   return {
     traces,
     legend,
     xTitle: sentence(withUnit(xAxis.label, xAxis.unit)),
+    xHover: { label: sentence(xAxis.label), unit: xAxis.unit },
     yTitle: delta ? `Δ ${baseY}`.trim() : baseY,
     icDropped,
   };

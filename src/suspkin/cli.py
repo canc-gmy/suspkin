@@ -776,10 +776,14 @@ def app_cmd(
     no_browser: Annotated[
         bool, typer.Option("--no-browser", help="Do not open the browser.")
     ] = False,
+    dev: Annotated[
+        bool,
+        typer.Option("--dev", help="API only: use the Vite dev server (npm run dev) for the UI."),
+    ] = False,
 ) -> None:
     """Start the experimental local web app (needs the 'app' extra).
 
-    Snapshot export will be a separate command (``app-export``) because a Typer group with a
+    Snapshot export is a separate command (``app-export``) because a Typer group with a
     variadic PATHS argument cannot also have sub-commands.
     """
     try:
@@ -800,4 +804,37 @@ def app_cmd(
         port=port,
         preload=[p.resolve() for p in (paths or [])],
         open_browser=not no_browser,
+        dev=dev,
     )
+
+
+@app.command("app-export")
+def app_export_cmd(
+    paths: Annotated[
+        list[Path],
+        typer.Argument(help="Vehicle YAMLs, bundles, report or optimizer run folders to embed."),
+    ],
+    out: Annotated[Path, typer.Option("--out", help="Output HTML file.")] = Path("compare.html"),
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", help="Root folder the paths must be inside (default: cwd)."),
+    ] = None,
+    no_scene: Annotated[
+        bool, typer.Option("--no-scene", help="Leave out the 3D scenes (smaller file).")
+    ] = False,
+) -> None:
+    """Export a self-contained HTML snapshot of the given results (needs the 'app' extra)."""
+    try:
+        import fastapi  # noqa: F401
+    except ImportError:
+        typer.echo("the web app needs the 'app' extra: uv sync --extra app", err=True)
+        raise typer.Exit(code=2) from None
+    from suspkin.app.snapshot import export_snapshot
+
+    root = (workspace or Path.cwd()).resolve()
+    try:
+        size = export_snapshot([p.resolve() for p in paths], out, root, include_scene=not no_scene)
+    except Exception as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    typer.echo(f"Snapshot exported to {out} ({size / 1e6:.1f} MB)")

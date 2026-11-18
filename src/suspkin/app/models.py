@@ -57,6 +57,38 @@ class HistoryOut(BaseModel):
     columns: dict[str, list[float | str | bool | None]]
     meta: dict[str, Any]
     result: dict[str, Any]
+    objectives: list[str] = Field(
+        default_factory=list, description="History columns of the objectives (``f_*``, no total)."
+    )
+    best_so_far: list[float | None] = Field(
+        default_factory=list, description="Running best feasible ``f_total`` per history row."
+    )
+    pareto_all: list[bool] = Field(
+        default_factory=list,
+        description="Per history row: feasible and non-dominated in all objectives "
+        "(needs >= 2 objectives).",
+    )
+    pareto_pairs: dict[str, list[bool]] = Field(
+        default_factory=dict,
+        description="Per objective pair ``'f_a|f_b'`` (objective order): per history row, "
+        "feasible and non-dominated in those two objectives only.",
+    )
+    knee_eval_id: int | None = Field(default=None, description="``eval_id`` of the front knee.")
+
+
+class ExportRequest(BaseModel):
+    """Export the open datasets as a self-contained HTML snapshot."""
+
+    out: str | None = Field(
+        default=None, description="Workspace-relative output file (default: timestamped name)."
+    )
+
+
+class ExportOut(BaseModel):
+    """Result of a snapshot export."""
+
+    path: str = Field(description="Workspace-relative path of the written file.")
+    size: int = Field(description="File size in bytes.")
 
 
 class BrowseEntry(BaseModel):

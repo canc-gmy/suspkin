@@ -63,3 +63,16 @@ describe("visibility and selections", () => {
     expect(s().theme).toBe("light");
   });
 });
+
+describe("bindHash", () => {
+  it("follows hashchange and rewrites the hash on tab change", async () => {
+    const { bindHash } = await import("./store");
+    const off = bindHash();
+    location.hash = "#roll";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    expect(s().tab).toBe("roll");
+    s().setTab("summary");
+    expect(location.hash).toBe("#summary");
+    off();
+  });
+});

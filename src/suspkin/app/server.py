@@ -28,7 +28,7 @@ __all__ = ["DEFAULT_STATIC_DIR", "create_app", "run"]
 log = logging.getLogger("suspkin.app")
 
 DEFAULT_STATIC_DIR = Path(__file__).parent / "static"
-_VITE_ORIGIN = "http://localhost:5173"
+_VITE_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
 _NO_FRONTEND = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>suspkin app</title></head>
@@ -68,7 +68,7 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[_VITE_ORIGIN],
+        allow_origins=_VITE_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -123,10 +123,20 @@ def run(
     preload: Sequence[Path] = (),
     open_browser: bool = True,
     static_dir: Path | None = None,
+    dev: bool = False,
 ) -> None:
-    """Serve the app with uvicorn (blocking); optionally open the browser shortly after start."""
+    """Serve the app with uvicorn (blocking); optionally open the browser shortly after start.
+
+    ``dev``: serve only the API (with CORS for the Vite dev server on port 5173) and print
+    the Vite URL; no static files are served and no browser is opened.
+    """
     import uvicorn
 
+    if dev:
+        static_dir = workspace / ".suspkin-no-static"  # missing on purpose: API only
+        open_browser = False
+        print(f"API on http://{host}:{port}/api/v1 (docs: /docs)")
+        print("Frontend dev server: cd frontend && npm run dev, then open http://localhost:5173/")
     app = create_app(workspace, static_dir=static_dir, preload=preload)
     if open_browser:
         shown = "localhost" if host in ("0.0.0.0", "::") else host

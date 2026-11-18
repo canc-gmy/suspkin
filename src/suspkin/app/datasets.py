@@ -287,7 +287,10 @@ class DatasetManager:
             raise DatasetError(f"run folder has no vehicle.yaml/best.yaml: {self.rel(p)}")
         with self._lock:
             self._runs[run_id] = RunInfo(run_id, history, meta, result)
-        return [self._open_vehicle(q, label=lab, kind="run", run_id=run_id) for lab, q in items]
+        return [
+            self._open_vehicle(q, label=f"{p.name} {lab}", kind="run", run_id=run_id)
+            for lab, q in items
+        ]
 
     @staticmethod
     def _knee_path(p: Path, result: dict[str, Any]) -> Path | None:

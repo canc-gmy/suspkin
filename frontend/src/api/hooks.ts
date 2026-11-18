@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { DataSource } from "./source";
 import type { DatasetPatch, ScenePose } from "./types";
 
@@ -79,6 +79,8 @@ export function useScene(id: string | null, pose: ScenePose) {
     queryFn: () => src.getScene(id as string, pose),
     enabled: id !== null,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: false,
   });
 }
 
@@ -107,4 +109,9 @@ export function useCloseDataset() {
     mutationFn: (id: string) => src.closeDataset(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
   });
+}
+
+export function useExportSnapshot() {
+  const src = useSource();
+  return useMutation({ mutationFn: (out?: string) => src.exportSnapshot(out) });
 }

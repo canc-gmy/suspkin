@@ -116,5 +116,5 @@ A frontend redesign touches only `frontend/`. A new graph means adding one spec 
 | W1 | Result bundle, figure spec, `interactive_figure` split, units fix + review fixes | done |
 | W2 | FastAPI backend, `suspkin app` CLI, `app` extra (export becomes `suspkin app-export`) | done |
 | W3 | Frontend scaffold, design system (`frontend/DESIGN.md`), figure tabs, summary | done |
-| W4 | 3D tab, optimization tab, snapshot export, OpenAPI types | todo |
+| W4 | 3D tab, optimization tab, snapshot export, OpenAPI types | done |
 | W5 | Docs, ADR, CI frontend job, review | todo |

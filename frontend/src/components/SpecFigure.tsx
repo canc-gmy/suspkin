@@ -34,6 +34,7 @@ const PanelChart = memo(function PanelChart(p: PanelChartProps) {
           yTitle: plot.yTitle,
           legend: plot.legend,
           yZero: mode === "delta",
+          xHover: plot.xHover,
         }),
       };
     },
