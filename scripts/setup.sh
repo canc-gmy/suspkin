@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # One-command setup for suspkin (Linux, macOS, Git Bash).
-# Usage: bash scripts/setup.sh [--minimal] [--test]
+# Usage: bash scripts/setup.sh [--minimal] [--test] [--no-frontend]
 set -euo pipefail
 
 MINIMAL=0
 RUN_TEST=0
+NO_FRONTEND=0
 for arg in "$@"; do
   case "$arg" in
     --minimal) MINIMAL=1 ;;
     --test) RUN_TEST=1 ;;
-    -h|--help) echo "Usage: bash scripts/setup.sh [--minimal] [--test]"; exit 0 ;;
+    --no-frontend) NO_FRONTEND=1 ;;
+    -h|--help) echo "Usage: bash scripts/setup.sh [--minimal] [--test] [--no-frontend]"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -70,11 +72,23 @@ if [ -d .git ] && [ -f .pre-commit-config.yaml ]; then
   "${UV[@]}" run pre-commit install || fail "pre-commit install failed"
 fi
 
-# 5. Smoke check
+# 5. Frontend (optional, needs Node 20+)
+if [ "$NO_FRONTEND" -eq 1 ]; then
+  step "Skipping frontend build (--no-frontend)"
+elif [ ! -f frontend/package.json ]; then
+  echo "No frontend/package.json, skipping frontend build"
+elif ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "node/npm not found, skipping frontend build (the web app UI needs Node 20+)"
+else
+  step "Building the frontend"
+  (cd frontend && npm ci && npm run build && npm run build:single) || fail "frontend build failed"
+fi
+
+# 6. Smoke check
 step "Smoke check"
 "${UV[@]}" run suspkin version || fail "suspkin version failed"
 
-# 6. Tests
+# 7. Tests
 if [ "$RUN_TEST" -eq 1 ]; then
   step "Running tests"
   "${UV[@]}" run pytest -q || fail "pytest failed"

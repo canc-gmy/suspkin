@@ -40,12 +40,15 @@ nav:
       - Study YAML: guides/study-yaml.md
       - Command line: guides/cli.md
       - Examples: guides/examples.md
+      - Web app (experimental): guides/app.md
       - Stability and versioning: guides/stability.md
   - Reference:
       - Python API: reference/api.md
       - Optimize (experimental): reference/optimize.md
   - Architecture & math: ARCHITECTURE.md
   - Design plan: DESIGN_PLAN.md
+  - Architecture decisions:
+      - 0001 Web app architecture: adr/0001-webapp-architecture.md
   - Changelog: changelog.md
 
 validation:

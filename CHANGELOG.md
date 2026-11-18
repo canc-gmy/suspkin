@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Reloadable result bundles (`suspkin.report.bundle`: `save_bundle`, `load_bundle`); `build_report`
+  writes one per design under `bundles/`.
+- Declarative figure spec (`suspkin.plotting.spec`) built from the figure panels, and
+  `interactive_figure` split out of `interactive_view`.
+- Experimental local web app (FastAPI + React/TypeScript/Vite + Plotly.js, extra `app`): overlay
+  of revisions, delta vs reference, 3D pose view, optimization tab; versioned `/api/v1` with
+  generated TypeScript types.
+- `suspkin app` and `suspkin app-export` (self-contained HTML snapshot), the web app guide and
+  ADR 0001, and a CI `frontend` job.
+- Setup scripts build the frontend when Node is available (`-NoFrontend` / `--no-frontend` skips).
+
+### Changed
+
+- `mr_progression` is shown in 1/mm in the figures (as in the CLI).
+- `save_vehicle` writes LF line endings.
+- `build_report` writes `bundles/` and raises an error on duplicate design slugs.
+
 ## [1.0.0] - 2026-11-18
 
 ### Added

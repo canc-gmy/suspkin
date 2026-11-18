@@ -103,6 +103,17 @@ The `nsga2` method needs pymoo: `pip install suspkin[opt]` or `uv sync --extra o
 methods (`de`, `slsqp`, `trust-constr`, `de+slsqp`) use scipy only. See
 [ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08) for the math and outputs.
 
+## Web app (experimental, branch feat/webapp)
+
+Interactive figures, overlay of several results and a shareable HTML snapshot. See `docs/guides/app.md`.
+
+```bash
+uv sync --extra app --extra viz
+(cd frontend && npm ci && npm run build && npm run build:single)   # Node 20+
+uv run suspkin app configs/vehicles/fs_reference.yaml
+uv run suspkin app-export configs/vehicles/fs_reference.yaml --out compare.html
+```
+
 ## Development
 
 ```bash
