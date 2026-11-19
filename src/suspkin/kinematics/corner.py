@@ -38,7 +38,7 @@ from suspkin.geometry.vectors import (
     _unit3,
     wheel_spin_axis,
 )
-from suspkin.kinematics import _fast
+from suspkin.kinematics import _numba
 from suspkin.kinematics.rocker import KinematicsError, RockerCtx, RockerTuple, side_sign
 
 _RESIDUAL_TOL = 1e-9
@@ -139,7 +139,7 @@ class _Ctx:
         self.spin0_t = _as3(self.spin0)
         self.static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
         self.spring_chassis = _as3(p["spring_chassis"])
-        self.fast_arrays: tuple[Vec, Vec] | None = None  # packed lazily by ``_fast.arrays``
+        self.fast_arrays: tuple[Vec, Vec] | None = None  # packed lazily by ``_numba.arrays``
 
 
 def _eval(
@@ -285,8 +285,8 @@ def _solve3(j: list[list[float]], f: _V3) -> _V3 | None:
 
 def _newton(c: _Ctx, x0: _V3, travel: float, ti: _V3) -> tuple[_V3, _V3] | None:
     """Damped Newton on the 3x3 closing system; None if it does not converge."""
-    if _fast.available():
-        handled, res = _fast.newton(c, x0, travel, ti)
+    if _numba.available():
+        handled, res = _numba.newton(c, x0, travel, ti)
         if handled:
             return res
     x = x0

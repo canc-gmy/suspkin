@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient as _TestClient
 from behaviour._lock import REPO, snapshot_dir
 from suspkin.app.server import create_app
 from suspkin.geometry import load_vehicle
-from suspkin.kinematics import _fast
+from suspkin.kinematics import _numba
 from suspkin.report import build_report, run_standard_studies, save_bundle
 
 pytestmark = pytest.mark.lock
@@ -86,7 +86,7 @@ def _make_run(root: Path) -> None:
 
 def test_app_lock(tmp_path: Path, update_lock: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUSPKIN_NO_NUMBA", "1")
-    _fast.reset()
+    _numba.reset()
     import suspkin.app.snapshot as snap
 
     stub = tmp_path / "single"

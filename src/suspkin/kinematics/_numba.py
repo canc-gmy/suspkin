@@ -1,19 +1,72 @@
-"""Numba kernels of the corner solver (imported lazily by ``suspkin.kinematics._fast``).
+"""Optional numba fast path of the corner solver (pure-Python fallback when unavailable).
 
-Scalar ports of ``corner._eval`` / ``_solve3`` / ``_newton`` and of the secant iteration of
-``vehicle._solve_corner_ground``. Static geometry comes as flat float64 arrays (layout in
-``_fast.pack_geom`` / ``_fast.pack_rocker``). Kernels never raise: every failure is mapped
-to a status code and the caller falls back to the pure-Python path.
+numba is imported lazily on first use (never at module import). ``SUSPKIN_NO_NUMBA`` (any
+value except empty or ``0``) disables the fast path. This module holds both the numba
+kernels (scalar ports of ``corner._eval`` / ``_solve3`` / ``_newton`` and of the secant
+iteration of ``vehicle._solve_corner_ground``) and the wrappers that pack the static geometry
+into flat arrays and call them. Kernels are plain Python functions until :func:`kernels`
+compiles them with ``njit``; they never raise: every failure is mapped to a status code and
+the caller falls back to the pure-Python path.
 
-Status of ``ground``: 0 ok, 1 travel out of range, 2 Newton failed, 3 residual too large,
-4 branch jump, 5 flipped upright, 6 rocker unreachable, 7 non-finite, 8 no convergence.
+Status of ``ground_kernel``: 0 ok, 1 travel out of range, 2 Newton failed, 3 residual too
+large, 4 branch jump, 5 flipped upright, 6 rocker unreachable, 7 non-finite, 8 no convergence.
 """
 
 from __future__ import annotations
 
+import os
+import sys
+import warnings
+from collections.abc import Callable
 from math import acos, atan2, cos, hypot, pi, sin, sqrt
+from types import ModuleType
+from typing import TYPE_CHECKING, Any
 
-from numba import njit
+import numpy as np
+from numpy.typing import NDArray
+
+from suspkin.geometry.vectors import _V3
+
+if TYPE_CHECKING:
+    from suspkin.kinematics.corner import _Ctx
+
+Vec = NDArray[np.float64]
+
+_mod: ModuleType | None = None
+_tried = False
+_enabled: bool | None = None  # cached decision of ``available()``
+_MOUNT = {"upright": 0.0, "lca": 1.0, "uca": 2.0}
+_RAW: dict[str, Callable[..., Any]] = {}  # kernel name -> plain-Python function
+_jitted = False
+
+
+def _kernel(fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Register ``fn`` as a kernel; ``_compile`` swaps it for its numba dispatcher."""
+    _RAW[fn.__name__] = fn
+    return fn
+
+
+def _compile() -> None:
+    """Import numba (``ImportError`` if missing) and replace every kernel by its dispatcher.
+
+    The module globals are rebound before any call, so kernels that call each other resolve
+    to dispatchers at compile time.
+    """
+    global _jitted
+    from numba import njit
+
+    if _jitted:
+        return
+    jit = njit(cache=True, error_model="numpy")
+    g = globals()
+    for name, fn in _RAW.items():
+        g[name] = jit(fn)
+    _jitted = True
+
+
+# --------------------------------------------------------------------------------------
+# kernels
+# --------------------------------------------------------------------------------------
 
 # Keep in sync with corner.py / vehicle.py (a test asserts equality).
 RESIDUAL_TOL = 1e-9
@@ -27,10 +80,8 @@ G_TOL = 1e-11
 MAX_ITER = 30
 MAX_TRAVEL = 0.25
 
-_jit = njit(cache=True, error_model="numpy")
 
-
-@_jit
+@_kernel
 def _rod(k0, k1, k2, cs, sn, v0, v1, v2):  # type: ignore[no-untyped-def]
     f = (k0 * v0 + k1 * v1 + k2 * v2) * (1.0 - cs)
     return (
@@ -40,7 +91,7 @@ def _rod(k0, k1, k2, cs, sn, v0, v1, v2):  # type: ignore[no-untyped-def]
     )
 
 
-@_jit
+@_kernel
 def _minrot(w0, w1, w2, ik, r0, r1, r2):  # type: ignore[no-untyped-def]
     a0 = w1 * r2 - w2 * r1
     a1 = w2 * r0 - w0 * r2
@@ -52,7 +103,7 @@ def _minrot(w0, w1, w2, ik, r0, r1, r2):  # type: ignore[no-untyped-def]
     )
 
 
-@_jit
+@_kernel
 def _column(  # type: ignore[no-untyped-def]
     dd0, dd1, dd2, dl0, dl1, dl2,
     n0, n1, n2, dn, u00, u01, u02, ik, w0, w1, w2,
@@ -85,7 +136,7 @@ def _column(  # type: ignore[no-untyped-def]
     )
 
 
-@_jit
+@_kernel
 def _eval(g, a, b, psi, travel, ti0, ti1, ti2):  # type: ignore[no-untyped-def]
     """Residuals and Jacobian; returns ``(status, f0..f2, j00, j01, ..., j22)``.
 
@@ -155,7 +206,7 @@ def _eval(g, a, b, psi, travel, ti0, ti1, ti2):  # type: ignore[no-untyped-def]
     return (0, f0, f1, f2, ca0, cb0, 0.0, ca1, cb1, cp1, ca2, cb2, vw2)
 
 
-@_jit
+@_kernel
 def _solve3(a, b, c, d, e, g, h, i, k, f0, f1, f2):  # type: ignore[no-untyped-def]
     c0 = e * k - g * i
     c1 = g * h - d * k
@@ -170,8 +221,8 @@ def _solve3(a, b, c, d, e, g, h, i, k, f0, f1, f2):  # type: ignore[no-untyped-d
     return (True, x0, x1, x2)
 
 
-@_jit
-def newton(g, a, b, psi, travel, ti0, ti1, ti2):  # type: ignore[no-untyped-def]
+@_kernel
+def newton_kernel(g, a, b, psi, travel, ti0, ti1, ti2):  # type: ignore[no-untyped-def]
     """Damped Newton, same algorithm as ``corner._newton``.
 
     Returns ``(ok, x0, x1, x2, f0, f1, f2)`` with ``ok`` 1 on success and 0 on failure.
@@ -225,7 +276,7 @@ def newton(g, a, b, psi, travel, ti0, ti1, ti2):  # type: ignore[no-untyped-def]
     return (0, z, z, z, z, z, z)
 
 
-@_jit
+@_kernel
 def _rocker(rk, po0, po1, po2, guess):  # type: ignore[no-untyped-def]
     """Rocker angle nearest to ``guess`` (``RockerCtx.solve_tuple``); ``(ok, angle)``."""
     sign = rk[0]
@@ -250,13 +301,13 @@ def _rocker(rk, po0, po1, po2, guess):  # type: ignore[no-untyped-def]
     return (True, sign * phys)
 
 
-@_jit
+@_kernel
 def _iterate(  # type: ignore[no-untyped-def]
     g, rk, travel, ti0, ti1, ti2, xa, xb, xp, phi_in, n0, n1, n2, offset, z_static,
 ):  # fmt: skip
     """One ``_solve_pose`` plus the contact height; ``(status, a, b, psi, f0..f2, phi, gval)``."""
     z = 0.0
-    r = newton(g, xa, xb, xp, travel, ti0, ti1, ti2)
+    r = newton_kernel(g, xa, xb, xp, travel, ti0, ti1, ti2)
     if r[0] == 0:
         return (2, z, z, z, z, z, z, z, z)
     a, b, psi = r[1], r[2], r[3]
@@ -327,8 +378,8 @@ def _iterate(  # type: ignore[no-untyped-def]
     return (0, a, b, psi, f0, f1, f2, rr[1], gval)
 
 
-@_jit
-def ground(  # type: ignore[no-untyped-def]
+@_kernel
+def ground_kernel(  # type: ignore[no-untyped-def]
     g, rk, n0, n1, n2, offset, z_static, ti0, ti1, ti2, t_guess, xa, xb, xp, phi0, slope0,
 ):  # fmt: skip
     """Secant iteration on travel (``vehicle._solve_corner_ground`` with a guess).
@@ -379,3 +430,175 @@ def ground(  # type: ignore[no-untyped-def]
         t_prev, g_prev = t, gv
         t = t - gv / slope
     return (8, z, z, z, z, z, z, z, z, z, z)
+
+
+# --------------------------------------------------------------------------------------
+# wrappers
+# --------------------------------------------------------------------------------------
+
+
+def _warmup(k: ModuleType) -> None:
+    """Compile and call both kernels on dummy inputs (they return a failure status)."""
+    geom, rk = np.zeros(45), np.zeros(15)
+    k.newton_kernel(geom, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    k.ground_kernel(geom, rk, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+
+
+def _disable(reason: str) -> None:
+    """Switch the fast path off for this process and say why (once)."""
+    global _mod, _enabled
+    if _mod is not None or _enabled is not False:
+        warnings.warn(
+            f"suspkin: numba fast path disabled, using pure Python ({reason})",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    _mod = None
+    _enabled = False
+
+
+def kernels() -> ModuleType | None:
+    """Return the kernel module (this module), compiling the kernels on first call.
+
+    numba is imported on first call; ``None`` if it is unavailable.
+
+    A missing numba is silent; any other failure (import, compile, warm-up) disables the
+    fast path for the process with a ``RuntimeWarning``.
+    """
+    global _mod, _tried
+    if not _tried:
+        _tried = True
+        try:
+            _compile()
+            k = sys.modules[__name__]
+        except ImportError:
+            return None
+        except Exception as exc:
+            _disable(f"import failed: {exc!r}")
+            return None
+        try:
+            _warmup(k)
+        except Exception as exc:
+            _disable(f"compilation failed: {exc!r}")
+            return None
+        _mod = k
+    return _mod
+
+
+def reset() -> None:
+    """Forget the cached decision so ``SUSPKIN_NO_NUMBA`` is read again (for tests)."""
+    global _enabled
+    _enabled = None
+
+
+def available() -> bool:
+    """True if numba works and ``SUSPKIN_NO_NUMBA`` does not disable it (cached)."""
+    global _enabled
+    if _enabled is None:
+        off = os.environ.get("SUSPKIN_NO_NUMBA", "") not in ("", "0")
+        _enabled = False if off else kernels() is not None
+    return _enabled
+
+
+def pack_geom(c: _Ctx) -> Vec:
+    """Flat corner geometry (45 floats): see the index use in the kernels."""
+    po0 = np.asarray(c.po0)
+    out = np.concatenate(
+        (
+            [c.sign],
+            c.uca_front,
+            c.lca_front,
+            c.uca_hat,
+            c.lca_hat,
+            c.r_ubj,
+            c.r_lbj,
+            c.d0_hat,
+            c.r_tie,
+            c.r_wc,
+            [c.len_ubj, c.len_tie, c.wc0_z],
+            c.spin0_t,
+            c.r_po,
+            po0 - np.asarray(c.lca_front),
+            po0 - np.asarray(c.uca_front),
+            [_MOUNT[c.mount], c.radius],
+        )
+    ).astype(np.float64)
+    assert out.shape == (45,)
+    return out
+
+
+def pack_rocker(c: _Ctx) -> Vec:
+    """Flat rocker data (15 floats): sign, pivot, v_par, w, axis x w, |w|^2, pushrod length."""
+    r = c.rocker
+    return np.concatenate(([r.sign], r.pivot, r.v_par, r.w, r.axw, [r.ww, r.length])).astype(
+        np.float64
+    )
+
+
+def arrays(c: _Ctx) -> tuple[Vec, Vec]:
+    """Packed ``(geom, rocker)`` arrays of a corner context (cached on the context)."""
+    if c.fast_arrays is None:
+        c.fast_arrays = (pack_geom(c), pack_rocker(c))
+    return c.fast_arrays
+
+
+def newton(c: _Ctx, x0: _V3, travel: float, ti: _V3) -> tuple[bool, tuple[_V3, _V3] | None]:
+    """Kernel version of ``corner._newton``: ``(handled, result)``.
+
+    ``handled`` is False if the kernel raised (fast path now disabled): run the Python body.
+    ``result`` is None if Newton does not converge.
+    """
+    k = kernels()
+    assert k is not None
+    try:
+        r = k.newton_kernel(arrays(c)[0], x0[0], x0[1], x0[2], travel, ti[0], ti[1], ti[2])
+    except Exception as exc:
+        _disable(f"kernel call failed: {exc!r}")
+        return False, None
+    if r[0] == 0:
+        return True, None
+    return True, ((r[1], r[2], r[3]), (r[4], r[5], r[6]))
+
+
+def ground(
+    c: _Ctx,
+    n: Vec,
+    offset: float,
+    z_static: float,
+    ti: _V3,
+    guess: object,
+    slope0: float | None,
+) -> tuple[float, _V3, _V3, float, float] | None:
+    """Kernel secant of ``vehicle._solve_corner_ground`` (warm-started by ``guess``).
+
+    Returns ``(travel, angles, residuals, phi0, slope)`` or None on any failure status or
+    exception, in which case the caller runs the pure-Python path.
+    """
+    k = kernels()
+    assert k is not None
+    try:
+        geom, rk = arrays(c)
+        r = k.ground_kernel(
+            geom,
+            rk,
+            float(n[0]),
+            float(n[1]),
+            float(n[2]),
+            offset,
+            z_static,
+            ti[0],
+            ti[1],
+            ti[2],
+            guess.travel,  # type: ignore[attr-defined]
+            guess.theta_uca,  # type: ignore[attr-defined]
+            guess.theta_lca,  # type: ignore[attr-defined]
+            guess.psi,  # type: ignore[attr-defined]
+            guess.rocker_angle,  # type: ignore[attr-defined]
+            float("nan") if slope0 is None else slope0,
+        )
+    except Exception as exc:
+        _disable(f"kernel call failed: {exc!r}")
+        return None
+    if r[0] != 0:
+        return None
+    return r[1], (r[2], r[3], r[4]), (r[5], r[6], r[7]), r[8], r[10]

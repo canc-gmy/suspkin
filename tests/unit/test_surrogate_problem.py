@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from suspkin.geometry import build_corners
+from suspkin.kinematics.batch import corner_columns, make_static, rebuild
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients
 from suspkin.metrics.joints import JOINTS, joint_angle, joint_angles_frame
@@ -24,10 +25,7 @@ from suspkin.surrogate.evaluate import (
     BaselineAxle,
     OraclePredictor,
     SurrogateEvaluator,
-    _corner_columns,
     _joint_angles,
-    _make_static,
-    _rebuild,
     hermite,
 )
 from suspkin.surrogate.extract import extract_corner
@@ -97,13 +95,13 @@ def test_rebuild_matches_solver_states(setup, cid: str) -> None:  # type: ignore
     corners = [build_corners(v)[cid] for v in vehs]  # type: ignore[index]
     travel = np.linspace(-0.03, 0.03, 13)
     states = [sweep_corner(c, travel) for c in corners]
-    st = _make_static(corners)
+    st = make_static(corners)
     th = {
         n: np.array([[getattr(s, n) for s in ss] for ss in states])
         for n in ("theta_uca", "theta_lca", "psi")
     }
     guess = np.array([[s.rocker_angle for s in ss] for ss in states])
-    rb = _rebuild(st, th["theta_uca"], th["theta_lca"], th["psi"], guess)
+    rb = rebuild(st, th["theta_uca"], th["theta_lca"], th["psi"], guess)
     for b, ss in enumerate(states):
         for k, s in enumerate(ss):
             for name, p in s.points.items():
@@ -126,8 +124,8 @@ def test_columns_match_fom_tables(setup, cid: str) -> None:  # type: ignore[no-u
         for n in ("theta_uca", "theta_lca", "psi")
     }
     guess = np.array([[s.rocker_angle for s in ss] for ss in states])
-    rb = _rebuild(_make_static(corners), th["theta_uca"], th["theta_lca"], th["psi"], guess)
-    cols = _corner_columns(rb, travel)
+    rb = rebuild(make_static(corners), th["theta_uca"], th["theta_lca"], th["psi"], guess)
+    cols = corner_columns(rb, travel)
     for b, c in enumerate(corners):
         df = add_gradients(states_to_frame(states[b], c, metrics=True))
         for name in df.columns:
@@ -149,7 +147,7 @@ def test_joint_angles_match_fom(setup) -> None:  # type: ignore[no-untyped-def]
     states = sweep_corner(corner, travel)
     th = [np.array([[getattr(s, n) for s in states]]) for n in ("theta_uca", "theta_lca", "psi")]
     guess = np.array([[s.rocker_angle for s in states]])
-    rb = _rebuild(_make_static([corner]), *th, guess)
+    rb = rebuild(make_static([corner]), *th, guess)
     ref = joint_angles_frame(states, corner)
     for j in JOINTS:
         assert np.allclose(_joint_angles(rb, j, None)[0], ref[f"joint_{j}"], atol=1e-8), j
@@ -465,8 +463,8 @@ def _check_rebuild(corners) -> None:  # type: ignore[no-untyped-def]
         for n in ("theta_uca", "theta_lca", "psi")
     ]
     guess = np.array([[s.rocker_angle for s in ss] for ss in states])
-    rb = _rebuild(_make_static(corners), *th, guess)
-    cols = _corner_columns(rb, travel)
+    rb = rebuild(make_static(corners), *th, guess)
+    cols = corner_columns(rb, travel)
     for b, ss in enumerate(states):
         for k, s in enumerate(ss):
             for name, p in s.points.items():

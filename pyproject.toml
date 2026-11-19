@@ -85,10 +85,6 @@ plugins = ["pydantic.mypy"]
 module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*", "optuna.*", "numba", "numba.*"]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = ["suspkin.kinematics._nb_kernels"]
-ignore_errors = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

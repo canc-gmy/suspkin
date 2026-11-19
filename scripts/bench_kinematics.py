@@ -31,7 +31,7 @@ if "--no-numba" in sys.argv:  # must be set before suspkin is used
     os.environ["SUSPKIN_NO_NUMBA"] = "1"
 
 from suspkin.geometry import build_corners, load_vehicle
-from suspkin.kinematics import _fast
+from suspkin.kinematics import _numba
 from suspkin.kinematics.corner import solve_corner, sweep_corner
 from suspkin.report.studies import run_standard_studies
 from suspkin.sweeps import sweep_vehicle
@@ -63,7 +63,7 @@ def main() -> None:
     rack_lo, rack_hi = vehicle.front.steering.rack_travel  # type: ignore[union-attr]
 
     t0 = time.perf_counter()
-    path = "numba" if _fast.available() else "pure Python"  # loads/compiles the kernels
+    path = "numba" if _numba.available() else "pure Python"  # loads/compiles the kernels
     sweep_vehicle(vehicle, heave=np.linspace(-0.005, 0.005, 3))
     print(f"path: {path}")
     print(f"one-off kernel load + first vehicle sweep: {time.perf_counter() - t0:.3f} s")

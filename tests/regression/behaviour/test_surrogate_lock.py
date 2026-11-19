@@ -23,7 +23,7 @@ from typer.testing import CliRunner
 
 from behaviour._lock import REPO, snapshot_dir
 from suspkin.cli import app
-from suspkin.kinematics import _fast
+from suspkin.kinematics import _numba
 from suspkin.optimize import DesignSpace
 from suspkin.optimize.spec import load_study
 from suspkin.surrogate import axle_grids
@@ -41,7 +41,7 @@ def _no_numba(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUSPKIN_NO_NUMBA", "1")
     monkeypatch.setenv("COLUMNS", "100")
     monkeypatch.setenv("NO_COLOR", "1")
-    _fast.reset()
+    _numba.reset()
 
 
 def _arr(x: Any) -> Any:

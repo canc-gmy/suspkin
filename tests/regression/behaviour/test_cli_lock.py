@@ -21,7 +21,7 @@ from typer.testing import CliRunner
 
 from behaviour._lock import REPO, snapshot_dir
 from suspkin.cli import app
-from suspkin.kinematics import _fast
+from suspkin.kinematics import _numba
 
 pytestmark = pytest.mark.lock
 
@@ -127,7 +127,7 @@ def _no_numba(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COLUMNS", "100")
     monkeypatch.setenv("NO_COLOR", "1")
     monkeypatch.setenv("MPLBACKEND", "Agg")
-    _fast.reset()
+    _numba.reset()
 
 
 def _run(argv: list[str], out: Path) -> tuple[str, int]:
