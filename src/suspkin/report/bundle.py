@@ -13,9 +13,8 @@ nan).
 
 ``params`` are the arguments of ``run_standard_studies`` (``travel``, ``rack``,
 ``roll_deg``, ``heave``, ``pitch_deg``, ``steps``). Tables of an empty study (the rack of
-a vehicle without steering) are not written. :func:`bundle_to_results` rebuilds a
-``StudyResults`` (missing tables become empty frames; ``summary`` is rebuilt as a
-``VehicleSummary``, null values becoming nan).
+a vehicle without steering) are not written. :func:`load_bundle` returns a
+``Bundle`` with the tables, the summary dict (null values stay ``None``) and the vehicle.
 """
 
 from __future__ import annotations
