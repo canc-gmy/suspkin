@@ -40,7 +40,6 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geom_math.vectors import mirror_y
 from suspkin.geometry.models import ARB, Axle, BeamARB, TorsionalARB
 from suspkin.kinematics.corner import CornerState
@@ -87,20 +86,33 @@ def _drop_length(axle_cfg: Axle, side_left: bool) -> float:
     return float(np.linalg.norm(r - arm))
 
 
+_V3 = tuple[float, float, float]
+
+
+def _t3(v: Vec) -> _V3:
+    return (float(v[0]), float(v[1]), float(v[2]))
+
+
 def _circle_angle(
     pivot: Vec, axis: Vec, p0: Vec, target: Vec, length: float, guess: float
 ) -> float:
     """Rotation angle of ``p0`` about the axis so that ``|target - p| = length``.
 
     Closed form ``A cos + B sin = C``; of the two roots the nearest to ``guess``.
+    Scalar arithmetic (3-vectors are too small for numpy to pay off).
     """
-    v0 = p0 - pivot
-    v_par = (v0 @ axis) * axis
-    w = v0 - v_par
-    r = (target - pivot) - v_par
-    ca = float(r @ w)
-    cb = float(r @ np.cross(axis, w))
-    cc = 0.5 * (float(r @ r) + float(w @ w) - length**2)
+    px, py, pz = _t3(pivot)
+    a0, a1, a2 = _t3(axis)
+    q0, q1, q2 = _t3(p0)
+    t0, t1, t2 = _t3(target)
+    v0, v1, v2 = q0 - px, q1 - py, q2 - pz
+    f = v0 * a0 + v1 * a1 + v2 * a2
+    p0_, p1_, p2_ = f * a0, f * a1, f * a2
+    w0, w1, w2 = v0 - p0_, v1 - p1_, v2 - p2_
+    r0, r1, r2 = (t0 - px) - p0_, (t1 - py) - p1_, (t2 - pz) - p2_
+    ca = r0 * w0 + r1 * w1 + r2 * w2
+    cb = r0 * (a1 * w2 - a2 * w1) + r1 * (a2 * w0 - a0 * w2) + r2 * (a0 * w1 - a1 * w0)
+    cc = 0.5 * ((r0 * r0 + r1 * r1 + r2 * r2) + (w0 * w0 + w1 * w1 + w2 * w2) - length**2)
     amp = math.hypot(ca, cb)
     if amp < 1e-12 or abs(cc) > amp * (1.0 + 1e-12):
         raise KinematicsError("ARB drop link cannot reach the arm circle (no ARB solution)")
@@ -113,17 +125,46 @@ def _circle_angle(
     return guess + ((best - guess + math.pi) % (2.0 * math.pi) - math.pi)
 
 
+def _rotate_about(pivot: Vec, axis: Vec, angle: float, p: Vec) -> Vec:
+    """``pivot + R(axis, angle) (p - pivot)`` (Rodrigues, axis normalized)."""
+    a0, a1, a2 = _t3(axis)
+    na = math.sqrt(a0 * a0 + a1 * a1 + a2 * a2)
+    if na < 1e-12:
+        raise ValueError("rotation axis must be non-zero")
+    k0, k1, k2 = a0 / na, a1 / na, a2 / na
+    c0, c1, c2 = _t3(pivot)
+    q0, q1, q2 = _t3(p)
+    v0, v1, v2 = q0 - c0, q1 - c1, q2 - c2
+    cs, sn = math.cos(angle), math.sin(angle)
+    f = (k0 * v0 + k1 * v1 + k2 * v2) * (1.0 - cs)
+    return np.array(
+        (
+            c0 + v0 * cs + (k1 * v2 - k2 * v1) * sn + k0 * f,
+            c1 + v1 * cs + (k2 * v0 - k0 * v2) * sn + k1 * f,
+            c2 + v2 * cs + (k0 * v1 - k1 * v0) * sn + k2 * f,
+        )
+    )
+
+
 def _frozen(v: Vec) -> Vec:
     out = np.array(v, dtype=np.float64)
     out.setflags(write=False)
     return out
 
 
-def _residual(axle_cfg: Axle, left: CornerState, right: CornerState, ends: list[Vec]) -> float:
+def _residual(
+    left: CornerState, right: CornerState, ends: list[Vec], lengths: list[float]
+) -> float:
     worst = 0.0
     for i, state in enumerate((left, right)):
-        link = float(np.linalg.norm(np.asarray(state.points["rocker_arb"]) - ends[i]))
-        worst = max(worst, abs(link - _drop_length(axle_cfg, i == 0)))
+        r = state.points["rocker_arb"]
+        e = ends[i]
+        link = math.sqrt(
+            (float(r[0]) - float(e[0])) ** 2
+            + (float(r[1]) - float(e[1])) ** 2
+            + (float(r[2]) - float(e[2])) ** 2
+        )
+        worst = max(worst, abs(link - lengths[i]))
     return worst
 
 
@@ -137,6 +178,7 @@ def _solve_tube(
     assert not isinstance(arb, BeamARB)
     betas: list[float] = []
     ends: list[Vec] = []
+    lengths: list[float] = []
     for state, sign, g in (
         (left, 1.0, 0.0 if guess is None else guess.beta_left),
         (right, -1.0, 0.0 if guess is None else guess.beta_right),
@@ -148,9 +190,10 @@ def _solve_tube(
             arm, pivot, axis = mirror_y(arm), mirror_y(pivot), mirror_y(axis)
         target = np.asarray(state.points["rocker_arb"], dtype=np.float64)
         length = _drop_length(axle_cfg, sign > 0)
+        lengths.append(length)
         phys = _circle_angle(pivot, axis, arm, target, length, sign * g)
         betas.append(sign * phys)
-        ends.append(pivot + axis_angle_matrix(axis, phys) @ (arm - pivot))
+        ends.append(_rotate_about(pivot, axis, phys, arm))
     return ArbState(
         arb.type,
         betas[0],
@@ -159,7 +202,7 @@ def _solve_tube(
         betas[0] - betas[1],
         _frozen(ends[0]),
         _frozen(ends[1]),
-        _residual(axle_cfg, left, right, ends),
+        _residual(left, right, ends, lengths),
     )
 
 
@@ -172,6 +215,7 @@ def _solve_beam(
 ) -> ArbState:
     offsets: list[float] = []
     ends: list[Vec] = []
+    lengths: list[float] = []
     g_l = 0.0 if guess is None else guess.heave + guess.elastic
     g_r = 0.0 if guess is None else guess.heave - guess.elastic
     for state, sign, g in ((left, 1.0, g_l), (right, -1.0, g_r)):
@@ -180,6 +224,7 @@ def _solve_beam(
             arm = mirror_y(arm)
         d = np.asarray(state.points["rocker_arb"], dtype=np.float64) - arm
         length = _drop_length(axle_cfg, sign > 0)
+        lengths.append(length)
         q = length**2 - d[0] ** 2 - d[1] ** 2
         if q < 0.0:
             raise KinematicsError("ARB drop link cannot reach the beam end (no ARB solution)")
@@ -195,7 +240,7 @@ def _solve_beam(
         0.5 * (offsets[0] - offsets[1]),
         _frozen(ends[0]),
         _frozen(ends[1]),
-        _residual(axle_cfg, left, right, ends),
+        _residual(left, right, ends, lengths),
     )
 
 

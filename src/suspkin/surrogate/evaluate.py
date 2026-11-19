@@ -376,7 +376,7 @@ class _Rebuilt:
 
 
 def _rebuild(st: _CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> _Rebuilt:
-    """Vectorised ``corner._assemble`` at rack 0 (``th_*``, ``psi``, ``guess``: ``(B, K)``).
+    """Vectorised ``corner._pose`` + ``_finish`` at rack 0 (``th_*``/``psi``/``guess``: ``(B, K)``).
 
     Invalid states (flipped upright, pushrod out of reach, non-finite angles) give NaN.
     """

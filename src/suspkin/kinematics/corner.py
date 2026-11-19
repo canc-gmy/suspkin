@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from math import cos, sin, sqrt
-from typing import Literal
+from typing import Literal, Protocol
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -30,7 +30,7 @@ from scipy.optimize import root
 
 from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId
-from suspkin.kinematics.rocker import KinematicsError, RockerCtx, side_sign
+from suspkin.kinematics.rocker import KinematicsError, RockerCtx, RockerTuple, side_sign
 
 _RESIDUAL_TOL = 1e-9
 _MAX_HALVINGS = 6
@@ -98,23 +98,27 @@ def _dot(a: _V3, b: _V3) -> float:
 
 def _rodrigues(k: _V3, cs: float, sn: float, v: _V3) -> _V3:
     """Rotate ``v`` about the unit axis ``k`` (``cs``/``sn`` = cos/sin of the angle)."""
-    kx = _cross(k, v)
-    f = _dot(k, v) * (1.0 - cs)
+    k0, k1, k2 = k
+    v0, v1, v2 = v
+    f = (k0 * v0 + k1 * v1 + k2 * v2) * (1.0 - cs)
     return (
-        v[0] * cs + kx[0] * sn + k[0] * f,
-        v[1] * cs + kx[1] * sn + k[1] * f,
-        v[2] * cs + kx[2] * sn + k[2] * f,
+        v0 * cs + (k1 * v2 - k2 * v1) * sn + k0 * f,
+        v1 * cs + (k2 * v0 - k0 * v2) * sn + k1 * f,
+        v2 * cs + (k0 * v1 - k1 * v0) * sn + k2 * f,
     )
 
 
 def _min_rot(w: _V3, ik: float, r: _V3) -> _V3:
     """Apply ``I + K + K^2 / (1 + c)`` (minimal rotation, ``w = u x v``) to ``r``."""
-    wr = _cross(w, r)
-    wwr = _cross(w, wr)
+    w0, w1, w2 = w
+    r0, r1, r2 = r
+    a0 = w1 * r2 - w2 * r1
+    a1 = w2 * r0 - w0 * r2
+    a2 = w0 * r1 - w1 * r0
     return (
-        r[0] + wr[0] + wwr[0] * ik,
-        r[1] + wr[1] + wwr[1] * ik,
-        r[2] + wr[2] + wwr[2] * ik,
+        r0 + a0 + (w1 * a2 - w2 * a1) * ik,
+        r1 + a1 + (w2 * a0 - w0 * a2) * ik,
+        r2 + a2 + (w0 * a1 - w1 * a0) * ik,
     )
 
 
@@ -152,6 +156,7 @@ class _Ctx:
         self.r_po = _sub(self.po0, _tup(self.lbj0))
         self.spin0_t = _tup(self.spin0)
         self.static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
+        self.spring_chassis = _tup(p["spring_chassis"])
 
 
 def _eval(
@@ -192,30 +197,40 @@ def _eval(
     if not jac:
         return f, None
 
+    n0, n1, n2 = n
+    u00, u01, u02 = u0
+    w0, w1, w2 = w
+    pt0, pt1, pt2 = pt
+    pw0, pw1 = pw[0], pw[1]
+    e0, e1, e2 = e
+    vc = 1.0 - cph
+
     def column(dd: _V3, dl: _V3) -> _V3:
-        k = _dot(n, dd)
-        npr = ((dd[0] - n[0] * k) / dn, (dd[1] - n[1] * k) / dn, (dd[2] - n[2] * k) / dn)
-        t1 = _cross(u0, npr)
-        kk = _dot(u0, npr) * ik
-        wt = _cross(w, t1)
-        wm = (
-            t1[0] - w[0] * kk + wt[0] * ik,
-            t1[1] - w[1] * kk + wt[1] * ik,
-            t1[2] - w[2] * kk + wt[2] * ik,
-        )
-        qw = _rodrigues(n, cph, sph, wm)
-        nn = _cross(n, npr)
-        om = (
-            sph * npr[0] + (1.0 - cph) * nn[0] + qw[0],
-            sph * npr[1] + (1.0 - cph) * nn[1] + qw[1],
-            sph * npr[2] + (1.0 - cph) * nn[2] + qw[2],
-        )
-        vt = _cross(om, pt)
-        vw = _cross(om, pw)
+        # Vector helpers inlined (hot path); same operation order as _cross/_dot.
+        k = n0 * dd[0] + n1 * dd[1] + n2 * dd[2]
+        p0 = (dd[0] - n0 * k) / dn
+        p1 = (dd[1] - n1 * k) / dn
+        p2 = (dd[2] - n2 * k) / dn
+        t0 = u01 * p2 - u02 * p1
+        t1 = u02 * p0 - u00 * p2
+        t2 = u00 * p1 - u01 * p0
+        kk = (u00 * p0 + u01 * p1 + u02 * p2) * ik
+        m0 = t0 - w0 * kk + (w1 * t2 - w2 * t1) * ik
+        m1 = t1 - w1 * kk + (w2 * t0 - w0 * t2) * ik
+        m2 = t2 - w2 * kk + (w0 * t1 - w1 * t0) * ik
+        q0, q1, q2 = _rodrigues(n, cph, sph, (m0, m1, m2))
+        o0 = sph * p0 + vc * (n1 * p2 - n2 * p1) + q0
+        o1 = sph * p1 + vc * (n2 * p0 - n0 * p2) + q1
+        o2 = sph * p2 + vc * (n0 * p1 - n1 * p0) + q2
         return (
             k,
-            (e[0] * (dl[0] + vt[0]) + e[1] * (dl[1] + vt[1]) + e[2] * (dl[2] + vt[2])) / en,
-            dl[2] + vw[2],
+            (
+                e0 * (dl[0] + (o1 * pt2 - o2 * pt1))
+                + e1 * (dl[1] + (o2 * pt0 - o0 * pt2))
+                + e2 * (dl[2] + (o0 * pt1 - o1 * pt0))
+            )
+            / en,
+            dl[2] + (o0 * pw1 - o1 * pw0),
         )
 
     da = _cross(c.uca_hat, ru)
@@ -369,31 +384,104 @@ def solve_corner(
         If the mechanism cannot be assembled or the solver does not converge.
     """
     c = _Ctx(corner) if _ctx is None else _ctx
+    return _state(c, _solve_light(c, travel, rack, guess))
+
+
+def _state(c: _Ctx, s: CornerState | _Pose) -> CornerState:
+    return s if isinstance(s, CornerState) else _finish(c, s)
+
+
+def _solve_light(
+    c: _Ctx, travel: float, rack: float, guess: CornerState | _Pose | None
+) -> CornerState | _Pose:
+    """``solve_corner`` without building the point table on the direct path.
+
+    Returns a ``_Pose`` when the solve is direct and a ``CornerState`` when it went
+    through continuation; ``_state`` turns either into the ``solve_corner`` result.
+    """
     if guess is None:
         if abs(travel) > _COLD_LIMIT or abs(rack) > _COLD_LIMIT:
             return _staged(c, travel, rack)
-        return _solve_raw(c, travel, rack, None)
+        return _solve_pose(c, travel, rack, None)
     try:
-        return _solve_raw(c, travel, rack, guess)
+        return _solve_pose(c, travel, rack, guess)
     except KinematicsError:
         # Far guess: walk from the guess to the target in guarded steps.
-        state = _walk(_Advance(c, guess.rack, 0.0, "travel"), guess, travel)
+        start = _state(c, guess)
+        state = _walk(_Advance(c, start.rack, 0.0, "travel"), start, travel)
         return _walk(_Advance(c, 0.0, travel, "rack"), state, rack)
+
+
+class _Guess(Protocol):
+    """Fields of a neighbouring solution used to seed a solve (``CornerState`` or ``_Pose``)."""
+
+    @property
+    def travel(self) -> float: ...
+    @property
+    def rack(self) -> float: ...
+    @property
+    def theta_uca(self) -> float: ...
+    @property
+    def theta_lca(self) -> float: ...
+    @property
+    def psi(self) -> float: ...
+    @property
+    def rocker_angle(self) -> float: ...
+
+
+@dataclass(frozen=True)
+class _Pose:
+    """Solved corner pose before the point table is built (see ``_pose`` / ``_finish``).
+
+    Enough to seed the next solve and to locate the wheel (``wheel_center``,
+    ``spin_axis``); ``_finish`` turns it into the ``CornerState`` of the same solution.
+    """
+
+    travel: float
+    rack: float
+    theta_uca: float
+    theta_lca: float
+    psi: float
+    rocker_angle: float
+    tie_inner: Vec
+    residual: _V3
+    ubj: _V3
+    lbj: _V3
+    tie_outer: _V3
+    wheel_center: _V3
+    pushrod_outer: _V3
+    rocker: RockerTuple
+    spin_axis: _V3
+
+
+def _tie_inner(c: _Ctx, rack: float) -> Vec:
+    if c.rack_axis is None:
+        if rack != 0.0:
+            raise ValueError("rack must be 0 on an axle without steering")
+        return np.asarray(c.p["tie_inner"])
+    out: Vec = c.p["tie_inner"] + rack * c.rack_axis
+    return out
 
 
 def _solve_raw(
     c: _Ctx,
     travel: float,
     rack: float,
-    guess: CornerState | None,
+    guess: _Guess | None,
     x_pred: _V3 | None = None,
 ) -> CornerState:
-    if c.rack_axis is None:
-        if rack != 0.0:
-            raise ValueError("rack must be 0 on an axle without steering")
-        tie_inner = np.asarray(c.p["tie_inner"])
-    else:
-        tie_inner = c.p["tie_inner"] + rack * c.rack_axis
+    return _finish(c, _solve_pose(c, travel, rack, guess, x_pred))
+
+
+def _solve_pose(
+    c: _Ctx,
+    travel: float,
+    rack: float,
+    guess: _Guess | None,
+    x_pred: _V3 | None = None,
+) -> _Pose:
+    """Solve the closing angles and the rocker (no point table, see ``_finish``)."""
+    tie_inner = _tie_inner(c, rack)
     ti = _tup(tie_inner)
 
     if guess is None:
@@ -404,7 +492,7 @@ def _solve_raw(
         starts = [xg] if x_pred is None else [x_pred, xg]
         phi0 = guess.rocker_angle
 
-    def check(x: Vec, worst: float) -> None:
+    def check(x: _V3, worst: float) -> None:
         if not (worst <= _RESIDUAL_TOL):
             raise KinematicsError(
                 f"no convergence at travel {travel:.6f} m, rack {rack:.6f} m "
@@ -412,9 +500,9 @@ def _solve_raw(
             )
         if guess is not None:
             jump = max(
-                abs(float(x[0]) - guess.theta_uca),
-                abs(float(x[1]) - guess.theta_lca),
-                abs(float(x[2]) - guess.psi),
+                abs(x[0] - guess.theta_uca),
+                abs(x[1] - guess.theta_lca),
+                abs(x[2] - guess.psi),
             )
             if jump > _MAX_ANGLE_STEP:
                 raise KinematicsError(
@@ -429,31 +517,33 @@ def _solve_raw(
         if result is None:
             continue
         converged = True
-        x = np.array(result[0])
+        xs, f = result
         try:
-            check(x, max(abs(result[1][0]), abs(result[1][1]), abs(result[1][2])))
+            check(xs, max(abs(f[0]), abs(f[1]), abs(f[2])))
         except KinematicsError as exc:
             err = exc
             continue
-        return _assemble(c, x, travel, rack, tie_inner, phi0)
+        return _pose(c, xs, f, travel, rack, tie_inner, phi0)
     if converged and err is not None:
         raise err
     try:
         x = _hybr(c, starts[-1], travel, tie_inner)
         if not np.all(np.isfinite(x)):
             raise KinematicsError(f"solver diverged at travel {travel:.6f} m")
-        worst = float(np.max(np.abs(_residuals(c, x, travel, tie_inner))))
+        xs = (float(x[0]), float(x[1]), float(x[2]))
+        f, _ = _eval(c, xs[0], xs[1], xs[2], travel, ti, False)
+        worst = max(abs(f[0]), abs(f[1]), abs(f[2]))
     except (ValueError, ZeroDivisionError, FloatingPointError, np.linalg.LinAlgError) as exc:
         raise KinematicsError(f"solver failed at travel {travel:.6f} m: {exc}") from exc
-    check(x, worst)
-    return _assemble(c, x, travel, rack, tie_inner, phi0)
+    check(xs, worst)
+    return _pose(c, xs, f, travel, rack, tie_inner, phi0)
 
 
-def _assemble(
-    c: _Ctx, x: Vec, travel: float, rack: float, tie_inner: Vec, phi0: float
-) -> CornerState:
-    th_u, th_l, psi = float(x[0]), float(x[1]), float(x[2])
-    p = c.p
+def _pose(
+    c: _Ctx, x: _V3, f: _V3, travel: float, rack: float, tie_inner: Vec, phi0: float
+) -> _Pose:
+    """Upright points, rocker and spin axis of the solved angles ``x`` (residuals ``f``)."""
+    th_u, th_l, psi = x
     s = c.sign
     ubj, lbj, rot = _upright_map(c, th_u, th_l, psi)
 
@@ -461,13 +551,6 @@ def _assemble(
         v = rot(r)
         return (lbj[0] + v[0], lbj[1] + v[1], lbj[2] + v[2])
 
-    pts: dict[str, Vec] = {k: np.array(v) for k, v in p.items()}
-    pts["uca_outer"] = np.array(ubj)
-    pts["lca_outer"] = np.array(lbj)
-    pts["tie_outer"] = np.array(on_upright(c.r_tie))
-    pts["tie_inner"] = np.array(tie_inner)
-    wc = on_upright(c.r_wc)
-    pts["wheel_center"] = np.array(wc)
     if c.mount == "upright":
         po = on_upright(c.r_po)
     elif c.mount == "lca":
@@ -476,44 +559,75 @@ def _assemble(
     else:
         rr = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), _sub(c.po0, c.uca_front))
         po = (rr[0] + c.uca_front[0], rr[1] + c.uca_front[1], rr[2] + c.uca_front[2])
-    pts["pushrod_outer"] = np.array(po)
     try:
-        rk = c.rocker.solve(po, phi0)
+        rk = c.rocker.solve_tuple(po, phi0)
     except KinematicsError as exc:
         raise KinematicsError(f"{exc} at travel {travel:.6f} m") from exc
-    pts["pushrod_inner"] = rk.pushrod_inner
-    pts["rocker_spring"] = rk.rocker_spring
-    if rk.rocker_arb is not None:
-        pts["rocker_arb"] = rk.rocker_arb
-
-    spin = _unit(rot(c.spin0_t))
-    fz = spin[2]
-    up = _unit((-fz * spin[0], -fz * spin[1], 1.0 - fz * spin[2]))
-    pts["contact_patch"] = np.array(
-        (wc[0] - c.radius * up[0], wc[1] - c.radius * up[1], wc[2] - c.radius * up[2])
-    )
-
-    d_coil = _sub(_tup(rk.rocker_spring), _tup(p["spring_chassis"]))
-    cl = sqrt(_dot(d_coil, d_coil))
-    coil = c.corner.axle_cfg.coilover
-    d_push = _sub(po, _tup(rk.pushrod_inner))
-    push_len = sqrt(_dot(d_push, d_push))
-    f, _ = _eval(c, th_u, th_l, psi, travel, _tup(tie_inner), False)
-    max_res = max(max(abs(f[0]), abs(f[1]), abs(f[2])), abs(push_len - c.static_push))
-    for v in pts.values():
-        v.setflags(write=False)
-    return CornerState(
-        corner_id=c.corner.id,
+    return _Pose(
         travel=float(travel),
         rack=float(rack),
         theta_uca=th_u,
         theta_lca=th_l,
         psi=psi,
-        rocker_angle=rk.angle,
+        rocker_angle=rk[0],
+        tie_inner=tie_inner,
+        residual=f,
+        ubj=ubj,
+        lbj=lbj,
+        tie_outer=on_upright(c.r_tie),
+        wheel_center=on_upright(c.r_wc),
+        pushrod_outer=po,
+        rocker=rk,
+        spin_axis=_unit(rot(c.spin0_t)),
+    )
+
+
+def _finish(c: _Ctx, q: _Pose) -> CornerState:
+    """Build the ``CornerState`` (point table, coilover, residual) of a solved pose."""
+    angle, p_in, p_spring, p_arb, toggle = q.rocker
+    wc, spin = q.wheel_center, q.spin_axis
+    fz = spin[2]
+    up = _unit((-fz * spin[0], -fz * spin[1], 1.0 - fz * spin[2]))
+    # Static points are shared with the corner (read-only); moved points are new arrays.
+    pts: dict[str, Vec] = dict(c.p)
+    moved: dict[str, Vec] = {
+        "uca_outer": np.array(q.ubj),
+        "lca_outer": np.array(q.lbj),
+        "tie_outer": np.array(q.tie_outer),
+        "tie_inner": np.array(q.tie_inner),
+        "wheel_center": np.array(wc),
+        "pushrod_outer": np.array(q.pushrod_outer),
+        "pushrod_inner": np.array(p_in),
+        "rocker_spring": np.array(p_spring),
+        "contact_patch": np.array(
+            (wc[0] - c.radius * up[0], wc[1] - c.radius * up[1], wc[2] - c.radius * up[2])
+        ),
+    }
+    if p_arb is not None:
+        moved["rocker_arb"] = np.array(p_arb)
+    for v in moved.values():
+        v.setflags(write=False)
+    pts.update(moved)
+
+    d_coil = _sub(p_spring, c.spring_chassis)
+    cl = sqrt(_dot(d_coil, d_coil))
+    coil = c.corner.axle_cfg.coilover
+    d_push = _sub(q.pushrod_outer, p_in)
+    push_len = sqrt(_dot(d_push, d_push))
+    f = q.residual
+    max_res = max(max(abs(f[0]), abs(f[1]), abs(f[2])), abs(push_len - c.static_push))
+    return CornerState(
+        corner_id=c.corner.id,
+        travel=q.travel,
+        rack=q.rack,
+        theta_uca=q.theta_uca,
+        theta_lca=q.theta_lca,
+        psi=q.psi,
+        rocker_angle=angle,
         points=pts,
         spin_axis=np.array(spin),
         coilover_length=cl,
-        toggle_margin=rk.toggle_margin,
+        toggle_margin=toggle,
         max_residual=max_res,
         coilover_in_range=bool(coil.length_min <= cl <= coil.length_max),
     )

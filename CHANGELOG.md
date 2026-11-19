@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The kinematics solver is about 2 times faster end to end (`run_standard_studies` at 61 points:
+  336 ms to 162 ms; vehicle sweeps 2.0 to 2.6 times faster). The ground-contact secant builds the
+  corner point table only for the converged pose and is warm-started from the neighbouring pose.
+  The ARB drop-link solve and the hot 3-vector helpers use scalar math. Results are unchanged
+  apart from differences within the ground-contact tolerance (wheel travel about 1e-11 m). See
+  `docs/performance.md` and `scripts/bench_kinematics.py`.
+
 ## [1.1.0] - 2026-11-19
 
 ### Changed

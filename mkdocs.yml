@@ -48,6 +48,7 @@ nav:
       - Optimize (experimental): reference/optimize.md
       - Surrogate (experimental): reference/surrogate.md
   - Architecture & math: ARCHITECTURE.md
+  - Kinematics performance: performance.md
   - Design plan: DESIGN_PLAN.md
   - Architecture decisions:
       - 0001 Web app architecture: adr/0001-webapp-architecture.md
