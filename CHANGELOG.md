@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-19
+
 ### Changed
 
 - `suspkin optimize --surrogate ROOT` runs with `ROOT/models/` alone: without `ROOT/dataset/<axle>`

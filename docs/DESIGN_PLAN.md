@@ -533,7 +533,7 @@ The package name `suspkin` is a placeholder.
 | v0.7.0 | Optimization study spec: variables, constraints, evaluator, `suspkin check` | Reference study loads and passes; `check` table and region plot work |
 | v0.8.0 | Objectives + optimizers (NSGA-II, SLSQP/DE), comparison report | Optimizer runs on the v0.7 study spec; Pareto front and before/after report |
 | **v1.0.0** (current, done) | Stable kinematics | Docs complete, regression suite frozen |
-| v1.1.0 (implemented, benchmark pending, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
+| v1.1.0 (released 2026-11-19; full benchmark pending, §13) | NN surrogate (front + rear MLPs, Optuna), analytic vehicle layer, active-learning optimizer | See §13.13 |
 
 **Future phases (not planned in detail yet)**:
 
@@ -608,7 +608,7 @@ The package name `suspkin` is a placeholder.
 
 ## 13. Surrogate model and active learning (v1.1.0, implemented)
 
-Status: **implemented (v1.1.0, unreleased)**. Benchmark (§13.13) pending. Decided 2026-11-18: S1–S14 (§12). The text below is the design as drafted; each **As built** note records what changed.
+Status: **implemented (v1.1.0, released 2026-11-19)**. Benchmark (§13.13) pending. Decided 2026-11-18: S1–S14 (§12). The text below is the design as drafted; each **As built** note records what changed.
 
 ### 13.1 Goal and principle
 
