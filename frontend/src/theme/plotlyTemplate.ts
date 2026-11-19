@@ -11,6 +11,9 @@ export interface Tokens {
   rule: string;
   layoutBlue: string;
   danger: string;
+  regionDomain: string;
+  regionRequired: string;
+  regionKeepout: string;
   fontUi: string;
   /** Palette-index colour overrides present on this theme (`--rev-N`). */
   rev: Record<number, string>;
@@ -42,6 +45,9 @@ export function readTokens(theme: Theme): Tokens {
     rule: get("--rule"),
     layoutBlue: get("--layout-blue"),
     danger: get("--danger"),
+    regionDomain: get("--region-domain"),
+    regionRequired: get("--region-required"),
+    regionKeepout: get("--region-keepout"),
     fontUi: get("--font-ui") || "Barlow, sans-serif",
     rev,
   };
@@ -58,19 +64,14 @@ export interface LayoutOptions {
   legend: boolean;
   /** Draw a zero line on y (Δ mode) in addition to the static-pose line on x. */
   yZero: boolean;
-  /** "x unified" (default, curves over a shared x) or "closest" (scatter charts). */
-  hover?: "x unified" | "closest";
+  /**
+   * "closest" shows Plotly hover labels (scatter charts); "none" (default) turns them off: the
+   * curve panels are read in the readout strip and mark the cursor with a layout shape.
+   */
+  hover?: "none" | "closest";
   /** Draw the static-pose zero line on x (default true). */
   xZero?: boolean;
   yType?: "linear" | "log";
-  /** Show the x spike line across panels (default true for unified hover). */
-  spikes?: boolean;
-  /**
-   * Heading of the unified hover ("Wheel travel 12 mm"). Needs every trace on `xaxis: "x2"`:
-   * a hidden overlaying axis carries the label as tick prefix and the unit as suffix (shown
-   * only for the hover value, never on ticks).
-   */
-  xHover?: { label: string; unit: string };
 }
 
 function axis(t: Tokens, title: string, zero: boolean): PlotlyObject {
@@ -96,47 +97,14 @@ function axis(t: Tokens, title: string, zero: boolean): PlotlyObject {
 
 /** Plotly layout for one panel, from the DESIGN.md "Plot template". */
 export function chartLayout(t: Tokens, o: LayoutOptions): PlotlyObject {
-  const xaxis = {
-    ...axis(t, o.xTitle, o.xZero ?? true),
-    showspikes: o.spikes ?? (o.hover ?? "x unified") === "x unified",
-    spikemode: "across",
-    spikesnap: "cursor",
-    spikecolor: t.inkMuted,
-    spikethickness: 1,
-    spikedash: "dot",
-  };
-  const hoverAxis = o.xHover
-    ? {
-        xaxis2: {
-          overlaying: "x",
-          matches: "x",
-          showticklabels: false,
-          showgrid: false,
-          zeroline: false,
-          showline: false,
-          ticks: "",
-          hoverformat: ".4~g",
-          tickprefix: `${o.xHover.label} `,
-          showtickprefix: "first",
-          ticksuffix: o.xHover.unit ? ` ${o.xHover.unit}` : "",
-          showticksuffix: "first",
-          showspikes: xaxis.showspikes,
-          spikemode: "across",
-          spikesnap: "data" /* programmatic (linked) hover has no cursor to snap to */,
-          spikecolor: t.inkMuted,
-          spikethickness: 1,
-          spikedash: "dot",
-        },
-      }
-    : {};
+  const closest = o.hover === "closest";
   return {
-    ...hoverAxis,
     paper_bgcolor: t.sheet,
     plot_bgcolor: t.sheetRaised,
     font: { family: t.fontUi, size: 12, color: t.ink },
     margin: { l: 72, r: 16, t: o.legend ? 32 : 8, b: 52, pad: 0 },
-    hovermode: o.hover ?? "x unified",
-    hoverdistance: o.hover === "closest" ? 20 : -1,
+    hovermode: closest ? "closest" : false,
+    hoverdistance: closest ? 20 : -1,
     hoverlabel: {
       bgcolor: t.sheetRaised,
       bordercolor: t.rule,
@@ -152,8 +120,25 @@ export function chartLayout(t: Tokens, o: LayoutOptions): PlotlyObject {
       font: { family: t.fontUi, size: 12, color: t.inkMuted },
       bgcolor: "rgba(0,0,0,0)",
     },
-    xaxis: { ...xaxis, ...(o.xHover ? { showspikes: false } : {}) },
+    xaxis: axis(t, o.xTitle, o.xZero ?? true),
     yaxis: { ...axis(t, o.yTitle, o.yZero), ...(o.yType ? { type: o.yType } : {}) },
+  };
+}
+
+/** Shape of the cursor line on a curve panel: dashed muted while following, solid blue when pinned. */
+export function cursorShape(t: Tokens, x: number, pinned: boolean): PlotlyObject {
+  return {
+    type: "line",
+    xref: "x",
+    yref: "paper",
+    x0: x,
+    x1: x,
+    y0: 0,
+    y1: 1,
+    layer: "above",
+    line: pinned
+      ? { color: t.layoutBlue, width: 1, dash: "solid" }
+      : { color: t.inkMuted, width: 1, dash: "dash" },
   };
 }
 
@@ -171,7 +156,12 @@ export function plainLayout(t: Tokens): PlotlyObject {
  * Apply the theme to a server-built 3D scene: background, grid and axes from the tokens, and
  * the near-black geometry (wheels, hardpoints, contact patches) in ink so it reads on both sheets.
  */
-export function themeScene(fig: { data?: unknown; layout?: unknown }, t: Tokens): { data: PlotlyObject[]; layout: PlotlyObject } {
+export function themeScene(
+  fig: { data?: unknown; layout?: unknown },
+  t: Tokens,
+  opts: { legend?: boolean } = {},
+): { data: PlotlyObject[]; layout: PlotlyObject } {
+  const legendOn = opts.legend ?? true;
   const DARK = new Set(["#222222", "black", "#000000"]);
   const recolor = (obj: unknown): unknown => {
     if (!obj || typeof obj !== "object") return obj;
@@ -209,16 +199,28 @@ export function themeScene(fig: { data?: unknown; layout?: unknown }, t: Tokens)
       ...base,
       title: { text: "" },
       uirevision: "pose", // keep the camera when the pose (and so the data) changes
-      paper_bgcolor: t.sheet,
+      // one surface: paper, scene and axis walls share --sheet-raised, so there is no box or seam
+      paper_bgcolor: t.sheetRaised,
       font: { family: t.fontUi, size: 12, color: t.ink },
-      margin: { l: 0, r: 0, t: 8, b: 0 },
-      legend: { font: { family: t.fontUi, size: 12, color: t.inkMuted }, bgcolor: "rgba(0,0,0,0)" },
+      // the legend is a compact row in a strip at the top of the canvas, above the scene, so it
+      // never covers the car; the strip is only reserved while the legend is on
+      margin: { l: 0, r: 0, t: legendOn ? 48 : 8, b: 0 },
+      showlegend: legendOn,
+      legend: {
+        x: 0,
+        xanchor: "left",
+        y: 1,
+        yanchor: "bottom",
+        orientation: "h",
+        font: { family: t.fontUi, size: 12, color: t.inkMuted },
+        bgcolor: "rgba(0,0,0,0)",
+      },
       scene: {
         ...scene,
         xaxis: axisOf("xaxis"),
         yaxis: axisOf("yaxis"),
         zaxis: axisOf("zaxis"),
-        bgcolor: t.sheet,
+        bgcolor: t.sheetRaised,
         uirevision: "pose",
       },
     },

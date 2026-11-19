@@ -10,7 +10,13 @@ export type HistoryData = S["HistoryOut"];
 export type BrowseData = S["BrowseOut"];
 export type BrowseEntry = S["BrowseEntry"];
 export type PoseInput = S["PoseInput"];
+export type Hardpoint = S["HardpointOut"];
 export type ExportResult = S["ExportOut"];
+export type HardpointEdit = S["HardpointEdit"];
+export type DeriveRequest = S["DeriveRequest"];
+export type SaveRequest = S["SaveRequest"];
+export type SaveResult = S["SaveOut"];
+export type Region = S["RegionOut"];
 export type DatasetKind = DatasetInfo["kind"];
 
 export type Summary = Record<string, unknown>;

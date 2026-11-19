@@ -119,6 +119,13 @@ input {
   display: none;
 }
 
+/* on a phone the top strip keeps to two rows: the "Resolution" caption goes, its control keeps a name */
+@media (max-width: 479px) {
+  .resolution > .muted {
+    display: none;
+  }
+}
+
 @media (max-width: 899px) {
   .drawer-toggle {
     display: inline-block;
@@ -349,7 +356,7 @@ table.ruled {
 
 .design-label {
   flex: 1 1 100%;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word; /* long names break after an underscore first (see TitleBlock) */
 }
 
 .legend-note {
@@ -384,6 +391,143 @@ tr.fresh {
   flex: 1;
 }
 
+/* the toolbar and the readout strip stay in view while the panels scroll */
+.figure-toolbar {
+  position: sticky;
+  top: var(--topbar-h, 49px);
+  z-index: 4;
+  background: var(--sheet);
+  padding: var(--space-1) 0;
+  margin-bottom: 0;
+}
+
+.figure:focus-visible {
+  outline-offset: 4px;
+}
+
+.figure-sticky {
+  position: sticky;
+  top: calc(var(--topbar-h, 49px) + var(--toolbar-h, 0px));
+  z-index: 3;
+  background: var(--sheet);
+  padding-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ---- readout strip ---------------------------------------------------------------- */
+.readout-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding-bottom: 4px;
+}
+
+.readout-x {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+}
+
+input.readout-input {
+  width: 6.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+input.readout-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.readout-unit {
+  color: var(--ink-muted);
+}
+
+.readout-status {
+  margin-left: var(--space-1);
+  font-size: var(--text-12);
+}
+
+.readout-status.error {
+  margin: 0 0 0 var(--space-1);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.check input {
+  accent-color: var(--layout-blue);
+}
+
+.readout-scroll {
+  overflow: auto;
+  max-height: 30vh;
+}
+
+.readout-table {
+  border-collapse: collapse;
+  background: var(--sheet-raised);
+  white-space: nowrap;
+}
+
+.readout-table th,
+.readout-table td {
+  padding: 2px var(--space-1);
+  border-bottom: 1px solid var(--rule);
+  font-weight: var(--weight-body);
+}
+
+.readout-table thead th {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+  border-bottom: 2px solid var(--ink);
+}
+
+.readout-table .num {
+  text-align: right;
+  min-width: 9rem;
+}
+
+.readout-table .readout-rev {
+  position: sticky;
+  left: 0;
+  text-align: left;
+  background: var(--sheet-raised);
+  min-width: 3.5rem;
+}
+
+.readout-part + .readout-part {
+  margin-left: var(--space-2);
+}
+
+.pfx {
+  color: var(--ink-muted);
+  margin-right: 4px;
+}
+
+.resolution {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.resolution-note {
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+.design-meta {
+  flex: 1 1 100%;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
 .view-title {
   font-family: var(--font-title);
   font-size: var(--text-20);
@@ -399,6 +543,27 @@ tr.fresh {
   margin: var(--space-2) 0 var(--space-1);
 }
 
+/* Both axles: side by side from 1400 px (one panel column each), stacked below */
+.figure-columns.both {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.figure-column {
+  min-width: 0;
+}
+
+@media (min-width: 1400px) {
+  .figure-columns.both {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+  .figure-columns.both .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .panel-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -411,14 +576,55 @@ tr.fresh {
   }
 }
 
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+}
+
 .panel-title {
   font-family: var(--font-title);
   font-size: var(--text-17);
   font-weight: var(--weight-title);
-  margin: 0 0 var(--space-1);
+  margin: 0;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 var(--space-2);
+  font-size: var(--text-12);
+}
+
+.text-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  text-decoration: underline;
+}
+
+.panel-status {
+  color: var(--ink-muted);
+  order: -1; /* left of the buttons, so they never move when it appears */
+}
+
+.panel-status.error {
+  color: var(--danger);
+  margin: 0;
 }
 
 .panel-note {
+  max-width: 80ch;
   margin: 0 0 var(--space-1);
   color: var(--ink-muted);
   font-size: var(--text-12);
@@ -464,6 +670,85 @@ tr.fresh {
 
 .summary .unit {
   color: var(--ink-muted);
+}
+
+/* ---- hardpoints tab --------------------------------------------------------------- */
+.hardpoints-bar {
+  margin-top: var(--space-2);
+  margin-bottom: 0;
+}
+
+.hardpoint-table .hp-point,
+.hardpoint-table .hp-side {
+  white-space: nowrap;
+}
+
+.hardpoint-table thead th.sub {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-body);
+  color: var(--ink-muted);
+}
+
+.hardpoint-table .group-start {
+  border-left: 1px solid var(--rule);
+}
+
+.hardpoint-table .group-row th {
+  font-family: var(--font-title);
+  font-weight: var(--weight-title);
+  background: var(--sheet);
+}
+
+.hardpoint-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* the point column stays in view while the revisions scroll */
+.hardpoint-table .hp-point {
+  position: sticky;
+  left: 0;
+  background: var(--sheet-raised);
+  z-index: 1;
+}
+
+/* editing: number inputs in the edited revision's columns */
+.edit-bar {
+  margin-top: var(--space-1);
+  margin-bottom: var(--space-1);
+}
+
+.edit-title {
+  font-family: var(--font-title);
+  font-weight: var(--weight-label);
+}
+
+.save-line {
+  margin-top: 0;
+}
+
+input.cell-input {
+  width: 6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 2px 6px;
+}
+
+.hardpoint-table td.cell-changed {
+  border-left: 2px solid var(--layout-blue);
+}
+
+.hardpoint-table .hp-rightonly {
+  display: flex;
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+.hardpoint-table .hp-reset {
+  white-space: nowrap;
 }
 
 /* ---- empty state, dialog ---------------------------------------------------------- */
@@ -576,6 +861,7 @@ tr.fresh {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  white-space: nowrap; /* a label never wraps inside its own control; the toolbar wraps between controls */
 }
 
 select {
@@ -587,7 +873,7 @@ select {
 
 .sliders {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
   gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-2);
 }

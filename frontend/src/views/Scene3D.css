@@ -1,0 +1,62 @@
+/* Full-bleed 3D canvas: cancels the main area padding, no card. One surface with the plot
+   (paper, scene and walls are all --sheet-raised), so there is no visible box or seam. */
+.scene3d-canvas {
+  width: auto;
+  margin: 0 calc(-1 * var(--space-3)) calc(-1 * var(--space-3));
+  background: var(--sheet-raised);
+}
+
+@media (max-width: 899px) {
+  .scene3d-canvas {
+    margin: 0 calc(-1 * var(--space-2)) calc(-1 * var(--space-2));
+  }
+}
+
+/* Centres menu: a secondary button with a small panel under it. */
+.centres-menu {
+  position: relative;
+}
+
+.centres-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  min-width: max-content;
+  background: var(--sheet-raised);
+  border: 1px solid var(--rule);
+}
+
+.centres-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.centres-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.centres-group + .centres-group {
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid var(--rule);
+}
+
+.centres-heading {
+  color: var(--ink-muted);
+  font-size: var(--text-12);
+}
+
+/* Plane offset slider: same look as a pose slider, sized to sit in the options row. */
+.plane-slider {
+  width: 12rem;
+}

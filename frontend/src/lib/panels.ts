@@ -61,6 +61,8 @@ export function groupsOf(figures: readonly FigureSpec[]): string[] {
 }
 
 export type Axle = "front" | "rear";
+/** The axle control: one axle, or both figures at once. */
+export type AxleChoice = Axle | "both";
 
 /** True when a group has separate front and rear figures (ids ending `_front` / `_rear`). */
 export function hasAxles(figs: readonly FigureSpec[]): boolean {
@@ -71,4 +73,16 @@ export function hasAxles(figs: readonly FigureSpec[]): boolean {
 export function figuresFor(figures: readonly FigureSpec[], group: string, axle: Axle): FigureSpec[] {
   const figs = figures.filter((f) => f.group === group);
   return hasAxles(figs) ? figs.filter((f) => f.id.endsWith(`_${axle}`)) : figs;
+}
+
+/**
+ * Figures of a group as columns. A group with axles gives one column for Front or Rear, and
+ * two for Both (front, then rear); a group without axles is always one column. The caller puts
+ * the columns side by side on wide screens and stacks them on narrow ones.
+ */
+export function figureColumns(figures: readonly FigureSpec[], group: string, axle: AxleChoice): FigureSpec[][] {
+  const figs = figures.filter((f) => f.group === group);
+  if (!hasAxles(figs)) return [figs];
+  if (axle !== "both") return [figuresFor(figures, group, axle)];
+  return (["front", "rear"] as const).map((a) => figuresFor(figures, group, a)).filter((c) => c.length > 0);
 }

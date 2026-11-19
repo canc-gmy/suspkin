@@ -16,6 +16,9 @@ const ds = (id: string, label: string, color: number): DatasetInfo => ({
   color,
   studies: ["front_corner"],
   params: {},
+  steps: 31,
+  resolution_fixed: false,
+  has_study: false,
 });
 
 function mockSource(): DataSource {
@@ -30,9 +33,13 @@ function mockSource(): DataSource {
     openPath: fail,
     patchDataset: vi.fn((id: string, patch) => Promise.resolve({ ...ds(id, "x", 0), ...patch })),
     closeDataset: vi.fn(() => Promise.resolve()),
+    deriveDataset: fail,
+    saveDataset: fail,
     getTable: fail,
     getSummary: fail,
     getScene: fail,
+    getHardpoints: fail,
+    getRegions: fail,
     getHistory: fail,
     browse: fail,
   } as DataSource;

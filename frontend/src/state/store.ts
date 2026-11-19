@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { nextLetter, type Theme } from "../theme/revisions";
-import type { Axle } from "../lib/panels";
+import type { AxleChoice } from "../lib/panels";
 
 export type Mode = "overlay" | "delta";
 
@@ -15,9 +15,11 @@ export interface UiState {
   fresh: Record<string, true>;
   synced: boolean;
   tab: string | null;
-  axle: Axle;
+  axle: AxleChoice;
   mode: Mode;
   theme: Theme;
+  /** Draw small markers at the real solver points (kept for the session in localStorage). */
+  showPoints: boolean;
   drawerOpen: boolean;
   openDialog: boolean;
 
@@ -25,9 +27,10 @@ export interface UiState {
   toggleVisible: (id: string) => void;
   setReference: (id: string) => void;
   setTab: (tab: string) => void;
-  setAxle: (axle: Axle) => void;
+  setAxle: (axle: AxleChoice) => void;
   setMode: (mode: Mode) => void;
   setTheme: (theme: Theme) => void;
+  setShowPoints: (show: boolean) => void;
   toggleTheme: () => void;
   setDrawer: (open: boolean) => void;
   setOpenDialog: (open: boolean) => void;
@@ -35,6 +38,15 @@ export interface UiState {
 }
 
 const THEME_KEY = "suspkin.theme";
+const POINTS_KEY = "suspkin.showPoints";
+
+function initialShowPoints(): boolean {
+  try {
+    return localStorage.getItem(POINTS_KEY) === "1";
+  } catch {
+    return false; // storage unavailable
+  }
+}
 
 export function initialTheme(): Theme {
   try {
@@ -65,6 +77,7 @@ export const useUi = create<UiState>()((set) => ({
   axle: "front",
   mode: "overlay",
   theme: initialTheme(),
+  showPoints: initialShowPoints(),
   drawerOpen: false,
   openDialog: false,
 
@@ -96,6 +109,14 @@ export const useUi = create<UiState>()((set) => ({
   setAxle: (axle) => set({ axle }),
   setMode: (mode) => set({ mode }),
   setTheme: (theme) => set({ theme }),
+  setShowPoints: (showPoints) => {
+    try {
+      localStorage.setItem(POINTS_KEY, showPoints ? "1" : "0");
+    } catch {
+      // storage unavailable
+    }
+    set({ showPoints });
+  },
   toggleTheme: () => set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
   setDrawer: (drawerOpen) => set({ drawerOpen }),
   setOpenDialog: (openDialog) => set({ openDialog }),

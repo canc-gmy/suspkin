@@ -184,6 +184,106 @@
         }
       }
     },
+    "/api/v1/datasets/{dataset_id}/derive": {
+      "post": {
+        "summary": "Derive Dataset",
+        "description": "New ``edited`` revision: the source's vehicle with hardpoint edits (SI), solved.",
+        "operationId": "derive_dataset_api_v1_datasets__dataset_id__derive_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeriveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/save": {
+      "post": {
+        "summary": "Save Dataset",
+        "description": "Write the vehicle of a revision to a workspace YAML file (schema 1, LF).",
+        "operationId": "save_dataset_api_v1_datasets__dataset_id__save_post",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SaveOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/datasets/{dataset_id}/tables/{study}": {
       "get": {
         "summary": "Table",
@@ -363,6 +463,94 @@
         }
       }
     },
+    "/api/v1/datasets/{dataset_id}/hardpoints": {
+      "get": {
+        "summary": "Hardpoints",
+        "description": "Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set).",
+        "operationId": "hardpoints_api_v1_datasets__dataset_id__hardpoints_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HardpointOut"
+                  },
+                  "title": "Response Hardpoints Api V1 Datasets  Dataset Id  Hardpoints Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/datasets/{dataset_id}/regions": {
+      "get": {
+        "summary": "Regions",
+        "description": "Variable domains and constraint regions of the attached study (404 without one).",
+        "operationId": "regions_api_v1_datasets__dataset_id__regions_get",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Dataset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegionOut"
+                  },
+                  "title": "Response Regions Api V1 Datasets  Dataset Id  Regions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/runs/{run_id}/history": {
       "get": {
         "summary": "History",
@@ -507,6 +695,7 @@
             "enum": [
               "dir",
               "vehicle",
+              "study",
               "bundle",
               "report",
               "run",
@@ -574,7 +763,8 @@
             "enum": [
               "vehicle",
               "bundle",
-              "run"
+              "run",
+              "edited"
             ],
             "title": "Kind"
           },
@@ -612,6 +802,44 @@
             "type": "object",
             "title": "Params",
             "description": "Study parameters (SI)."
+          },
+          "steps": {
+            "type": "integer",
+            "title": "Steps",
+            "description": "Points per sweep of the solved tables.",
+            "default": 31
+          },
+          "resolution_fixed": {
+            "type": "boolean",
+            "title": "Resolution Fixed",
+            "description": "True for bundles and runs: the stored resolution cannot be changed.",
+            "default": true
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id",
+            "description": "Revision an edited revision was derived from."
+          },
+          "edits": {
+            "items": {
+              "$ref": "#/components/schemas/HardpointEdit"
+            },
+            "type": "array",
+            "title": "Edits",
+            "description": "Hardpoint edits of an edited revision."
+          },
+          "has_study": {
+            "type": "boolean",
+            "title": "Has Study",
+            "description": "True when an optimization study is attached: ``/regions`` has content.",
+            "default": false
           }
         },
         "type": "object",
@@ -650,11 +878,69 @@
               }
             ],
             "title": "Color"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 401.0,
+                "minimum": 3.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps",
+            "description": "Re-solve with this many points per sweep (vehicle files only)."
           }
         },
         "type": "object",
         "title": "DatasetPatch",
         "description": "Editable dataset attributes."
+      },
+      "DeriveRequest": {
+        "properties": {
+          "edits": {
+            "items": {
+              "$ref": "#/components/schemas/HardpointEdit"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Edits"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Default: '<source label> edited'."
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 401.0,
+                "minimum": 3.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps",
+            "description": "Points per sweep (default: the source's)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "edits"
+        ],
+        "title": "DeriveRequest",
+        "description": "Derive an edited revision from a vehicle-backed one."
       },
       "ExportOut": {
         "properties": {
@@ -714,6 +1000,132 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HardpointEdit": {
+        "properties": {
+          "axle": {
+            "type": "string",
+            "enum": [
+              "front",
+              "rear"
+            ],
+            "title": "Axle"
+          },
+          "point": {
+            "type": "string",
+            "title": "Point"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right",
+              "both"
+            ],
+            "title": "Side",
+            "description": "Left point (right mirrors it, a right override is kept), right point only (written to right_overrides, right-side coordinates), or both (mirrored; a right override of the point is dropped)."
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X",
+            "description": "Metres."
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y",
+            "description": "Metres."
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z",
+            "description": "Metres."
+          }
+        },
+        "type": "object",
+        "required": [
+          "axle",
+          "point",
+          "side"
+        ],
+        "title": "HardpointEdit",
+        "description": "Move one hardpoint (SI). Missing coordinates keep their current value."
+      },
+      "HardpointOut": {
+        "properties": {
+          "axle": {
+            "type": "string",
+            "enum": [
+              "front",
+              "rear"
+            ],
+            "title": "Axle"
+          },
+          "point": {
+            "type": "string",
+            "title": "Point"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Side"
+          },
+          "x": {
+            "type": "number",
+            "title": "X",
+            "description": "Metres."
+          },
+          "y": {
+            "type": "number",
+            "title": "Y",
+            "description": "Metres."
+          },
+          "z": {
+            "type": "number",
+            "title": "Z",
+            "description": "Metres."
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "description": "True for a right point taken from ``right_overrides``.",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "axle",
+          "point",
+          "side",
+          "x",
+          "y",
+          "z"
+        ],
+        "title": "HardpointOut",
+        "description": "One hardpoint of one corner after mirroring (SI, ISO 8855 vehicle frame)."
       },
       "HealthOut": {
         "properties": {
@@ -930,6 +1342,153 @@
         ],
         "title": "PoseInput",
         "description": "One body-pose input of the 3D view: SI unit, display unit and how to convert."
+      },
+      "RegionOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Variable point or constraint name."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "domain",
+              "inside",
+              "outside"
+            ],
+            "title": "Role"
+          },
+          "point": {
+            "type": "string",
+            "title": "Point",
+            "description": "Hardpoint reference, e.g. ``front.uca_front``."
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "title": "Side"
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "hexahedron",
+              "box",
+              "offset",
+              "sphere",
+              "cylinder"
+            ],
+            "title": "Shape"
+          },
+          "mirrored": {
+            "type": "boolean",
+            "title": "Mirrored",
+            "description": "Right copy of a symmetric domain.",
+            "default": false
+          },
+          "lines": {
+            "items": {
+              "items": {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Lines",
+            "description": "Wireframe polylines."
+          },
+          "over": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Over",
+            "description": "Sweep a constraint is evaluated over."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "role",
+          "point",
+          "side",
+          "shape",
+          "lines"
+        ],
+        "title": "RegionOut",
+        "description": "One optimization region as wireframe polylines (SI, body frame of the 3D scene).\n\nDomains are the variable domains (a symmetric variable gives the left one and a\n``mirrored`` right copy); ``inside`` / ``outside`` are constraint regions, given in the\nvehicle frame and not mirrored. Regions do not move with the body pose."
+      },
+      "SaveOut": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Workspace-relative path of the written file."
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "description": "File size in bytes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "size"
+        ],
+        "title": "SaveOut",
+        "description": "Result of saving a vehicle YAML."
+      },
+      "SaveRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path",
+            "description": "Workspace-relative file name ending in .yaml or .yml."
+          },
+          "overwrite": {
+            "type": "boolean",
+            "title": "Overwrite",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "title": "SaveRequest",
+        "description": "Write a revision's vehicle to a workspace YAML file."
       },
       "TableOut": {
         "properties": {

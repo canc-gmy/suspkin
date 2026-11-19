@@ -13,7 +13,7 @@ import json
 import math
 import os
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,15 +22,28 @@ import pandas as pd
 import yaml
 from pydantic import ValidationError
 
-from suspkin.geometry import Vehicle, VehicleConfigError, load_vehicle
-from suspkin.kinematics import KinematicsError
+from suspkin.app.edits import HardpointEditError, apply_hardpoint_edits
+from suspkin.app.models import HardpointEdit
+from suspkin.app.regions import is_study_data
+from suspkin.geometry import (
+    Vehicle,
+    VehicleConfigError,
+    build_corners,
+    load_vehicle,
+    save_vehicle,
+    vehicle_yaml,
+)
+from suspkin.kinematics import KinematicsError, sweep_corner
 from suspkin.optimize.history import read_history
 from suspkin.optimize.outputs import read_meta
+from suspkin.optimize.spec import StudyConfigError, load_study
 from suspkin.plotting.spec import derived_columns
 from suspkin.report.bundle import BundleError, is_bundle, load_bundle
 from suspkin.report.studies import run_standard_studies
+from suspkin.sweeps import sweep_vehicle
 
 __all__ = [
+    "AlreadyExistsError",
     "Dataset",
     "DatasetError",
     "DatasetManager",
@@ -62,6 +75,18 @@ class DatasetNotFoundError(LookupError):
     """Unknown dataset or run id."""
 
 
+class EditError(DatasetError):
+    """Hardpoint edits that name an unknown point or give an invalid geometry (HTTP 400)."""
+
+
+class SolveFailedError(DatasetError):
+    """The solver failed on an edited vehicle (HTTP 422)."""
+
+
+class AlreadyExistsError(DatasetError):
+    """A file that exists and may not be replaced (HTTP 409)."""
+
+
 @dataclass
 class Dataset:
     """One open dataset. ``tables`` are SI and include the derived columns."""
@@ -76,6 +101,18 @@ class Dataset:
     vehicle: Vehicle
     params: dict[str, Any] = field(default_factory=dict)
     run_id: str | None = None
+    #: Points per sweep of the solved tables.
+    steps: int = 31
+    #: True when the tables are stored (bundle) or tied to a run: the resolution cannot change.
+    resolution_fixed: bool = True
+    #: Bytes and path of the vehicle file a ``vehicle`` dataset was solved from (for re-solving).
+    vehicle_bytes: bytes | None = field(default=None, repr=False)
+    vehicle_path: Path | None = None
+    #: Revision an ``edited`` dataset was derived from, and the edits that were applied.
+    parent_id: str | None = None
+    edits: list[HardpointEdit] = field(default_factory=list)
+    #: Study YAML whose variable domains and regions the 3D view can draw (runs, opened studies).
+    study_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -94,6 +131,12 @@ class _Solved:
     tables: dict[str, pd.DataFrame]
     summary: dict[str, Any]
     params: dict[str, Any]
+    steps: int = 31
+
+
+def _table_steps(tables: Mapping[str, pd.DataFrame], default: int) -> int:
+    """Points per sweep of stored tables: the length of the longest one."""
+    return max((len(t) for t in tables.values()), default=default) or default
 
 
 def clean_json(obj: Any) -> Any:
@@ -117,6 +160,43 @@ def _stat_sig(*files: Path) -> str:
         except OSError:
             parts.append(f"{f.name}:-")
     return "|".join(parts)
+
+
+_STUDY_KEYS = ("travel", "rack", "roll_deg", "heave", "pitch_deg")
+
+
+def _study_kwargs(params: Mapping[str, Any]) -> dict[str, Any]:
+    """The ``run_standard_studies`` arguments (except steps) recorded in stored params."""
+    return {k: params[k] for k in _STUDY_KEYS if params.get(k) is not None}
+
+
+def _failing_sweep(vehicle: Vehicle, params: Mapping[str, Any]) -> str | None:
+    """Name of the first standard sweep whose end points cannot be solved (None: all solve)."""
+    travel = float(params.get("travel", 0.030))
+    corners = build_corners(vehicle)
+    probes: list[tuple[str, Callable[[], object]]] = [
+        ("front bump and droop", lambda: sweep_corner(corners["FL"], [-travel, 0.0, travel])),
+        ("rear bump and droop", lambda: sweep_corner(corners["RL"], [-travel, 0.0, travel])),
+    ]
+    steer = vehicle.front.steering
+    if steer is not None:
+        rack = params.get("rack")
+        lo, hi = steer.rack_travel if rack is None else (-float(rack), float(rack))
+        probes.append(("steering rack", lambda: sweep_vehicle(vehicle, rack=[lo, 0.0, hi])))
+    h = float(params.get("heave", 0.025))
+    r = math.radians(float(params.get("roll_deg", 2.0)))
+    p = math.radians(float(params.get("pitch_deg", 1.5)))
+    probes += [
+        ("heave", lambda: sweep_vehicle(vehicle, heave=[-h, 0.0, h])),
+        ("roll", lambda: sweep_vehicle(vehicle, roll=[-r, 0.0, r])),
+        ("pitch", lambda: sweep_vehicle(vehicle, pitch=[-p, 0.0, p])),
+    ]
+    for name, run in probes:
+        try:
+            run()
+        except (KinematicsError, ValueError, ArithmeticError):
+            return name
+    return None
 
 
 def _vehicle_from_bytes(data: bytes, where: str) -> Vehicle:
@@ -154,8 +234,20 @@ def _is_vehicle_yaml(p: Path) -> bool:
     return True
 
 
+def _is_study_yaml(p: Path) -> bool:
+    """Light check (no validation): a YAML with ``schema`` and ``variables``/``constraints``."""
+    if p.suffix.lower() not in (".yaml", ".yml") or not p.is_file():
+        return False
+    try:
+        if p.stat().st_size > MAX_VEHICLE_BYTES:
+            return False
+        return is_study_data(yaml.safe_load(p.read_text(encoding="utf-8")))
+    except Exception:
+        return False
+
+
 def classify(p: Path) -> str:
-    """Entry kind of ``p``: dir | vehicle | bundle | report | run | other."""
+    """Entry kind of ``p``: dir | vehicle | study | bundle | report | run | other."""
     if p.is_dir():
         if is_bundle(p):
             return "bundle"
@@ -164,6 +256,8 @@ def classify(p: Path) -> str:
         if _is_report(p):
             return "report"
         return "dir"
+    if _is_study_yaml(p):
+        return "study"
     return "vehicle" if _is_vehicle_yaml(p) else "other"
 
 
@@ -244,7 +338,32 @@ class DatasetManager:
                 loaded = [self._load_bundle(b) for b in bundles]  # all or nothing
                 return [self._register_bundle(*item) for item in loaded]
             raise DatasetError(f"not a bundle, report or optimizer run folder: {self.rel(p)}")
+        if _is_study_yaml(p):
+            return [self._open_study(p)]
         return [self._open_vehicle(p)]
+
+    def _open_study(self, p: Path) -> Dataset:
+        """Open the vehicle a study YAML points to as a revision labelled with the study stem."""
+        data = self._read_vehicle_file(p)
+        try:
+            study, _ = load_study(p)
+        except StudyConfigError as exc:
+            raise DatasetError(f"{self.rel(p)} is not a valid study: {exc}") from exc
+        vpath = (p.parent / study.vehicle).resolve()
+        if not self._inside(vpath):
+            raise WorkspaceError(f"the vehicle of {p.name} is outside the workspace")
+        vdata = self._read_vehicle_file(vpath)
+        digest = hashlib.sha256(vdata).hexdigest()
+        solved = self._solve(vpath, vdata, digest)
+        return self._register(
+            kind="vehicle",
+            path=vpath,
+            label=p.stem,
+            solved=solved,
+            vehicle_bytes=vdata,
+            did=_short("study", str(p), hashlib.sha256(data).hexdigest()[:16], digest[:16]),
+            study_path=p,
+        )
 
     def _read_vehicle_file(self, path: Path) -> bytes:
         self._guard(path)
@@ -259,8 +378,23 @@ class DatasetManager:
         except OSError as exc:
             raise DatasetError(f"cannot read {self.rel(path)}: {exc}") from exc
 
-    def _solve(self, vehicle_path: Path, data: bytes, digest: str) -> _Solved:
-        key = (digest, tuple(sorted(self.study_params.items())))
+    @property
+    def default_steps(self) -> int:
+        """Points per sweep of newly opened vehicle files."""
+        return int(self.study_params.get("steps", 31))
+
+    def _solve(
+        self,
+        vehicle_path: Path,
+        data: bytes,
+        digest: str,
+        steps: int | None = None,
+        *,
+        extra: Mapping[str, Any] | None = None,
+    ) -> _Solved:
+        n = self.default_steps if steps is None else steps
+        params = {**self.study_params, **(extra or {}), "steps": n}
+        key = (digest, tuple(sorted(params.items())))
         with self._lock:
             hit = self._cache.get(key)
         if hit is not None:
@@ -270,7 +404,7 @@ class DatasetManager:
         except VehicleConfigError as exc:
             raise DatasetError(f"{self.rel(vehicle_path)} is not a vehicle: {exc}") from exc
         try:
-            res = run_standard_studies(veh, **self.study_params)
+            res = run_standard_studies(veh, **params)
         except (KinematicsError, ValueError, ArithmeticError) as exc:
             raise DatasetError(f"cannot solve {self.rel(vehicle_path)}: {exc}") from exc
         solved = _Solved(
@@ -278,6 +412,7 @@ class DatasetManager:
             tables={k: derived_columns(k, v) for k, v in res.tables().items()},
             summary=clean_json(res.summary.to_dict()),
             params=clean_json(dict(res.params)),
+            steps=n,
         )
         with self._lock:
             self._cache[key] = solved
@@ -292,8 +427,13 @@ class DatasetManager:
         solved: _Solved,
         run_id: str | None = None,
         content: str = "",
+        vehicle_bytes: bytes | None = None,
+        did: str | None = None,
+        parent_id: str | None = None,
+        edits: Sequence[HardpointEdit] = (),
+        study_path: Path | None = None,
     ) -> Dataset:
-        did = _short(kind, str(path), content)
+        did = did or _short(kind, str(path), content)
         with self._lock:
             if did in self._datasets:
                 return self._datasets[did]
@@ -315,12 +455,25 @@ class DatasetManager:
                 vehicle=solved.vehicle,
                 params=solved.params,
                 run_id=run_id,
+                steps=solved.steps,
+                resolution_fixed=kind not in ("vehicle", "edited"),
+                vehicle_bytes=vehicle_bytes if kind in ("vehicle", "edited") else None,
+                vehicle_path=path if kind in ("vehicle", "edited") else None,
+                parent_id=parent_id,
+                edits=list(edits),
+                study_path=study_path,
             )
             self._datasets[did] = ds
             return ds
 
     def _open_vehicle(
-        self, p: Path, *, label: str | None = None, kind: str = "vehicle", run_id: str | None = None
+        self,
+        p: Path,
+        *,
+        label: str | None = None,
+        kind: str = "vehicle",
+        run_id: str | None = None,
+        study_path: Path | None = None,
     ) -> Dataset:
         data = self._read_vehicle_file(p)  # read once: the digest keys both cache and id
         digest = hashlib.sha256(data).hexdigest()
@@ -332,6 +485,8 @@ class DatasetManager:
             solved=solved,
             run_id=run_id,
             content=digest[:16],
+            vehicle_bytes=data,
+            study_path=study_path,
         )
 
     def _load_bundle(self, p: Path) -> tuple[Path, Any, _Solved, str]:
@@ -348,6 +503,7 @@ class DatasetManager:
             tables={k: derived_columns(k, v) for k, v in b.tables.items()},
             summary=clean_json(b.summary),
             params=clean_json(dict(b.manifest.get("params") or {})),
+            steps=_table_steps(b.tables, self.default_steps),
         )
         return p, b, solved, _stat_sig(*files)
 
@@ -385,8 +541,16 @@ class DatasetManager:
             items.append(("knee", knee))
         if not items:
             raise DatasetError(f"run folder has no vehicle.yaml/best.yaml: {self.rel(p)}")
+        study = p / "study.yaml"
+        self._guard(study)
         datasets = [
-            self._open_vehicle(q, label=f"{p.name} {lab}", kind="run", run_id=run_id)
+            self._open_vehicle(
+                q,
+                label=f"{p.name} {lab}",
+                kind="run",
+                run_id=run_id,
+                study_path=study if study.is_file() else None,
+            )
             for lab, q in items
         ]
         with self._lock:
@@ -445,6 +609,102 @@ class DatasetManager:
             ds = self.get(dataset_id)
             ds.color = color
             return ds
+
+    def set_steps(self, dataset_id: str, steps: int) -> Dataset:
+        """Re-solve a vehicle dataset with ``steps`` points per sweep (cached by file and steps)."""
+        ds = self.get(dataset_id)
+        if ds.resolution_fixed or ds.vehicle_bytes is None or ds.vehicle_path is None:
+            raise DatasetError(f"the resolution of {ds.label!r} is stored and cannot change")
+        if steps == ds.steps:
+            return ds
+        digest = hashlib.sha256(ds.vehicle_bytes).hexdigest()
+        extra = _study_kwargs(ds.params) if ds.kind == "edited" else None
+        solved = self._solve(  # outside the lock
+            ds.vehicle_path, ds.vehicle_bytes, digest, steps, extra=extra
+        )
+        with self._lock:
+            ds.tables = solved.tables
+            ds.summary = solved.summary
+            ds.params = solved.params
+            ds.steps = solved.steps
+            return ds
+
+    def derive(
+        self,
+        dataset_id: str,
+        edits: Sequence[HardpointEdit],
+        *,
+        label: str | None = None,
+        steps: int | None = None,
+    ) -> Dataset:
+        """Apply hardpoint ``edits`` to a revision and register the result as ``edited``.
+
+        The id is a hash of the resulting vehicle YAML and the resolution, so the same edits
+        give the same revision (an open one is returned as is). Study parameters and the
+        resolution default to the source's.
+        """
+        parent = self.get(dataset_id)
+        try:
+            vehicle = apply_hardpoint_edits(parent.vehicle, edits)
+        except HardpointEditError as exc:
+            raise EditError(str(exc)) from exc
+        data = vehicle_yaml(vehicle).encode("utf-8")
+        digest = hashlib.sha256(data).hexdigest()
+        n = parent.steps if steps is None else steps
+        extra = _study_kwargs(parent.params)
+        did = _short("edited", digest, str(n))
+        with self._lock:
+            known = self._datasets.get(did)
+        if known is not None:
+            return known
+        path = self.workspace / parent.source
+        try:
+            solved = self._solve(path, data, digest, n, extra=extra)
+        except DatasetError as exc:
+            if not isinstance(exc.__cause__, KinematicsError):
+                raise
+            sweep = _failing_sweep(vehicle, {**self.study_params, **extra})
+            where = f"the {sweep} sweep" if sweep else "the standard sweeps"
+            raise SolveFailedError(
+                f"The solver failed in {where}: {exc.__cause__}. Check the edited points."
+            ) from exc
+        return self._register(
+            kind="edited",
+            path=path,
+            label=label or f"{parent.label} edited",
+            solved=solved,
+            vehicle_bytes=data,
+            did=did,
+            parent_id=parent.id,
+            edits=edits,
+            study_path=parent.study_path,
+        )
+
+    def save(
+        self, dataset_id: str, path: str | Path, *, overwrite: bool = False
+    ) -> tuple[str, int]:
+        """Write the vehicle of a revision to a workspace YAML file: ``(rel path, size)``.
+
+        Only existing vehicle YAML files can be replaced, and only with ``overwrite``.
+        """
+        ds = self.get(dataset_id)
+        target = self.resolve(path)
+        if target.suffix.lower() not in (".yaml", ".yml"):
+            raise DatasetError("the file name must end in .yaml or .yml")
+        if not target.parent.is_dir():
+            raise DatasetError(f"the folder does not exist: {self.rel(target.parent) or '.'}")
+        if os.path.lexists(target):
+            if not target.is_file() or not _is_vehicle_yaml(target):
+                raise DatasetError(
+                    f"{self.rel(target)} exists and is not a vehicle YAML; choose another file name"
+                )
+            if not overwrite:
+                raise AlreadyExistsError(f"already exists: {self.rel(target)}")
+        try:
+            save_vehicle(ds.vehicle, target)
+            return self.rel(target), target.stat().st_size
+        except OSError as exc:
+            raise DatasetError(f"cannot write {self.rel(target)}: {exc}") from exc
 
     def close(self, dataset_id: str) -> None:
         """Close a dataset (and its run once no dataset uses it)."""

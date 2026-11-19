@@ -14,7 +14,16 @@ from pathlib import Path
 from typing import Any
 
 from suspkin.app.datasets import DatasetManager
-from suspkin.app.routes import _column, _dataset_out, health_out, history_out, scene_json
+from suspkin.app.routes import (
+    _column,
+    _dataset_out,
+    hardpoints_out,
+    health_out,
+    history_out,
+    regions_out,
+    scene_json,
+)
+from suspkin.optimize.spec import StudyConfigError
 from suspkin.plotting.spec import spec_json
 
 __all__ = [
@@ -63,6 +72,13 @@ def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> di
             scenes = {d.id: scene_json(d) for d in datasets}
         except ImportError:
             scenes = {}  # plotly is not installed: the 3D tab reports no scene
+    regions: dict[str, Any] = {}
+    for d in datasets:
+        if d.study_path is not None:
+            try:
+                regions[d.id] = [r.model_dump(mode="json") for r in regions_out(d)]
+            except StudyConfigError:
+                continue  # the study file changed or vanished: that revision shows no regions
     return {
         "health": health_out(manager).model_dump(mode="json")
         | {"workspace": manager.workspace.name},
@@ -72,6 +88,10 @@ def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> di
         "summaries": {d.id: d.summary for d in datasets},
         "histories": histories,
         "scenes": scenes,
+        "regions": regions,
+        "hardpoints": {
+            d.id: [h.model_dump(mode="json") for h in hardpoints_out(d)] for d in datasets
+        },
     }
 
 

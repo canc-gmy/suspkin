@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chartLayout, type Tokens } from "./plotlyTemplate";
+import { chartLayout, cursorShape, type Tokens } from "./plotlyTemplate";
 
 const T: Tokens = {
   sheet: "#fff",
@@ -11,27 +11,35 @@ const T: Tokens = {
   rule: "#bbb",
   layoutBlue: "#00f",
   danger: "#f00",
+  regionDomain: "#0a0",
+  regionRequired: "#0aa",
+  regionKeepout: "#a05",
   fontUi: "Barlow",
   rev: {},
 };
+const base = { xTitle: "x", yTitle: "y", legend: false, yZero: false };
 
-describe("chartLayout hover axis", () => {
-  const layout = chartLayout(T, { xTitle: "x", yTitle: "y", legend: false, yZero: false, xHover: { label: "Wheel travel", unit: "mm" } });
-  const x2 = layout["xaxis2"] as Record<string, unknown>;
-
-  it("keeps the hidden hover axis locked to the visible x axis", () => {
-    expect(x2["matches"]).toBe("x");
-    expect(x2["overlaying"]).toBe("x");
-    expect(x2["showticklabels"]).toBe(false);
+describe("chartLayout", () => {
+  it("has no hover labels and no hidden hover axis on curve panels", () => {
+    const layout = chartLayout(T, base);
+    expect(layout["hovermode"]).toBe(false);
+    expect(layout["xaxis2"]).toBeUndefined();
+    expect((layout["xaxis"] as Record<string, unknown>)["showspikes"]).toBeUndefined();
   });
 
-  it("puts label and unit on the hover value and snaps spikes to data (linked hover has no cursor)", () => {
-    expect(x2["tickprefix"]).toBe("Wheel travel ");
-    expect(x2["ticksuffix"]).toBe(" mm");
-    expect(x2["spikesnap"]).toBe("data");
+  it("keeps hover labels for scatter charts", () => {
+    expect(chartLayout(T, { ...base, hover: "closest" })["hovermode"]).toBe("closest");
   });
+});
 
-  it("has no hover axis without a heading", () => {
-    expect(chartLayout(T, { xTitle: "x", yTitle: "y", legend: false, yZero: false })["xaxis2"]).toBeUndefined();
+describe("cursorShape", () => {
+  it("is a dashed muted line while following and a solid blue line when pinned", () => {
+    const follow = cursorShape(T, 3, false);
+    const pinned = cursorShape(T, 3, true);
+    expect(follow["x0"]).toBe(3);
+    expect(follow["x1"]).toBe(3);
+    expect(follow["yref"]).toBe("paper");
+    expect(follow["line"]).toMatchObject({ color: "#888", dash: "dash", width: 1 });
+    expect(pinned["line"]).toMatchObject({ color: "#00f", dash: "solid", width: 1 });
   });
 });

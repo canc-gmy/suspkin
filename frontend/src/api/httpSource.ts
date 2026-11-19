@@ -32,7 +32,8 @@ export class HttpSource implements DataSource {
     let res: Response;
     try {
       res = await fetch(this.base + path, init);
-    } catch {
+    } catch (e) {
+      if (init?.signal?.aborted) throw e; // a cancelled request is not a server failure
       throw new ApiError("The suspkin server is not reachable. Check that it is still running.", 0);
     }
     if (!res.ok) {
@@ -70,6 +71,12 @@ export class HttpSource implements DataSource {
   async closeDataset(id: string): Promise<void> {
     await this.request<void>(`/datasets/${encodeURIComponent(id)}`, { method: "DELETE" });
   }
+  deriveDataset(id: string, body: Parameters<DataSource["deriveDataset"]>[1], signal?: AbortSignal): Ret<"deriveDataset"> {
+    return this.request(`/datasets/${encodeURIComponent(id)}/derive`, { ...this.json("POST", body), signal });
+  }
+  saveDataset(id: string, body: Parameters<DataSource["saveDataset"]>[1]): Ret<"saveDataset"> {
+    return this.request(`/datasets/${encodeURIComponent(id)}/save`, this.json("POST", body));
+  }
   getTable(id: string, study: string): Ret<"getTable"> {
     return this.request(`/datasets/${encodeURIComponent(id)}/tables/${encodeURIComponent(study)}`);
   }
@@ -81,6 +88,12 @@ export class HttpSource implements DataSource {
     for (const [k, v] of Object.entries(pose)) if (v !== undefined) q.set(k, String(v));
     const qs = q.toString();
     return this.request(`/datasets/${encodeURIComponent(id)}/scene${qs ? `?${qs}` : ""}`);
+  }
+  getHardpoints(id: string): Ret<"getHardpoints"> {
+    return this.request(`/datasets/${encodeURIComponent(id)}/hardpoints`);
+  }
+  getRegions(id: string): Ret<"getRegions"> {
+    return this.request(`/datasets/${encodeURIComponent(id)}/regions`);
   }
   getHistory(runId: string): Ret<"getHistory"> {
     return this.request(`/runs/${encodeURIComponent(runId)}/history`);

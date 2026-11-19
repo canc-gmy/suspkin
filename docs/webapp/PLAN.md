@@ -118,3 +118,60 @@ A frontend redesign touches only `frontend/`. A new graph means adding one spec 
 | W3 | Frontend scaffold, design system (`frontend/DESIGN.md`), figure tabs, summary | done |
 | W4 | 3D tab, optimization tab, snapshot export, OpenAPI types | done |
 | W5 | Docs, ADR, CI frontend job, milestone review + fixes | done |
+
+---
+
+# Iteration 2: UI/UX (branch `feat/webapp`, started 2026-11-18)
+
+## Context
+The first version was merged to main through PR #2. After using it, the user asked for four things:
+1. **Fixed readout:** curve values must stay in a fixed place and never cover the plot. Today the Plotly unified hover box floats over the curves.
+2. **Point-wise resolution:** it should be possible to read values between the solved points, not only at them.
+3. **3D canvas:** it should fill the remaining screen.
+4. **3D camera:** angle and zoom must not change when the car pose changes.
+
+The user also chose three areas: the comparison workflow, hardpoint editing, and a visual polish pass. UI work follows `frontend/DESIGN.md`, which gets updated first for each new component, and uses the `frontend-design` skill.
+
+## Design decisions
+- **Readout strip:** a sticky strip docked under the figure toolbar.
+  - It shows the cursor x ("Wheel travel 12.4 mm") and a compact table: one row per visible revision (letter + line sample), one column per panel. Left/right values sit side by side and Δ values appear when Δ mode is on.
+  - Plot hover labels are switched off; only the spike line stays.
+  - **Pin:** clicking a plot pins the cursor. ← / → nudge it by one fine step (0.1 mm or 0.01 deg), and an input takes an exact x. Esc unpins.
+- **Continuous cursor:** the cursor follows the mouse x itself, not the nearest data point.
+  - Values come from a natural cubic spline in `src/lib/interp.ts` (pure, tested). The same spline is resampled densely to draw the lines, so readout and curve always agree.
+  - A "Show solved points" toggle draws small markers at the real solver points, so interpolated and solved values stay distinguishable.
+- **Solver resolution:** a "Resolution" control (31 / 61 / 121 points) re-solves vehicle YAML revisions with that many steps. The backend cache key already includes study params; the resolution is set per dataset in the API. Bundles and runs keep their stored resolution and show it.
+- **3D view:**
+  - The canvas fills the viewport below the toolbar (CSS height `calc(100dvh - header)`), and resizes with the window.
+  - Camera, zoom and pan survive pose changes: a constant `uirevision`, and axis ranges and aspect ratio fixed from the static pose with a margin, so the scene never rescales.
+  - An optional ghost overlay draws the reference revision in thin muted lines, and hardpoints that differ from the reference are highlighted.
+- **Comparison workflow:**
+  - Front / Rear / Both layout. Both shows the front and rear figures side by side on wide screens and stacked on narrow ones.
+  - A Hardpoints tab lists every hardpoint per revision with Δ to the reference (mm). Rows that differ come first, and the list can be filtered.
+  - "Copy data" and "Download CSV" per panel, in display units, with a revision letter per column.
+- **Hardpoint editing** (Hardpoints tab):
+  - "Edit as new revision" on a vehicle-backed revision opens an editable table (mm).
+  - Edits mirror to the right side unless "Right side only" is ticked; that writes `right_overrides`, the same mechanism `optimize/design.py` uses.
+  - "Solve" creates a new revision (e.g. "B edited") through `POST /datasets/{id}/derive {edits}`. Invalid geometry gives an inline error, and a pydantic or solver error names the point.
+  - "Auto-solve" re-solves 600 ms after the last edit and cancels stale solves.
+  - "Save as YAML" goes through `POST /datasets/{id}/save {path}`: workspace only, it never overwrites without confirmation, and it writes `schema: 1`.
+- **Polish pass:** a frontend-design critique of screenshots of every view (light and dark, desktop and mobile), then the fixes it finds. These include spacing and hierarchy, chart readability, empty and error states, focus order, and the remaining tab overflow.
+
+## Slices
+| Slice | Content | Status |
+|---|---|---|
+| I2-1 | DESIGN.md update. Readout strip with pin and nudge. Continuous cursor with spline interpolation shared with drawing. Solved-points toggle. Resolution control and backend per-dataset steps. | done |
+| I2-2 | 3D: full-height canvas, fixed camera, zoom and ranges, reference ghost, differing-hardpoint highlight. (hardpoint ring moved to I2-3) | done |
+| I2-3 | Comparison: Front/Rear/Both, Hardpoints tab with Δ, copy and download panel data. + 3D hardpoint rings, one 3D surface colour, legend inside | done |
+| I2-4 | Hardpoint editing: derive and save endpoints with tests, editor UI, auto-solve. | done (local) |
+| I2-5 | Polish pass from a design critique. Docs (guide, CHANGELOG). Review. | polish done (local); docs + final review pending |
+
+I2-1 and I2-2 run first, in parallel: they touch different components and come straight from the user's notes. I2-3 follows, then I2-4, which depends on the Hardpoints tab. I2-5 comes last.
+
+## Verification
+- In every slice: frontend lint, typecheck, vitest and both builds. Python ruff, mypy and app tests.
+- A live check in the browser pane with at least 3 revisions, including an optimizer run:
+  - the readout never overlaps the plot;
+  - a pinned cursor and an exact-x input match the spline at solved points to rounding;
+  - after a pose change the 3D camera is identical (read the camera through the Plotly layout before and after);
+  - an edited revision solves and saves.

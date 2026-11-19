@@ -13,6 +13,10 @@
   --layout-blue: #23468f;
   --on-layout-blue: #f8fafb;
   --danger: #a3341f;
+  /* constraint regions in the 3D view; also told apart by line style, never by colour alone */
+  --region-domain: #2e7d32;
+  --region-required: #00838f;
+  --region-keepout: #c2185b;
   /* revision colour overrides (palette index -> colour that keeps contrast on this sheet) */
   --rev-6: #b8a800;
 }
@@ -29,6 +33,9 @@
   --layout-blue: #9cc3ff;
   --on-layout-blue: #0f2a44;
   --danger: #ff9c85;
+  --region-domain: #8bd17c;
+  --region-required: #5cc8d6;
+  --region-keepout: #ff7fa8;
   --rev-0: #4da3e0;
   --rev-7: #ffffff;
 }
@@ -46,6 +53,9 @@
     --layout-blue: #9cc3ff;
     --on-layout-blue: #0f2a44;
     --danger: #ff9c85;
+    --region-domain: #8bd17c;
+    --region-required: #5cc8d6;
+    --region-keepout: #ff7fa8;
     --rev-0: #4da3e0;
     --rev-7: #ffffff;
   }

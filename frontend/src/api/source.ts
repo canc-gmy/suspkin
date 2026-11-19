@@ -2,9 +2,14 @@ import type {
   BrowseData,
   DatasetInfo,
   DatasetPatch,
+  DeriveRequest,
   ExportResult,
+  Hardpoint,
   Health,
+  Region,
   HistoryData,
+  SaveRequest,
+  SaveResult,
   ScenePose,
   Summary,
   TableData,
@@ -22,9 +27,17 @@ export interface DataSource {
   openPath(path: string): Promise<DatasetInfo[]>;
   patchDataset(id: string, patch: DatasetPatch): Promise<DatasetInfo>;
   closeDataset(id: string): Promise<void>;
+  /** Apply hardpoint edits (SI) to a revision: a new `edited` revision, solved. Abortable. */
+  deriveDataset(id: string, body: DeriveRequest, signal?: AbortSignal): Promise<DatasetInfo>;
+  /** Write the vehicle of a revision to a workspace YAML file. */
+  saveDataset(id: string, body: SaveRequest): Promise<SaveResult>;
   getTable(id: string, study: string): Promise<TableData>;
   getSummary(id: string): Promise<Summary>;
   getScene(id: string, pose?: ScenePose): Promise<Record<string, unknown>>;
+  /** Every hardpoint of a revision after mirroring (SI). */
+  getHardpoints(id: string): Promise<Hardpoint[]>;
+  /** Constraint regions and variable domains of the study attached to a revision (404 without). */
+  getRegions(id: string): Promise<Region[]>;
   getHistory(runId: string): Promise<HistoryData>;
   browse(dir: string): Promise<BrowseData>;
   /** Write a snapshot of the open revisions into the workspace. */

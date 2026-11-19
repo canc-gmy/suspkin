@@ -5,6 +5,7 @@ import { useUi } from "../state/store";
 
 const KIND_LABEL: Record<string, string> = {
   vehicle: "Vehicle",
+  study: "Study",
   bundle: "Saved bundle",
   report: "Report",
   run: "Optimizer run",
@@ -134,6 +135,7 @@ export function OpenDialog() {
                       <label className="file-row">
                         <input
                           type="checkbox"
+                          aria-label={`Open ${e.name}`}
                           checked={selected.includes(e.path)}
                           onChange={() => toggle(e.path)}
                         />

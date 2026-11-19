@@ -5,7 +5,7 @@ import { SnapshotSource, type Snapshot } from "./snapshotSource";
 const snap: Snapshot = {
   health: { status: "ok", version: "1", workspace: "ws" },
   figures: { schema: 1, palette: [], linestyles: [], figures: [], summary_rows: [] },
-  datasets: [{ id: "a", label: "A", kind: "vehicle", source: "a.yaml", color: 0, studies: ["roll"], params: {} }],
+  datasets: [{ id: "a", label: "A", kind: "vehicle", source: "a.yaml", color: 0, studies: ["roll"], params: {}, steps: 31, resolution_fixed: false, has_study: false }],
   tables: { a: { roll: { columns: { roll: [0, 1] } } } },
   summaries: { a: { x: 1 } },
   histories: {},

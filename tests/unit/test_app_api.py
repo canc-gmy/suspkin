@@ -184,6 +184,49 @@ def test_cache_hit(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 2
 
 
+def test_resolution_patch(client: TestClient, ws: Path) -> None:
+    (d,) = _open(client, "car.yaml")
+    assert d["steps"] == PARAMS["steps"] and d["resolution_fixed"] is False
+    n0 = len(client.get(f"{API}/datasets/{d['id']}/tables/heave").json()["columns"]["heave"])
+    assert n0 == PARAMS["steps"]
+    r = client.patch(f"{API}/datasets/{d['id']}", json={"steps": 9})
+    assert r.status_code == 200 and r.json()["steps"] == 9
+    n1 = len(client.get(f"{API}/datasets/{d['id']}/tables/heave").json()["columns"]["heave"])
+    assert n1 == 9
+    assert client.patch(f"{API}/datasets/{d['id']}", json={"steps": 2}).status_code == 422
+    # same dataset id after re-solving
+    assert [x["id"] for x in client.get(f"{API}/datasets").json()] == [d["id"]]
+
+
+def test_resolution_fixed_for_bundle_and_run(client: TestClient, ws: Path) -> None:
+    res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
+    save_bundle(res, ws / "b1", label="mybundle")
+    (b,) = _open(client, "b1")
+    assert b["resolution_fixed"] is True and b["steps"] == PARAMS["steps"]
+    assert client.patch(f"{API}/datasets/{b['id']}", json={"steps": 9}).status_code == 400
+    run = _make_run(ws)
+    for d in _open(client, run.name):
+        assert d["resolution_fixed"] is True
+        assert client.patch(f"{API}/datasets/{d['id']}", json={"steps": 9}).status_code == 400
+
+
+def test_resolution_cache_key_includes_steps(ws: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    real = ds_mod.run_standard_studies
+
+    def counting(*a: Any, **k: Any) -> Any:
+        calls.append(k["steps"])
+        return real(*a, **k)
+
+    monkeypatch.setattr(ds_mod, "run_standard_studies", counting)
+    m = DatasetManager(ws, study_params=PARAMS)
+    (d,) = m.open("car.yaml")
+    m.set_steps(d.id, 7)
+    m.set_steps(d.id, PARAMS["steps"])  # back to the first resolution: cached
+    m.set_steps(d.id, 7)
+    assert calls == [PARAMS["steps"], 7]
+
+
 def test_bundle_and_report_folder(client: TestClient, ws: Path) -> None:
     res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
     save_bundle(res, ws / "b1", label="mybundle")
@@ -234,6 +277,8 @@ def test_scene(client: TestClient) -> None:
     r2 = client.get(f"{API}/datasets/{d['id']}/scene", params={"heave": 0.01, "roll": 0.01})
     assert r2.status_code == 200 and len(r2.json()["data"]) > 0
     assert r2.json() != r.json()
+    c0, c1 = r.json()["centres"], r2.json()["centres"]
+    assert set(c0["contact"]) == {"FL", "FR", "RL", "RR"} and c0["contact"] != c1["contact"]
 
 
 def test_browse_kinds(client: TestClient, ws: Path) -> None:
@@ -312,3 +357,65 @@ def test_openapi_dump(tmp_path: Path) -> None:
     schema = json.loads(out.read_text(encoding="utf-8"))
     assert "workspace" in schema["components"]["schemas"]["HealthOut"]["properties"]
     assert main([]) == 2
+
+
+def _hp(rows: list[dict[str, Any]], axle: str, point: str, side: str) -> dict[str, Any]:
+    (row,) = [r for r in rows if (r["axle"], r["point"], r["side"]) == (axle, point, side)]
+    return row
+
+
+def test_hardpoints_mirror_and_overrides(client: TestClient, ws: Path) -> None:
+    import yaml
+
+    raw = yaml.safe_load(FIXTURE.read_text(encoding="utf-8"))
+    raw["front"]["right_overrides"] = {"uca_outer": [0.01, -0.56, 0.31]}
+    (ws / "asym.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
+    (plain_ds,) = _open(client, "car.yaml")
+    (asym_ds,) = _open(client, "asym.yaml")
+
+    rows = client.get(f"{API}/datasets/{plain_ds['id']}/hardpoints").json()
+    hp = raw["front"]["hardpoints"]
+    assert {r["axle"] for r in rows} == {"front", "rear"} and {r["side"] for r in rows} == {
+        "left",
+        "right",
+    }
+    assert not any(r["overridden"] for r in rows)
+    for r in rows:  # right side mirrors y, left is as given (rocker_arb included)
+        src = raw[r["axle"]]["hardpoints"][r["point"]]
+        sign = 1.0 if r["side"] == "left" else -1.0
+        assert (r["x"], r["y"], r["z"]) == pytest.approx((src[0], sign * src[1], src[2]))
+    assert _hp(rows, "front", "rocker_arb", "left")["x"] == pytest.approx(hp["rocker_arb"][0])
+
+    rows2 = client.get(f"{API}/datasets/{asym_ds['id']}/hardpoints").json()
+    r = _hp(rows2, "front", "uca_outer", "right")
+    assert r["overridden"] and (r["x"], r["y"], r["z"]) == pytest.approx((0.01, -0.56, 0.31))
+    assert not _hp(rows2, "front", "uca_outer", "left")["overridden"]
+    assert sum(x["overridden"] for x in rows2) == 1
+    assert len(rows2) == len(rows)
+
+
+def test_hardpoints_bundle_run_and_unknown(client: TestClient, ws: Path) -> None:
+    res = run_standard_studies(load_vehicle(FIXTURE), **PARAMS)
+    save_bundle(res, ws / "b1", label="mybundle")
+    (b,) = _open(client, "b1")
+    run = _make_run(ws)
+    ds = _open(client, run.name)
+    base = client.get(f"{API}/datasets/{_open(client, 'car.yaml')[0]['id']}/hardpoints").json()
+    for d in [b, *ds]:
+        assert client.get(f"{API}/datasets/{d['id']}/hardpoints").json() == base
+    assert client.get(f"{API}/datasets/nope/hardpoints").status_code == 404
+
+
+def test_scene_carries_posed_hardpoints(client: TestClient) -> None:
+    pytest.importorskip("plotly")
+    (d,) = _open(client, "car.yaml")
+    rows = client.get(f"{API}/datasets/{d['id']}/hardpoints").json()
+    s0 = client.get(f"{API}/datasets/{d['id']}/scene").json()["hardpoints"]
+    corner = {("front", "left"): "FL", ("front", "right"): "FR", ("rear", "left"): "RL"}
+    for r in rows:  # static pose: the scene positions equal the endpoint positions
+        key = corner.get((r["axle"], r["side"]))
+        if key:
+            assert s0[f"{key}:{r['point']}"] == pytest.approx([r["x"], r["y"], r["z"]])
+    s1 = client.get(f"{API}/datasets/{d['id']}/scene", params={"heave": 0.01}).json()
+    assert s1["hardpoints"]["FL:uca_outer"] != s0["FL:uca_outer"]
+    assert s1["hardpoints"]["FL:uca_front"] == pytest.approx(s0["FL:uca_front"])  # chassis point

@@ -84,6 +84,31 @@ export function useScene(id: string | null, pose: ScenePose) {
   });
 }
 
+/** Study regions of a revision; pass null to skip (no study, or no region overlay ticked). */
+export function useRegions(id: string | null) {
+  const src = useSource();
+  return useQuery({
+    queryKey: ["regions", id],
+    queryFn: () => src.getRegions(id as string),
+    enabled: id !== null,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/** Hardpoints (SI) per revision; a revision that cannot be read comes back as an error entry. */
+export function useHardpoints(ids: string[]) {
+  const src = useSource();
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["hardpoints", id],
+      queryFn: () => src.getHardpoints(id),
+      staleTime: Infinity,
+      retry: false,
+    })),
+  });
+}
+
 export function useOpenPath() {
   const src = useSource();
   const qc = useQueryClient();
@@ -104,6 +129,21 @@ export function usePatchDataset() {
   return useMutation({
     mutationFn: (a: { id: string; patch: DatasetPatch }) => src.patchDataset(a.id, a.patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["datasets"] }),
+  });
+}
+
+/**
+ * Re-solve vehicle-backed revisions with `steps` points per sweep. Stays pending until the new
+ * tables have been fetched, so the UI can show "Solving" the whole time.
+ */
+export function useSetResolution() {
+  const src = useSource();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (a: { ids: string[]; steps: number }) =>
+      Promise.all(a.ids.map((id) => src.patchDataset(id, { steps: a.steps }))),
+    onSuccess: () =>
+      Promise.all(["datasets", "table", "summary", "scene"].map((k) => qc.invalidateQueries({ queryKey: [k] }))),
   });
 }
 

@@ -11,21 +11,30 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from suspkin import __version__
+from suspkin.app.centres import scene_centres
 from suspkin.app.datasets import Dataset, DatasetManager, RunInfo, clean_json
 from suspkin.app.models import (
     BrowseEntry,
     BrowseOut,
     DatasetOut,
     DatasetPatch,
+    DeriveRequest,
     ExportOut,
     ExportRequest,
+    HardpointOut,
     HealthOut,
     HistoryOut,
     OpenRequest,
     PoseInput,
+    RegionOut,
+    SaveOut,
+    SaveRequest,
     TableOut,
 )
+from suspkin.app.regions import study_regions
+from suspkin.geometry import Vehicle, build_corners
 from suspkin.kinematics import KinematicsError, solve_vehicle
+from suspkin.optimize.spec import StudyConfigError
 from suspkin.plotting.optimization import best_so_far, knee_index, pareto_mask
 from suspkin.plotting.spec import spec_json
 from suspkin.units import display_factor, display_unit
@@ -43,6 +52,11 @@ def _dataset_out(ds: Dataset) -> DatasetOut:
         studies=list(ds.tables),
         run_id=ds.run_id,
         params=ds.params,
+        steps=ds.steps,
+        resolution_fixed=ds.resolution_fixed,
+        parent_id=ds.parent_id,
+        edits=list(ds.edits),
+        has_study=ds.study_path is not None,
     )
 
 
@@ -129,11 +143,50 @@ def history_out(run: RunInfo) -> HistoryOut:
     )
 
 
+def hardpoints_out(ds: Dataset) -> list[HardpointOut]:
+    """Every hardpoint of the vehicle after mirroring (right side: mirrored or override)."""
+    out: list[HardpointOut] = []
+    for corner in build_corners(ds.vehicle).values():
+        overrides = corner.axle_cfg.right_overrides if corner.side == "right" else {}
+        for name, p in corner.points.items():
+            out.append(
+                HardpointOut(
+                    axle=corner.axle,
+                    point=name,
+                    side=corner.side,
+                    x=float(p[0]),
+                    y=float(p[1]),
+                    z=float(p[2]),
+                    overridden=name in overrides,
+                )
+            )
+    return out
+
+
+def regions_out(ds: Dataset) -> list[RegionOut]:
+    """Wireframes of the study regions of a dataset (empty without a study)."""
+    return [] if ds.study_path is None else study_regions(ds.study_path)
+
+
+def scene_hardpoints(vehicle: Vehicle, state: Any = None) -> dict[str, list[float]]:
+    """Posed hardpoint positions (SI) by ``"<corner>:<point>"``, e.g. ``FL:uca_outer``."""
+    from suspkin.plotting.geometry3d import vehicle_segments
+
+    scene = vehicle_segments(vehicle, state)
+    return {name: [float(v) for v in p] for name, p in scene.labels}
+
+
 def scene_json(ds: Dataset) -> dict[str, Any]:
-    """Plotly 3D figure JSON of a dataset at the static pose (raises ImportError without plotly)."""
+    """Plotly 3D figure JSON of a dataset at the static pose (raises ImportError without plotly).
+
+    The extra top-level keys: ``hardpoints`` (posed positions by name) and ``centres``
+    (rotation centres, see ``scene_centres``).
+    """
     from suspkin.plotting.interactive import interactive_figure
 
     out: dict[str, Any] = json.loads(interactive_figure(ds.vehicle).to_json())
+    out["hardpoints"] = scene_hardpoints(ds.vehicle)
+    out["centres"] = scene_centres(ds.vehicle).model_dump(mode="json")
     return out
 
 
@@ -159,12 +212,29 @@ def make_router(manager: DatasetManager) -> APIRouter:
 
     @r.patch("/datasets/{dataset_id}", response_model=DatasetOut)
     def patch_dataset(dataset_id: str, patch: DatasetPatch) -> DatasetOut:
-        manager.get(dataset_id)
+        ds = manager.get(dataset_id)
+        if patch.steps is not None and ds.resolution_fixed:
+            raise HTTPException(
+                400, "the resolution of bundles and runs is stored; it cannot change"
+            )
         if patch.label is not None:
             manager.rename(dataset_id, patch.label)
         if patch.color is not None:
             manager.recolor(dataset_id, patch.color)
+        if patch.steps is not None:
+            manager.set_steps(dataset_id, patch.steps)
         return _dataset_out(manager.get(dataset_id))
+
+    @r.post("/datasets/{dataset_id}/derive", response_model=DatasetOut)
+    def derive_dataset(dataset_id: str, req: DeriveRequest) -> DatasetOut:
+        """New ``edited`` revision: the source's vehicle with hardpoint edits (SI), solved."""
+        return _dataset_out(manager.derive(dataset_id, req.edits, label=req.label, steps=req.steps))
+
+    @r.post("/datasets/{dataset_id}/save", response_model=SaveOut)
+    def save_dataset(dataset_id: str, req: SaveRequest) -> SaveOut:
+        """Write the vehicle of a revision to a workspace YAML file (schema 1, LF)."""
+        path, size = manager.save(dataset_id, req.path, overwrite=req.overwrite)
+        return SaveOut(path=path, size=size)
 
     @r.delete("/datasets/{dataset_id}", status_code=204)
     def delete_dataset(dataset_id: str) -> None:
@@ -205,7 +275,25 @@ def make_router(manager: DatasetManager) -> APIRouter:
         except ImportError as exc:
             raise HTTPException(501, str(exc)) from exc
         out: dict[str, Any] = json.loads(fig.to_json())
+        out["hardpoints"] = scene_hardpoints(ds.vehicle, state)
+        out["centres"] = scene_centres(ds.vehicle, state).model_dump(mode="json")
         return out
+
+    @r.get("/datasets/{dataset_id}/hardpoints", response_model=list[HardpointOut])
+    def hardpoints(dataset_id: str) -> list[HardpointOut]:
+        """Every hardpoint after mirroring, in SI (right side from ``right_overrides`` if set)."""
+        return hardpoints_out(manager.get(dataset_id))
+
+    @r.get("/datasets/{dataset_id}/regions", response_model=list[RegionOut])
+    def regions(dataset_id: str) -> list[RegionOut]:
+        """Variable domains and constraint regions of the attached study (404 without one)."""
+        ds = manager.get(dataset_id)
+        if ds.study_path is None:
+            raise HTTPException(404, f"{ds.label!r} has no optimization study")
+        try:
+            return regions_out(ds)
+        except StudyConfigError as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @r.get("/runs/{run_id}/history", response_model=HistoryOut)
     def history(run_id: str) -> HistoryOut:

@@ -1,12 +1,16 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { DatasetInfo, FigureSpec, PanelSpec, SpecDoc } from "../api";
 import { useTables } from "../api/hooks";
 import { selectPanels } from "../lib/panels";
-import { buildPanel, type RevisionData, type Table } from "../lib/traces";
+import { csvName, panelRows, toCsv, toTsv } from "../lib/panelData";
+import { buildReadout, clampX, formatX, nudge } from "../lib/readout";
+import { buildPanel, scaled, type RevisionData, type Table } from "../lib/traces";
 import { useUi, visibleIds, type Mode } from "../state/store";
 import { revisionColor, type Theme } from "../theme/revisions";
 import { chartLayout, readTokens } from "../theme/plotlyTemplate";
-import { PlotlyChart, type ChartHandle } from "./PlotlyChart";
+import { PlotlyChart, type ChartCursor } from "./PlotlyChart";
+import { PanelActions } from "./PanelActions";
+import { Readout } from "./Readout";
 
 interface PanelChartProps {
   fig: FigureSpec;
@@ -15,18 +19,21 @@ interface PanelChartProps {
   reference: RevisionData | null;
   mode: Mode;
   linestyles: string[];
-  onHoverX: (panelId: string, x: number | null) => void;
-  chartRef: (panelId: string, handle: ChartHandle | null) => void;
-  onPointer: (panelId: string | null) => void;
+  showPoints: boolean;
+  icDropped: number;
+  /** Cursor line; null for a panel whose x axis is not the study x. */
+  cursor: ChartCursor | null;
+  onPointerX?: (x: number | null) => void;
+  onPointerClick?: (x: number) => void;
 }
 
 const PanelChart = memo(function PanelChart(p: PanelChartProps) {
-  const { fig, panel, revs, reference, mode, linestyles, onHoverX, chartRef, onPointer } = p;
+  const { fig, panel, revs, reference, mode, linestyles, showPoints, icDropped, cursor, onPointerX, onPointerClick } = p;
 
   const build = useCallback(
     (theme: Theme) => {
       const t = readTokens(theme);
-      const plot = buildPanel(fig, panel, revs, reference, mode, linestyles, t.inkMuted);
+      const plot = buildPanel(fig, panel, revs, reference, mode, linestyles, t.inkMuted, { showPoints });
       return {
         data: plot.traces,
         layout: chartLayout(t, {
@@ -34,36 +41,31 @@ const PanelChart = memo(function PanelChart(p: PanelChartProps) {
           yTitle: plot.yTitle,
           legend: plot.legend,
           yZero: mode === "delta",
-          xHover: plot.xHover,
         }),
       };
     },
-    [fig, panel, revs, reference, mode, linestyles],
+    [fig, panel, revs, reference, mode, linestyles, showPoints],
   );
-
-  const icDropped = useMemo(
-    () => buildPanel(fig, panel, revs, reference, mode, linestyles, "").icDropped,
-    [fig, panel, revs, reference, mode, linestyles],
-  );
-  const setRef = useCallback((h: ChartHandle | null) => chartRef(panel.id, h), [chartRef, panel.id]);
 
   return (
-    <section
-      className="panel"
-      aria-label={panel.title}
-      onMouseEnter={() => onPointer(panel.id)}
-      onMouseLeave={() => onPointer(null)}
-    >
-      <h3 className="panel-title">{panel.title}</h3>
-      {panel.ic && icDropped > 0 && (
-        <p className="panel-note">IC at infinity: {icDropped} points not drawn</p>
-      )}
+    <section className="panel" aria-label={panel.title}>
+      <div className="panel-head">
+        <h3 className="panel-title">{panel.title}</h3>
+        <PanelActions
+          getRows={() => panelRows(fig, panel, revs, reference, mode === "delta")}
+          filename={csvName(fig, panel)}
+          toCsv={toCsv}
+          toTsv={toTsv}
+        />
+      </div>
+      {panel.ic && icDropped > 0 && <p className="panel-note">IC at infinity: {icDropped} points not drawn</p>}
       <PlotlyChart
-        ref={setRef}
         build={build}
         ariaLabel={`${panel.title} versus ${(panel.x ?? fig.x).label}`}
         filename={`${fig.id}_${panel.id}`}
-        onHoverX={(x) => onHoverX(panel.id, x)}
+        cursor={cursor}
+        onPointerX={onPointerX}
+        onPointerClick={onPointerClick}
       />
     </section>
   );
@@ -136,30 +138,73 @@ export function SpecFigure({ fig, spec, datasets, showTitle }: Props) {
     return selectPanels(fig, sets);
   }, [fig, revs, ref, mode]);
 
-  // linked hover: the chart under the pointer drives the others
-  const handles = useRef(new Map<string, ChartHandle>());
-  const active = useRef<string | null>(null);
-  const chartRef = useCallback((id: string, h: ChartHandle | null) => {
-    if (h) handles.current.set(id, h);
-    else handles.current.delete(id);
-  }, []);
-  const onPointer = useCallback((id: string | null) => {
-    if (id === null) {
-      const prev = active.current;
-      active.current = null;
-      handles.current.forEach((h, k) => k !== prev && h.clearHover());
-    } else {
-      active.current = id;
+  const showPoints = useUi((s) => s.showPoints);
+  const setShowPoints = useUi((s) => s.setShowPoints);
+  const delta = mode === "delta";
+
+  const plots = useMemo(
+    () =>
+      panels.map((panel) => ({
+        panel,
+        plot: buildPanel(fig, panel, revs, ref, mode, spec.linestyles, "", { showPoints }),
+      })),
+    [panels, fig, revs, ref, mode, spec.linestyles, showPoints],
+  );
+
+  // the cursor lives on the study x: it follows the pointer, or stays where it was pinned
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  const [pinnedX, setPinnedX] = useState<number | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const frame = useRef(0);
+  const latest = useRef<number | null>(null);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+
+  const domain = useMemo(() => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const r of [...revs, ...(ref ? [ref] : [])]) {
+      for (const v of scaled(r.table, fig.x.column, fig.x.factor) ?? []) {
+        if (v === null) continue;
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+      }
     }
+    return lo <= hi ? ([lo, hi] as const) : null;
+  }, [revs, ref, fig.x.column, fig.x.factor]);
+
+  const onPointerX = useCallback((x: number | null) => {
+    latest.current = x;
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(() => setHoverX(latest.current));
   }, []);
-  const onHoverX = useCallback((id: string, x: number | null) => {
-    if (active.current !== id) return;
-    handles.current.forEach((h, k) => {
-      if (k === id) return;
-      if (x === null) h.clearHover();
-      else h.hoverAt(x);
-    });
-  }, []);
+  const onPin = useCallback(
+    (x: number) => {
+      setPinnedX(clampX(x, domain));
+      root.current?.focus({ preventScroll: true });
+    },
+    [domain],
+  );
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      setPinnedX(null);
+      return;
+    }
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement;
+    if (pinnedX === null || typing) return;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      setPinnedX(clampX(nudge(pinnedX, e.key === "ArrowLeft" ? -1 : 1, e.shiftKey, fig.x), domain));
+    }
+  };
+
+  const cursorX = pinnedX ?? hoverX;
+  const cursor = useMemo<ChartCursor>(() => ({ x: cursorX, pinned: pinnedX !== null }), [cursorX, pinnedX]);
+  const table = useMemo(
+    () => buildReadout(plots.map(({ panel, plot }) => ({ panel, curves: plot.curves })), revs, ref?.id ?? null, delta, cursorX),
+    [plots, revs, ref, delta, cursorX],
+  );
+  const icOf = (id: string) => plots.find((p) => p.panel.id === id)?.plot.icDropped ?? 0;
+  const xLabel = fig.x.label.charAt(0).toUpperCase() + fig.x.label.slice(1);
 
   const hint =
     mode === "delta" && revs.filter((r) => r.id !== ref?.id).length === 0
@@ -167,7 +212,7 @@ export function SpecFigure({ fig, spec, datasets, showTitle }: Props) {
       : null;
 
   return (
-    <div className="figure">
+    <div className="figure" ref={root} tabIndex={0} role="group" aria-label={fig.title} onKeyDown={onKeyDown}>
       {showTitle && <h2 className="figure-title">{fig.title}</h2>}
       {failed && (
         <p className="error" role="alert">
@@ -179,21 +224,41 @@ export function SpecFigure({ fig, spec, datasets, showTitle }: Props) {
       {!pending && !failed && panels.length === 0 && (
         <p className="muted">The visible revisions have no {fig.study} results.</p>
       )}
-      <div className="panel-grid">
-        {panels.map((panel) => (
-          <PanelChart
-            key={panel.id}
-            fig={fig}
-            panel={panel}
-            revs={revs}
-            reference={ref}
-            mode={mode}
-            linestyles={spec.linestyles}
-            onHoverX={onHoverX}
-            chartRef={chartRef}
-            onPointer={onPointer}
+      {panels.length > 0 && (
+        <div className="figure-sticky">
+          <Readout
+            xLabel={xLabel}
+            xUnit={fig.x.unit}
+            x={cursorX}
+            formatX={(v) => formatX(v, fig.x)}
+            pinned={pinnedX !== null}
+            table={table}
+            showPoints={showPoints}
+            onShowPoints={setShowPoints}
+            onPinX={onPin}
           />
-        ))}
+        </div>
+      )}
+      <div className="panel-grid">
+        {panels.map((panel) => {
+          const onStudyX = (panel.x ?? fig.x).column === fig.x.column;
+          return (
+            <PanelChart
+              key={panel.id}
+              fig={fig}
+              panel={panel}
+              revs={revs}
+              reference={ref}
+              mode={mode}
+              linestyles={spec.linestyles}
+              showPoints={showPoints}
+              icDropped={icOf(panel.id)}
+              cursor={onStudyX ? cursor : null}
+              onPointerX={onStudyX ? onPointerX : undefined}
+              onPointerClick={onStudyX ? onPin : undefined}
+            />
+          );
+        })}
       </div>
     </div>
   );
