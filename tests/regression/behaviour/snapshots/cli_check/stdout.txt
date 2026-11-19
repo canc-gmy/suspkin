@@ -1,0 +1,23 @@
+name               type           value      min     max  unit           g  status  detail
+camber_band_f      band          -0.629   -4.000   0.000  deg       -0.629  PASS
+toe_band_f         band          -0.135   -0.500   0.500  deg       -3.654  PASS
+camber_gain_f      slope         -0.017   -0.050   0.000  deg/mm    -0.350  PASS
+bump_steer_r       slope          0.000   -0.020   0.020  deg/mm    -0.493  PASS
+roll_camber_f      slope         -0.813   -1.100  -0.500  -         -0.478  PASS
+mr_front           value          0.980    0.900   1.100  -         -0.402  PASS
+mr_rear            value          0.993    0.900   1.100  -         -0.464  PASS
+travel_f           reach         10.224    0.000       -  mm       -10.224  PASS    bump stroke remaining
+travel_r           reach          9.581    0.000       -  mm        -9.581  PASS    bump stroke remaining
+ubj_angle          joint_angle    5.931        -  25.000  deg     -190.687  PASS
+rc_height_f        summary       33.721   10.000  80.000  mm        -0.339  PASS
+roll_gradient      summary        0.629        -   1.200  deg/g     -0.476  PASS
+tlltd_front        summary        0.503    0.450   0.600  -         -0.353  PASS
+uca_front_keepout  outside      138.003    0.000       -  mm      -138.003  PASS
+tie_inner_tube     outside       54.630    0.000       -  mm       -54.630  PASS
+uca_front_zone     inside       -40.000        -   0.000  mm       -40.000  PASS
+uca_rear_zone      inside       -40.000        -   0.000  mm       -40.000  PASS
+tie_len            distance     435.018  400.000       -  mm       -35.018  PASS
+uca_base           distance     260.000  200.000       -  mm       -60.000  PASS
+uca_above_lca      relation     325.000  225.000       -  mm      -100.000  PASS
+20/20 constraints pass, feasible: yes
+<TMP>/out/c.csv

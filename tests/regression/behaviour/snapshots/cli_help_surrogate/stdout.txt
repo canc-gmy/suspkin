@@ -1,0 +1,14 @@
+                                                                                                   
+ Usage: root surrogate [OPTIONS] COMMAND [ARGS]...                                                 
+                                                                                                   
+ Neural-network surrogate (experimental).                                                          
+                                                                                                   
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --help        <bool>  Show this message and exit.                                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ──────────────────────────────────────────────────────────────────────────────────────┐
+│ sample    Sample the initial Latin-hypercube dataset of the surrogate (experimental).           │
+│ train     Search the architecture and train the networks (experimental).                        │
+│ validate  Test-split error per channel against its tolerance (experimental).                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

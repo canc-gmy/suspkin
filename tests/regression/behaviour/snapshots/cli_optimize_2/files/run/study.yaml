@@ -1,0 +1,108 @@
+# Demo optimisation study for configs/vehicles/fs_reference.yaml (schema 1).
+#
+# Same design variables and sweeps as fs_reference_constraints.yaml, a subset of its
+# constraints, plus objectives and an optimizer block. Run it with:
+#   suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo
+# Units: numbers are SI, strings carry units ("20 mm", "2 deg", "15 min"). Frame: ISO 8855.
+# The baseline vehicle is feasible for every constraint below.
+
+schema: 1
+vehicle: vehicle.yaml
+
+variables:
+  # Front UCA front chassis pivot: skewed hexahedron (top face shifted outboard and
+  # tapered), roughly +-18 mm around the baseline point (130, 300, 325) mm.
+  - point: front.uca_front
+    domain:
+      hexahedron:
+        units: mm
+        vertices:
+          - [112, 282, 307]
+          - [148, 282, 307]
+          - [148, 318, 307]
+          - [112, 318, 307]
+          - [116, 288, 343]
+          - [144, 288, 343]
+          - [144, 324, 343]
+          - [116, 324, 343]
+
+  # Front UCA rear chassis pivot: skewed hexahedron around (-130, 300, 325) mm.
+  - point: front.uca_rear
+    domain:
+      hexahedron:
+        units: mm
+        vertices:
+          - [-148, 282, 307]
+          - [-112, 282, 307]
+          - [-112, 318, 307]
+          - [-148, 318, 307]
+          - [-152, 286, 343]
+          - [-116, 286, 343]
+          - [-116, 322, 343]
+          - [-152, 322, 343]
+
+  # Front tie-rod inner end on the rack: axis-aligned box around (85, 150, 154) mm.
+  - point: front.tie_inner
+    domain: {box: {min: [70, 135, 139], max: [100, 165, 169], units: mm}}
+
+  # Rear pushrod outer end on the UCA: offset from the baseline point (x and z only).
+  - point: rear.pushrod_outer
+    domain: {offset: {x: [-10 mm, 10 mm], z: [-8 mm, 8 mm]}}
+
+sweeps:
+  bump_f: {kind: corner, corner: FL, travel: [-30 mm, 30 mm], steps: 13}
+  bump_r: {kind: corner, corner: RL, travel: [-30 mm, 30 mm], steps: 13}
+  roll: {kind: vehicle, input: roll, range: [-2 deg, 2 deg], steps: 9}
+  steer: {kind: vehicle, input: rack, range: full, steps: 9}
+
+constraints:
+  # A subset of fs_reference_constraints.yaml: the baseline passes all of them with margin.
+  # --- sweep metrics -------------------------------------------------------------------
+  - {name: camber_band_f, type: band, sweep: bump_f, metric: camber, where: [-25 mm, 25 mm], min: -4 deg, max: 0 deg, scale: 1 deg, note: "Front camber stays negative and below 4 deg over usable travel"}
+  - {name: toe_band_f, type: band, sweep: bump_f, metric: toe, where: [-25 mm, 25 mm], min: -0.5 deg, max: 0.5 deg, scale: 0.1 deg, note: "Front bump steer envelope"}
+  - {name: bump_steer_r, type: slope, sweep: bump_r, metric: toe, min: -0.02 deg/mm, max: 0.02 deg/mm, note: "Rear toe change per mm of travel"}
+  - {name: mr_front, type: value, sweep: bump_f, metric: mr_spring, at: 0 mm, min: 0.9, max: 1.1, note: "Front spring motion ratio near unity"}
+  - {name: mr_rear, type: value, sweep: bump_r, metric: mr_spring, at: 0 mm, min: 0.9, max: 1.1, note: "Rear spring motion ratio near unity"}
+  # --- reach and joints ----------------------------------------------------------------
+  - {name: travel_f, type: reach, corner: FL, travel: [-30 mm, 30 mm], min_toggle_margin: 20 deg, stroke: true, note: "Front corner reaches full travel within coilover stroke and rocker toggle margin"}
+  - {name: ubj_angle, type: joint_angle, corner: FL, joint: uca_outer, sweep: bump_f, max: 25 deg, note: "Upper ball joint articulation limit"}
+  # --- vehicle summary -----------------------------------------------------------------
+  - {name: rc_height_f, type: summary, metric: front.rc_height, min: 10 mm, max: 80 mm, note: "Front roll centre height"}
+  - {name: tlltd_front, type: summary, metric: tlltd_front, min: 0.45, max: 0.60, note: "Front share of total lateral load transfer distribution"}
+  # --- packaging and relations ---------------------------------------------------------
+  - name: uca_front_zone
+    type: inside
+    point: front.uca_front
+    region: {box: {min: [0.09, 0.26, 0.28], max: [0.17, 0.34, 0.37]}}
+    note: "UCA front pivot must stay inside the upper rail envelope"
+  - {name: tie_len, type: distance, a: front.tie_inner, b: front.tie_outer, min: 400 mm, note: "Minimum tie-rod length"}
+  - {name: uca_above_lca, type: relation, lhs: front.uca_front.z, op: ">=", rhs: front.lca_front.z, offset: 100 mm, note: "UCA pivot at least 100 mm above the LCA pivot"}
+
+objectives:
+  # Weighted mode: f_total = sum(weight * f), f = raw / scale. All values below are in
+  # "scale" units, so a weight of 1 means "one scale unit of error costs 1".
+  # Front camber vs bump travel should follow a target curve (RMS error over +-25 mm).
+  - name: camber_curve
+    type: curve
+    sweep: bump_f
+    metric: camber
+    target: {x: [-30 mm, 0 mm, 30 mm], y: [-1.6 deg, -0.6 deg, 0.3 deg]}   # linear interpolation
+    where: [-25 mm, 25 mm]
+    weight: 1.0
+    scale: 0.1 deg
+  # Static front roll centre height close to 40 mm.
+  - {name: rc_f, type: target, metric: front.rc_height, target: 40 mm, scale: 5 mm}
+  # Bump steer: minimise the largest |toe slope| over +-25 mm.
+  - {name: bump_steer_f, type: minimize, sweep: bump_f, metric: bump_steer, of: max_abs, where: [-25 mm, 25 mm], scale: 0.01 deg/mm, weight: 1.0}
+  # Motion ratio should be as constant as possible over travel (RMS residual of a line fit).
+  - {name: mr_linearity, type: linearity, sweep: bump_f, metric: mr_spring, where: [-25 mm, 25 mm], scale: 0.01, weight: 0.5}
+
+optimizer:
+  mode: weighted         # one scalar objective: f_total
+  method: de+slsqp       # global differential evolution (80 % of the budget), then SLSQP polish
+  seed: 1                # reproducible runs
+  workers: auto          # CPU count - 1 processes
+  budget: {evaluations: 300, time: 15 min}   # demo budget; use thousands for a real run
+  start: baseline        # only for slsqp / trust-constr (baseline or `best` history point);
+                         # de+slsqp ignores it and always polishes from the best history point
+  options: {}            # passthrough: popsize, maxiter, ftol, fd_step ...

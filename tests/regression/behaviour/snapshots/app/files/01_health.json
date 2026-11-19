@@ -1,0 +1,54 @@
+{
+ "status": 200,
+ "body": {
+  "status": "ok",
+  "version": "<VERSION>",
+  "workspace": "<TMP>//ws",
+  "pose": [
+   {
+    "name": "heave",
+    "label": "Heave",
+    "si_unit": "m",
+    "display_unit": "mm",
+    "factor": 1000.0,
+    "param": "heave",
+    "param_factor": 1000.0,
+    "default_max": 25.0,
+    "step": 0.5
+   },
+   {
+    "name": "roll",
+    "label": "Roll",
+    "si_unit": "rad",
+    "display_unit": "deg",
+    "factor": 57.29577951308232,
+    "param": "roll_deg",
+    "param_factor": 1.0,
+    "default_max": 2.0,
+    "step": 0.1
+   },
+   {
+    "name": "pitch",
+    "label": "Pitch",
+    "si_unit": "rad",
+    "display_unit": "deg",
+    "factor": 57.29577951308232,
+    "param": "pitch_deg",
+    "param_factor": 1.0,
+    "default_max": 1.5,
+    "step": 0.1
+   },
+   {
+    "name": "rack",
+    "label": "Rack",
+    "si_unit": "m",
+    "display_unit": "mm",
+    "factor": 1000.0,
+    "param": "rack",
+    "param_factor": 1000.0,
+    "default_max": 30.0,
+    "step": 0.5
+   }
+  ]
+ }
+}

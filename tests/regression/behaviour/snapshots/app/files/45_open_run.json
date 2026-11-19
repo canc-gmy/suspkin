@@ -1,0 +1,92 @@
+{
+ "status": 200,
+ "body": [
+  {
+   "id": "<ID8>",
+   "label": "run1 baseline",
+   "kind": "run",
+   "source": "run1/vehicle.yaml",
+   "color": 7,
+   "studies": [
+    "front_corner",
+    "rear_corner",
+    "rack",
+    "heave",
+    "roll",
+    "pitch"
+   ],
+   "run_id": "<ID9>",
+   "params": {
+    "travel": 0.02,
+    "rack": null,
+    "roll_deg": 1.0,
+    "heave": 0.025,
+    "pitch_deg": 1.5,
+    "steps": 5
+   },
+   "steps": 5,
+   "resolution_fixed": true,
+   "parent_id": null,
+   "edits": [],
+   "has_study": false
+  },
+  {
+   "id": "<ID10>",
+   "label": "run1 best",
+   "kind": "run",
+   "source": "run1/best.yaml",
+   "color": 8,
+   "studies": [
+    "front_corner",
+    "rear_corner",
+    "rack",
+    "heave",
+    "roll",
+    "pitch"
+   ],
+   "run_id": "<ID9>",
+   "params": {
+    "travel": 0.02,
+    "rack": null,
+    "roll_deg": 1.0,
+    "heave": 0.025,
+    "pitch_deg": 1.5,
+    "steps": 5
+   },
+   "steps": 5,
+   "resolution_fixed": true,
+   "parent_id": null,
+   "edits": [],
+   "has_study": false
+  },
+  {
+   "id": "<ID11>",
+   "label": "run1 knee",
+   "kind": "run",
+   "source": "run1/pareto/pareto_0.yaml",
+   "color": 9,
+   "studies": [
+    "front_corner",
+    "rear_corner",
+    "rack",
+    "heave",
+    "roll",
+    "pitch"
+   ],
+   "run_id": "<ID9>",
+   "params": {
+    "travel": 0.02,
+    "rack": null,
+    "roll_deg": 1.0,
+    "heave": 0.025,
+    "pitch_deg": 1.5,
+    "steps": 5
+   },
+   "steps": 5,
+   "resolution_fixed": true,
+   "parent_id": null,
+   "edits": [],
+   "has_study": false
+  }
+ ]
+}

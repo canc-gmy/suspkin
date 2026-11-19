@@ -1,0 +1,25 @@
+<REPO>/tests/regression/behaviour/cases/bad_vehicle.yaml: 8 validation errors for Vehicle
+vehicle.mass
+  Input should be a valid number, unable to parse string as a number [type=float_parsing, input_value='not-a-number', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.14/v/float_parsing
+vehicle.cg_height
+  Field required [type=missing, input_value={'name': 'broken', 'mass': 'not-a-number'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+vehicle.front_mass_ratio
+  Field required [type=missing, input_value={'name': 'broken', 'mass': 'not-a-number'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+front.unsprung_mass
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+front.hardpoints
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+front.wheel
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+front.coilover
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing
+rear
+  Field required [type=missing, input_value={'schema': 1, 'vehicle': ...a-number'}, 'front': {}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/missing

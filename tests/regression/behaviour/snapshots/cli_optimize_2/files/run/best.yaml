@@ -1,0 +1,226 @@
+schema: 1
+vehicle:
+  name: fs_reference
+  mass: 290.0
+  cg_height: 0.28
+  front_mass_ratio: 0.47
+  drive: rwd
+  brake_bias_front: 0.6
+  drive_split_front: null
+  unsprung_cg_height: null
+front:
+  brakes: outboard
+  pushrod_mount: uca
+  unsprung_mass: 10.0
+  hardpoints:
+    uca_front:
+    - 0.1225
+    - 0.3025
+    - 0.3315
+    uca_rear:
+    - -0.123
+    - 0.3185
+    - 0.3145
+    uca_outer:
+    - -0.009
+    - 0.567
+    - 0.338
+    lca_front:
+    - 0.15
+    - 0.22
+    - 0.125
+    lca_rear:
+    - -0.15
+    - 0.22
+    - 0.125
+    lca_outer:
+    - 0.01
+    - 0.586
+    - 0.118
+    tie_inner:
+    - 0.0825
+    - 0.145
+    - 0.1535
+    tie_outer:
+    - 0.085
+    - 0.585
+    - 0.15
+    pushrod_outer:
+    - -0.0087
+    - 0.5175
+    - 0.3374
+    pushrod_inner:
+    - 0.0
+    - 0.437
+    - 0.509
+    rocker_pivot:
+    - 0.0
+    - 0.385
+    - 0.479
+    rocker_spring:
+    - 0.0
+    - 0.385
+    - 0.5575
+    spring_chassis:
+    - 0.0
+    - 0.185
+    - 0.5575
+    wheel_center:
+    - 0.0
+    - 0.61
+    - 0.228
+    rocker_arb:
+    - -0.09
+    - 0.26
+    - 0.479
+    rocker_axis:
+    - 1.0
+    - 0.0
+    - 0.0
+  wheel:
+    tyre_radius: 0.228
+    rim_width: 0.178
+    static_camber: -0.017453
+    static_toe: 0.0
+    tyre_vertical_stiffness: 100000.0
+  coilover:
+    spring_rate: 35000.0
+    free_length: 0.2164
+    preload: 0.0
+    length_min: 0.16
+    length_max: 0.24
+  arb:
+    arm_end:
+    - -0.09
+    - 0.26
+    - 0.579
+    bar_pivot:
+    - -0.24
+    - 0.26
+    - 0.579
+    bar_axis:
+    - 0.0
+    - 1.0
+    - 0.0
+    bar_length: 0.52
+    outer_diameter: 0.012
+    inner_diameter: 0.01
+    shear_modulus: 79300000000.0
+    type: torsional
+    arm_diameter: 0.012
+    arm_youngs_modulus: 200000000000.0
+  steering:
+    c_factor: 0.09
+    rack_travel:
+    - -0.03
+    - 0.03
+    rack_axis:
+    - 0.0
+    - 1.0
+    - 0.0
+  right_overrides: {}
+rear:
+  brakes: outboard
+  pushrod_mount: uca
+  unsprung_mass: 10.0
+  hardpoints:
+    uca_front:
+    - -1.42
+    - 0.3
+    - 0.32
+    uca_rear:
+    - -1.68
+    - 0.3
+    - 0.32
+    uca_outer:
+    - -1.554
+    - 0.557
+    - 0.338
+    lca_front:
+    - -1.4
+    - 0.22
+    - 0.125
+    lca_rear:
+    - -1.7
+    - 0.22
+    - 0.125
+    lca_outer:
+    - -1.55
+    - 0.575
+    - 0.118
+    tie_inner:
+    - -1.64
+    - 0.15
+    - 0.153
+    tie_outer:
+    - -1.64
+    - 0.565
+    - 0.15
+    pushrod_outer:
+    - -1.546
+    - 0.5075
+    - 0.333
+    pushrod_inner:
+    - -1.55
+    - 0.437
+    - 0.509
+    rocker_pivot:
+    - -1.55
+    - 0.385
+    - 0.479
+    rocker_spring:
+    - -1.55
+    - 0.385
+    - 0.5565
+    spring_chassis:
+    - -1.55
+    - 0.185
+    - 0.5565
+    wheel_center:
+    - -1.55
+    - 0.59
+    - 0.228
+    rocker_arb:
+    - -1.64
+    - 0.26
+    - 0.479
+    rocker_axis:
+    - 1.0
+    - 0.0
+    - 0.0
+  wheel:
+    tyre_radius: 0.228
+    rim_width: 0.178
+    static_camber: -0.02618
+    static_toe: 0.001745
+    tyre_vertical_stiffness: 100000.0
+  coilover:
+    spring_rate: 40000.0
+    free_length: 0.2174
+    preload: 0.0
+    length_min: 0.16
+    length_max: 0.24
+  arb:
+    arm_end:
+    - -1.64
+    - 0.26
+    - 0.579
+    bar_pivot:
+    - -1.79
+    - 0.26
+    - 0.579
+    bar_axis:
+    - 0.0
+    - 1.0
+    - 0.0
+    bar_length: 0.52
+    outer_diameter: 0.016
+    inner_diameter: 0.012
+    shear_modulus: 79300000000.0
+    type: blade
+    blade_width: 0.025
+    blade_thickness: 0.003
+    blade_youngs_modulus: 200000000000.0
+    blade_angle: 0.0
+  steering: null
+  right_overrides: {}

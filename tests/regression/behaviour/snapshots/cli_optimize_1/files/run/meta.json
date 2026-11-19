@@ -1,0 +1,15 @@
+{
+  "suspkin_version": "<VERSION>",
+  "git_hash": "<GITHASH>",
+  "seed": 1,
+  "method": "de+slsqp",
+  "mode": "weighted",
+  "start": "<TS>",
+  "end": "<TS>",
+  "n_evals": 44,
+  "n_evals_total": 44,
+  "workers": 1,
+  "resumed": false,
+  "study_hash": "<STUDYHASH>",
+  "valid_from_eval_id": 0
+}

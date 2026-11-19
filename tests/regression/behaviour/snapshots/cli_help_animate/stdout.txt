@@ -1,0 +1,22 @@
+                                                                                                   
+ Usage: root animate [OPTIONS] {vehicle_yaml}                                                      
+                                                                                                   
+ Animate a body-pose sweep (heave, roll, pitch or rack) of the 3D geometry.                        
+                                                                                                   
+ Heave and rack in MILLIMETRES, roll and pitch in DEGREES. Give exactly one sweep                  
+ variable.                                                                                         
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out          <path>              Output .gif (or .mp4 with ffmpeg). [required]             │
+│    --heave        <float,float>...    Heave range MIN MAX (mm).                                 │
+│    --roll         <float,float>...    Roll range MIN MAX (deg).                                 │
+│    --pitch        <float,float>...    Pitch range MIN MAX (deg).                                │
+│    --rack         <float,float>...    Rack range MIN MAX (mm).                                  │
+│    --steps        <int range> [x>=2]  Number of frames. [default: 15]                           │
+│    --fps          <int range> [x>=1]  Frames per second. [default: 15]                          │
+│    --help         <bool>              Show this message and exit.                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

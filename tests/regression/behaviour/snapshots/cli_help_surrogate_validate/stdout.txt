@@ -1,0 +1,18 @@
+                                                                                                   
+ Usage: root surrogate validate [OPTIONS] {study_yaml}                                             
+                                                                                                   
+ Test-split error per channel against its tolerance (experimental).                                
+                                                                                                   
+ Writes ROOT/validation/<axle>/ (CSV tables and figures). Exit code 1 when a channel is            
+ over its tolerance, 2 on a study, argument or data error.                                         
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    study_yaml      <path>  Study YAML with a surrogate block. [required]                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --root          <path>  Surrogate folder (dataset/, models/). [required]                     │
+│    --axle          <str>   front | rear | both. [default: both]                                 │
+│    --device        <str>   auto | cpu | cuda (default: study).                                  │
+│    --help          <bool>  Show this message and exit.                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

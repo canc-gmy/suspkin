@@ -1,0 +1,420 @@
+{
+  "mode": "weighted",
+  "best_eval_id": 88,
+  "knee_eval_id": null,
+  "n_pareto": 0,
+  "baseline": {
+    "x": null,
+    "feasible": true,
+    "f_total": 11.350351418784,
+    "f": {
+      "camber_curve": 8.702096183558657,
+      "rc_f": 1.255872843772131,
+      "bump_steer_f": 1.0757887721791255,
+      "mr_linearity": 0.6331872385481717
+    },
+    "g": {
+      "camber_band_f": -0.6292069195577438,
+      "toe_band_f": -3.6543857472555885,
+      "bump_steer_r": -0.49269035775427467,
+      "mr_front": -0.4023953899148396,
+      "mr_rear": -0.4635614727317609,
+      "travel_f": -10.224438871928115,
+      "ubj_angle": -190.68692891664043,
+      "rc_height_f": -0.33886622544484774,
+      "tlltd_front": -0.35349893741883437,
+      "uca_front_zone": -39.99999999999995,
+      "tie_len": -35.018390415853474,
+      "uca_above_lca": -100.0
+    },
+    "constraints": [
+      {
+        "name": "camber_band_f",
+        "type": "band",
+        "value": -0.010981732422613731,
+        "min": -0.06981317007977318,
+        "max": 0.0,
+        "g": -0.6292069195577438,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "toe_band_f",
+        "type": "band",
+        "value": -0.0023485399172153126,
+        "min": -0.008726646259971648,
+        "max": 0.008726646259971648,
+        "g": -3.6543857472555885,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "bump_steer_r",
+        "type": "slope",
+        "value": 0.00510309297323119,
+        "min": -0.34906585039886595,
+        "max": 0.34906585039886595,
+        "g": -0.49269035775427467,
+        "status": "pass",
+        "dim": "angle/length",
+        "detail": ""
+      },
+      {
+        "name": "mr_front",
+        "type": "value",
+        "value": 0.980479077982968,
+        "min": 0.9,
+        "max": 1.1,
+        "g": -0.4023953899148396,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "mr_rear",
+        "type": "value",
+        "value": 0.9927122945463522,
+        "min": 0.9,
+        "max": 1.1,
+        "g": -0.4635614727317609,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "travel_f",
+        "type": "reach",
+        "value": 0.010224438871928115,
+        "min": 0.0,
+        "max": null,
+        "g": -10.224438871928115,
+        "status": "pass",
+        "dim": "length",
+        "detail": "bump stroke remaining"
+      },
+      {
+        "name": "ubj_angle",
+        "type": "joint_angle",
+        "value": 0.1035208379874065,
+        "min": null,
+        "max": 0.4363323129985824,
+        "g": -190.68692891664043,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "rc_height_f",
+        "type": "summary",
+        "value": 0.033720635781139346,
+        "min": 0.01,
+        "max": 0.08,
+        "g": -0.33886622544484774,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "tlltd_front",
+        "type": "summary",
+        "value": 0.5030248406128252,
+        "min": 0.45,
+        "max": 0.6,
+        "g": -0.35349893741883437,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "uca_front_zone",
+        "type": "inside",
+        "value": -0.03999999999999995,
+        "min": null,
+        "max": 0.0,
+        "g": -39.99999999999995,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "tie_len",
+        "type": "distance",
+        "value": 0.4350183904158535,
+        "min": 0.4,
+        "max": null,
+        "g": -35.018390415853474,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "uca_above_lca",
+        "type": "relation",
+        "value": 0.325,
+        "min": 0.225,
+        "max": null,
+        "g": -100.0,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      }
+    ],
+    "objectives": [
+      {
+        "name": "camber_curve",
+        "type": "curve",
+        "raw": 0.01518802302283314,
+        "f": 8.702096183558657,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "rc_f",
+        "type": "target",
+        "raw": 0.006279364218860654,
+        "f": 1.255872843772131,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "bump_steer_f",
+        "type": "minimize",
+        "raw": 0.18776056130512914,
+        "f": 1.0757887721791255,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "angle/length",
+        "detail": "max_abs"
+      },
+      {
+        "name": "mr_linearity",
+        "type": "linearity",
+        "raw": 0.006331872385481717,
+        "f": 0.6331872385481717,
+        "weight": 0.5,
+        "status": "ok",
+        "dim": "ratio",
+        "detail": ""
+      }
+    ]
+  },
+  "best": {
+    "x": {
+      "front.uca_front.u": 0.2545454545454544,
+      "front.uca_front.v": 0.45601851851851855,
+      "front.uca_front.w": 0.6805555555555557,
+      "front.uca_rear.u": 0.717592592592593,
+      "front.uca_rear.v": 0.99074074074074,
+      "front.uca_rear.w": 0.20833333333333154,
+      "front.tie_inner.u": 0.4166666666666666,
+      "front.tie_inner.v": 0.3333333333333327,
+      "front.tie_inner.w": 0.48333333333333284,
+      "rear.pushrod_outer.x": 0.8750000000000032,
+      "rear.pushrod_outer.z": 0.22500000000000253
+    },
+    "feasible": true,
+    "f_total": 10.982332414718844,
+    "f": {
+      "camber_curve": 9.163600582872567,
+      "rc_f": 0.48924791799350026,
+      "bump_steer_f": 1.03949504623971,
+      "mr_linearity": 0.5799777352261323
+    },
+    "g": {
+      "camber_band_f": -0.5656240109534477,
+      "toe_band_f": -3.603066070988551,
+      "bump_steer_r": -0.49269035775427467,
+      "mr_front": -0.34567216356093655,
+      "mr_rear": -0.4423524009207506,
+      "travel_f": -10.53465088191613,
+      "ubj_angle": -188.6697591572622,
+      "rc_height_f": -0.3936251487147499,
+      "tlltd_front": -0.3588360947385931,
+      "uca_front_zone": -32.5,
+      "tie_len": -40.02102222507503,
+      "uca_above_lca": -106.50000000000001
+    },
+    "constraints": [
+      {
+        "name": "camber_band_f",
+        "type": "band",
+        "value": -0.009872001319474133,
+        "min": -0.06981317007977318,
+        "max": 0.0,
+        "g": -0.5656240109534477,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "toe_band_f",
+        "type": "band",
+        "value": -0.002438109649407052,
+        "min": -0.008726646259971648,
+        "max": 0.008726646259971648,
+        "g": -3.603066070988551,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "bump_steer_r",
+        "type": "slope",
+        "value": 0.00510309297323119,
+        "min": -0.34906585039886595,
+        "max": 0.34906585039886595,
+        "g": -0.49269035775427467,
+        "status": "pass",
+        "dim": "angle/length",
+        "detail": ""
+      },
+      {
+        "name": "mr_front",
+        "type": "value",
+        "value": 0.9691344327121874,
+        "min": 0.9,
+        "max": 1.1,
+        "g": -0.34567216356093655,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "mr_rear",
+        "type": "value",
+        "value": 0.9884704801841502,
+        "min": 0.9,
+        "max": 1.1,
+        "g": -0.4423524009207506,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "travel_f",
+        "type": "reach",
+        "value": 0.01053465088191613,
+        "min": 0.0,
+        "max": null,
+        "g": -10.53465088191613,
+        "status": "pass",
+        "dim": "length",
+        "detail": "bump stroke remaining"
+      },
+      {
+        "name": "ubj_angle",
+        "type": "joint_angle",
+        "value": 0.10704146337468763,
+        "min": null,
+        "max": 0.4363323129985824,
+        "g": -188.6697591572622,
+        "status": "pass",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "rc_height_f",
+        "type": "summary",
+        "value": 0.0375537604100325,
+        "min": 0.01,
+        "max": 0.08,
+        "g": -0.3936251487147499,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "tlltd_front",
+        "type": "summary",
+        "value": 0.503825414210789,
+        "min": 0.45,
+        "max": 0.6,
+        "g": -0.3588360947385931,
+        "status": "pass",
+        "dim": "ratio",
+        "detail": ""
+      },
+      {
+        "name": "uca_front_zone",
+        "type": "inside",
+        "value": -0.0325,
+        "min": null,
+        "max": 0.0,
+        "g": -32.5,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "tie_len",
+        "type": "distance",
+        "value": 0.44002102222507505,
+        "min": 0.4,
+        "max": null,
+        "g": -40.02102222507503,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "uca_above_lca",
+        "type": "relation",
+        "value": 0.3315,
+        "min": 0.225,
+        "max": null,
+        "g": -106.50000000000001,
+        "status": "pass",
+        "dim": "length",
+        "detail": ""
+      }
+    ],
+    "objectives": [
+      {
+        "name": "camber_curve",
+        "type": "curve",
+        "raw": 0.015993500150879778,
+        "f": 9.163600582872567,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "angle",
+        "detail": ""
+      },
+      {
+        "name": "rc_f",
+        "type": "target",
+        "raw": 0.0024462395899675013,
+        "f": 0.48924791799350026,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "length",
+        "detail": ""
+      },
+      {
+        "name": "bump_steer_f",
+        "type": "minimize",
+        "raw": 0.18142611115053642,
+        "f": 1.03949504623971,
+        "weight": 1.0,
+        "status": "ok",
+        "dim": "angle/length",
+        "detail": "max_abs"
+      },
+      {
+        "name": "mr_linearity",
+        "type": "linearity",
+        "raw": 0.005799777352261323,
+        "f": 0.5799777352261323,
+        "weight": 0.5,
+        "status": "ok",
+        "dim": "ratio",
+        "detail": ""
+      }
+    ]
+  }
+}

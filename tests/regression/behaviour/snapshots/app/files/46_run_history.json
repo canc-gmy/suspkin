@@ -1,0 +1,50 @@
+{
+ "status": 200,
+ "body": {
+  "run_id": "<ID9>",
+  "columns": {
+   "eval_id": [
+    0.0,
+    1.0,
+    2.0
+   ],
+   "x_a": [
+    1.0,
+    1.5,
+    2.0
+   ],
+   "f_total": [
+    2.0,
+    1.0,
+    null
+   ],
+   "status": [
+    "ok",
+    "ok",
+    "failed"
+   ]
+  },
+  "meta": {
+   "mode": "single",
+   "seed": 1
+  },
+  "result": {
+   "mode": "pareto",
+   "best_eval_id": 1,
+   "knee_eval_id": 1
+  },
+  "objectives": [],
+  "best_so_far": [
+   null,
+   null,
+   null
+  ],
+  "pareto_all": [
+   false,
+   false,
+   false
+  ],
+  "pareto_pairs": {},
+  "knee_eval_id": null
+ }
+}

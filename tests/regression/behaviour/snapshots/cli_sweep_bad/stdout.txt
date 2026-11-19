@@ -1,0 +1,1 @@
+error: pushrod cannot reach the rocker circle (no rocker solution) at travel 0.099219 m

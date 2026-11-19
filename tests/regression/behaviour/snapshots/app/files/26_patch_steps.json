@@ -1,0 +1,32 @@
+{
+ "status": 200,
+ "body": {
+  "id": "<ID1>",
+  "label": "front car",
+  "kind": "vehicle",
+  "source": "car.yaml",
+  "color": 5,
+  "studies": [
+   "front_corner",
+   "rear_corner",
+   "rack",
+   "heave",
+   "roll",
+   "pitch"
+  ],
+  "run_id": null,
+  "params": {
+   "travel": 0.02,
+   "rack": null,
+   "roll_deg": 1.0,
+   "heave": 0.025,
+   "pitch_deg": 1.5,
+   "steps": 7
+  },
+  "steps": 7,
+  "resolution_fixed": false,
+  "parent_id": null,
+  "edits": [],
+  "has_study": false
+ }
+}

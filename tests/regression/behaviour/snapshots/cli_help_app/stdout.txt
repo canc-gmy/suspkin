@@ -1,0 +1,20 @@
+                                                                                                   
+ Usage: root app [OPTIONS] [paths]...                                                              
+                                                                                                   
+ Start the experimental local web app (needs the 'app' extra).                                     
+                                                                                                   
+ Snapshot export is a separate command (``app-export``) because a Typer group with a               
+ variadic PATHS argument cannot also have sub-commands.                                            
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│   paths...      <list[Path]>  Vehicle YAMLs, bundles, report or optimizer run folders to open.  │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --port              <int>   Port to listen on. [default: 8765]                                  │
+│ --host              <str>   Interface to bind. [default: 127.0.0.1]                             │
+│ --workspace         <path>  Root folder the app may read (default: cwd).                        │
+│ --no-browser        <bool>  Do not open the browser.                                            │
+│ --dev               <bool>  API only: use the Vite dev server (npm run dev) for the UI.         │
+│ --help              <bool>  Show this message and exit.                                         │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

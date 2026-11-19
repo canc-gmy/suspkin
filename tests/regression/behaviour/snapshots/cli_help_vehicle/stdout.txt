@@ -1,0 +1,13 @@
+                                                                                                   
+ Usage: root vehicle [OPTIONS] {vehicle_yaml}                                                      
+                                                                                                   
+ Print the vehicle-level summary (rates, roll, anti-features, steering) in display units.          
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --json        <path>  Write the SI vehicle summary as JSON.                                     │
+│ --help        <bool>  Show this message and exit.                                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

@@ -1,0 +1,2185 @@
+{
+ "status": 200,
+ "body": {
+  "schema": 1,
+  "palette": [
+   "#0072B2",
+   "#D55E00",
+   "#009E73",
+   "#CC79A7",
+   "#E69F00",
+   "#56B4E9",
+   "#F0E442",
+   "#000000"
+  ],
+  "linestyles": [
+   "-",
+   "--",
+   ":",
+   "-."
+  ],
+  "figures": [
+   {
+    "id": "corner_alignment_front",
+    "group": "corner_alignment",
+    "title": "Front corner: alignment",
+    "study": "front_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "camber",
+      "title": "Camber",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "camber",
+        "label": "camber",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "toe_bump_steer",
+      "title": "Toe (bump steer)",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "toe",
+        "label": "toe",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "caster",
+      "title": "Caster",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "caster",
+        "label": "caster",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "kingpin_inclination",
+      "title": "Kingpin inclination",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "kpi",
+        "label": "KPI",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "scrub_radius",
+      "title": "Scrub radius",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "scrub_radius",
+        "label": "scrub radius",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "mechanical_trail",
+      "title": "Mechanical trail",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mechanical_trail",
+        "label": "trail",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "corner_alignment_rear",
+    "group": "corner_alignment",
+    "title": "Rear corner: alignment",
+    "study": "rear_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "camber",
+      "title": "Camber",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "camber",
+        "label": "camber",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "toe_bump_steer",
+      "title": "Toe (bump steer)",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "toe",
+        "label": "toe",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "caster",
+      "title": "Caster",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "caster",
+        "label": "caster",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "kingpin_inclination",
+      "title": "Kingpin inclination",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "kpi",
+        "label": "KPI",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "scrub_radius",
+      "title": "Scrub radius",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "scrub_radius",
+        "label": "scrub radius",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "mechanical_trail",
+      "title": "Mechanical trail",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mechanical_trail",
+        "label": "trail",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "corner_position_front",
+    "group": "corner_position",
+    "title": "Front corner: wheel position",
+    "study": "front_corner",
+    "columns": 2,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "half_track_change",
+      "title": "Half-track change",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "half_track_change",
+        "label": "half-track",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "contact_patch_shift",
+      "title": "Contact-patch shift",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "contact_patch_dx",
+        "label": "dx (long.)",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "contact_patch_dy",
+        "label": "dy (lat.)",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "wheel_centre_recession",
+      "title": "Wheel-centre recession",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheel_center_recession",
+        "label": "recession",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "wheelbase_change_contribution",
+      "title": "Wheelbase change (contribution)",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheelbase_change_contribution",
+        "label": "wheelbase",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "corner_position_rear",
+    "group": "corner_position",
+    "title": "Rear corner: wheel position",
+    "study": "rear_corner",
+    "columns": 2,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "half_track_change",
+      "title": "Half-track change",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "half_track_change",
+        "label": "half-track",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "contact_patch_shift",
+      "title": "Contact-patch shift",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "contact_patch_dx",
+        "label": "dx (long.)",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "contact_patch_dy",
+        "label": "dy (lat.)",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "wheel_centre_recession",
+      "title": "Wheel-centre recession",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheel_center_recession",
+        "label": "recession",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "wheelbase_change_contribution",
+      "title": "Wheelbase change (contribution)",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheelbase_change_contribution",
+        "label": "wheelbase",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "corner_centres_front",
+    "group": "corner_centres",
+    "title": "Front corner: centres",
+    "study": "front_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "roll_centre_height",
+      "title": "Roll-centre height",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "rc_height",
+        "label": "RC height",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "fvic_lateral_y",
+      "title": "FVIC lateral (y)",
+      "y_label": "[m]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvic_y",
+        "label": "FVIC y",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "m"
+       }
+      ]
+     },
+     {
+      "id": "fvic_height_z",
+      "title": "FVIC height (z)",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvic_z",
+        "label": "FVIC z",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "front_view_swing_arm_length",
+      "title": "Front-view swing-arm length",
+      "y_label": "[m]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvsa",
+        "label": "FVSA",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "m"
+       }
+      ]
+     },
+     {
+      "id": "front_view_swing_angle",
+      "title": "Front-view swing angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fv_swing_angle",
+        "label": "FV swing",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "side_view_angles",
+      "title": "Side-view angles",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "sv_swing_angle",
+        "label": "SV swing (patch)",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "sv_wc_angle",
+        "label": "SV swing (wheel centre)",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "corner_centres_rear",
+    "group": "corner_centres",
+    "title": "Rear corner: centres",
+    "study": "rear_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "roll_centre_height",
+      "title": "Roll-centre height",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "rc_height",
+        "label": "RC height",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "fvic_lateral_y",
+      "title": "FVIC lateral (y)",
+      "y_label": "[m]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvic_y",
+        "label": "FVIC y",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "m"
+       }
+      ]
+     },
+     {
+      "id": "fvic_height_z",
+      "title": "FVIC height (z)",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvic_z",
+        "label": "FVIC z",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "front_view_swing_arm_length",
+      "title": "Front-view swing-arm length",
+      "y_label": "[m]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fvsa",
+        "label": "FVSA",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "m"
+       }
+      ]
+     },
+     {
+      "id": "front_view_swing_angle",
+      "title": "Front-view swing angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "fv_swing_angle",
+        "label": "FV swing",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "side_view_angles",
+      "title": "Side-view angles",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "sv_swing_angle",
+        "label": "SV swing (patch)",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "sv_wc_angle",
+        "label": "SV swing (wheel centre)",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "actuation_front",
+    "group": "actuation",
+    "title": "Front corner: actuation",
+    "study": "front_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "coilover_compression",
+      "title": "Coilover compression",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "coilover_compression",
+        "label": "compression",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "coilover_length",
+      "title": "Coilover length",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "coilover_length",
+        "label": "length",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "spring_motion_ratio",
+      "title": "Spring motion ratio",
+      "y_label": "",
+      "y_dim": "ratio",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mr_spring",
+        "label": "MR spring/wheel",
+        "dim": "ratio",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       }
+      ]
+     },
+     {
+      "id": "mr_progression",
+      "title": "MR progression",
+      "y_label": "[1/mm]",
+      "y_dim": "1/length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mr_progression",
+        "label": "d(MR)/dz",
+        "dim": "1/length",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "1/mm"
+       }
+      ]
+     },
+     {
+      "id": "wheel_and_ride_rate",
+      "title": "Wheel and ride rate",
+      "y_label": "[N/mm]",
+      "y_dim": "stiffness",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheel_rate",
+        "label": "wheel rate",
+        "dim": "stiffness",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "N/mm"
+       },
+       {
+        "column": "ride_rate",
+        "label": "ride rate",
+        "dim": "stiffness",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "N/mm"
+       }
+      ]
+     },
+     {
+      "id": "spring_force",
+      "title": "Spring force",
+      "y_label": "[N]",
+      "y_dim": "force",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "spring_force",
+        "label": "spring force",
+        "dim": "force",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "N"
+       }
+      ]
+     },
+     {
+      "id": "pushrod_and_rocker_angle",
+      "title": "Pushrod and rocker angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "pushrod_angle",
+        "label": "pushrod angle",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "rocker_rotation",
+        "label": "rocker",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "toggle_margin",
+      "title": "Toggle margin",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "toggle_margin",
+        "label": "toggle margin",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "stroke_remaining",
+      "title": "Stroke remaining",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "bump_stroke_remaining",
+        "label": "bump",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "droop_stroke_remaining",
+        "label": "droop",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "actuation_rear",
+    "group": "actuation",
+    "title": "Rear corner: actuation",
+    "study": "rear_corner",
+    "columns": 3,
+    "x": {
+     "column": "travel",
+     "label": "wheel travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "coilover_compression",
+      "title": "Coilover compression",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "coilover_compression",
+        "label": "compression",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "coilover_length",
+      "title": "Coilover length",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "coilover_length",
+        "label": "length",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "spring_motion_ratio",
+      "title": "Spring motion ratio",
+      "y_label": "",
+      "y_dim": "ratio",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mr_spring",
+        "label": "MR spring/wheel",
+        "dim": "ratio",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       }
+      ]
+     },
+     {
+      "id": "mr_progression",
+      "title": "MR progression",
+      "y_label": "[1/mm]",
+      "y_dim": "1/length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "mr_progression",
+        "label": "d(MR)/dz",
+        "dim": "1/length",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "1/mm"
+       }
+      ]
+     },
+     {
+      "id": "wheel_and_ride_rate",
+      "title": "Wheel and ride rate",
+      "y_label": "[N/mm]",
+      "y_dim": "stiffness",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "wheel_rate",
+        "label": "wheel rate",
+        "dim": "stiffness",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "N/mm"
+       },
+       {
+        "column": "ride_rate",
+        "label": "ride rate",
+        "dim": "stiffness",
+        "side": null,
+        "corner": null,
+        "factor": 0.001,
+        "unit": "N/mm"
+       }
+      ]
+     },
+     {
+      "id": "spring_force",
+      "title": "Spring force",
+      "y_label": "[N]",
+      "y_dim": "force",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "spring_force",
+        "label": "spring force",
+        "dim": "force",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "N"
+       }
+      ]
+     },
+     {
+      "id": "pushrod_and_rocker_angle",
+      "title": "Pushrod and rocker angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "pushrod_angle",
+        "label": "pushrod angle",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "rocker_rotation",
+        "label": "rocker",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "toggle_margin",
+      "title": "Toggle margin",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "toggle_margin",
+        "label": "toggle margin",
+        "dim": "angle",
+        "side": null,
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "stroke_remaining",
+      "title": "Stroke remaining",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "bump_stroke_remaining",
+        "label": "bump",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "droop_stroke_remaining",
+        "label": "droop",
+        "dim": "length",
+        "side": null,
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "steering",
+    "group": "steering",
+    "title": "Steering",
+    "study": "rack",
+    "columns": 2,
+    "x": {
+     "column": "rack",
+     "label": "rack travel",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "steer_angle",
+      "title": "Steer angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "d_left",
+        "label": "left",
+        "dim": "angle",
+        "side": "left",
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "d_right",
+        "label": "right",
+        "dim": "angle",
+        "side": "right",
+        "corner": null,
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "ackermann",
+      "title": "Ackermann",
+      "y_label": "[%]",
+      "y_dim": "percent",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": {
+       "column": "outer",
+       "label": "outer steer angle",
+       "dim": "angle",
+       "factor": 57.29577951308232,
+       "unit": "deg"
+      },
+      "series": [
+       {
+        "column": "ackermann",
+        "label": "Ackermann",
+        "dim": "percent",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": "%"
+       }
+      ]
+     },
+     {
+      "id": "toe",
+      "title": "Toe",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_toe",
+        "label": "left",
+        "dim": "angle",
+        "side": "left",
+        "corner": "FL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "FR_toe",
+        "label": "right",
+        "dim": "angle",
+        "side": "right",
+        "corner": "FR",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "steering_ratio",
+      "title": "Steering ratio",
+      "y_label": "",
+      "y_dim": "ratio",
+      "ic": false,
+      "requires": [
+       "ratio"
+      ],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "ratio",
+        "label": "ratio",
+        "dim": "ratio",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       }
+      ]
+     },
+     {
+      "id": "steer_gain",
+      "title": "Steer gain",
+      "y_label": "[deg/mm]",
+      "y_dim": "angle/length",
+      "ic": false,
+      "requires": [
+       "gain"
+      ],
+      "alternative_to": "steering_ratio",
+      "x": null,
+      "series": [
+       {
+        "column": "gain",
+        "label": "mean steer gain",
+        "dim": "angle/length",
+        "side": null,
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "roll",
+    "group": "roll",
+    "title": "Roll sweep",
+    "study": "roll",
+    "columns": 3,
+    "x": {
+     "column": "roll",
+     "label": "body roll",
+     "dim": "angle",
+     "factor": 57.29577951308232,
+     "unit": "deg"
+    },
+    "panels": [
+     {
+      "id": "corner_travel",
+      "title": "Corner travel",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_travel",
+        "label": "FL",
+        "dim": "length",
+        "side": null,
+        "corner": "FL",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "FR_travel",
+        "label": "FR",
+        "dim": "length",
+        "side": null,
+        "corner": "FR",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "RL_travel",
+        "label": "RL",
+        "dim": "length",
+        "side": null,
+        "corner": "RL",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "RR_travel",
+        "label": "RR",
+        "dim": "length",
+        "side": null,
+        "corner": "RR",
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "camber_to_ground",
+      "title": "Camber to ground",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_camber_ground",
+        "label": "FL",
+        "dim": "angle",
+        "side": null,
+        "corner": "FL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "FR_camber_ground",
+        "label": "FR",
+        "dim": "angle",
+        "side": null,
+        "corner": "FR",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "RL_camber_ground",
+        "label": "RL",
+        "dim": "angle",
+        "side": null,
+        "corner": "RL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "RR_camber_ground",
+        "label": "RR",
+        "dim": "angle",
+        "side": null,
+        "corner": "RR",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "steer_to_ground",
+      "title": "Steer to ground",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_steer_ground",
+        "label": "FL",
+        "dim": "angle",
+        "side": null,
+        "corner": "FL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "FR_steer_ground",
+        "label": "FR",
+        "dim": "angle",
+        "side": null,
+        "corner": "FR",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "RL_steer_ground",
+        "label": "RL",
+        "dim": "angle",
+        "side": null,
+        "corner": "RL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "RR_steer_ground",
+        "label": "RR",
+        "dim": "angle",
+        "side": null,
+        "corner": "RR",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     },
+     {
+      "id": "roll_centre_height",
+      "title": "Roll-centre height",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "rc_front_z",
+        "label": "front",
+        "dim": "length",
+        "side": "front",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "rc_rear_z",
+        "label": "rear",
+        "dim": "length",
+        "side": "rear",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "roll_centre_lateral_position",
+      "title": "Roll-centre lateral position",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "rc_front_y",
+        "label": "front",
+        "dim": "length",
+        "side": "front",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "rc_rear_y",
+        "label": "rear",
+        "dim": "length",
+        "side": "rear",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "arb_elastic_coordinate",
+      "title": "ARB elastic coordinate",
+      "y_label": "[rad or m]",
+      "y_dim": "ratio",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "arb_front_elastic",
+        "label": "front",
+        "dim": "ratio",
+        "side": "front",
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       },
+       {
+        "column": "arb_rear_elastic",
+        "label": "rear",
+        "dim": "ratio",
+        "side": "rear",
+        "corner": null,
+        "factor": 1.0,
+        "unit": ""
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "heave_pitch_heave",
+    "group": "heave_pitch",
+    "title": "Heave sweep",
+    "study": "heave",
+    "columns": 2,
+    "x": {
+     "column": "heave",
+     "label": "heave",
+     "dim": "length",
+     "factor": 1000.0,
+     "unit": "mm"
+    },
+    "panels": [
+     {
+      "id": "heave_corner_travel",
+      "title": "Heave: corner travel",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_travel",
+        "label": "FL",
+        "dim": "length",
+        "side": null,
+        "corner": "FL",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "FR_travel",
+        "label": "FR",
+        "dim": "length",
+        "side": null,
+        "corner": "FR",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "RL_travel",
+        "label": "RL",
+        "dim": "length",
+        "side": null,
+        "corner": "RL",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "RR_travel",
+        "label": "RR",
+        "dim": "length",
+        "side": null,
+        "corner": "RR",
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "heave_roll_centre_height",
+      "title": "Heave: roll-centre height",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "rc_front_z",
+        "label": "front",
+        "dim": "length",
+        "side": "front",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "rc_rear_z",
+        "label": "rear",
+        "dim": "length",
+        "side": "rear",
+        "corner": null,
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "id": "heave_pitch_pitch",
+    "group": "heave_pitch",
+    "title": "Pitch sweep",
+    "study": "pitch",
+    "columns": 2,
+    "x": {
+     "column": "pitch",
+     "label": "body pitch",
+     "dim": "angle",
+     "factor": 57.29577951308232,
+     "unit": "deg"
+    },
+    "panels": [
+     {
+      "id": "pitch_axle_travel",
+      "title": "Pitch: axle travel",
+      "y_label": "[mm]",
+      "y_dim": "length",
+      "ic": false,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_travel",
+        "label": "front (FL)",
+        "dim": "length",
+        "side": "front",
+        "corner": "FL",
+        "factor": 1000.0,
+        "unit": "mm"
+       },
+       {
+        "column": "RL_travel",
+        "label": "rear (RL)",
+        "dim": "length",
+        "side": "rear",
+        "corner": "RL",
+        "factor": 1000.0,
+        "unit": "mm"
+       }
+      ]
+     },
+     {
+      "id": "pitch_side_view_swing_angle",
+      "title": "Pitch: side-view swing angle",
+      "y_label": "[deg]",
+      "y_dim": "angle",
+      "ic": true,
+      "requires": [],
+      "alternative_to": null,
+      "x": null,
+      "series": [
+       {
+        "column": "FL_sv_swing_angle",
+        "label": "front (FL)",
+        "dim": "angle",
+        "side": "front",
+        "corner": "FL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       },
+       {
+        "column": "RL_sv_swing_angle",
+        "label": "rear (RL)",
+        "dim": "angle",
+        "side": "rear",
+        "corner": "RL",
+        "factor": 57.29577951308232,
+        "unit": "deg"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "summary_rows": [
+   {
+    "label": "Wheelbase",
+    "path": [
+     "wheelbase"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Sprung mass",
+    "path": [
+     "sprung_mass"
+    ],
+    "dim": "mass",
+    "factor": 1.0,
+    "unit": "kg",
+    "decimals": 1
+   },
+   {
+    "label": "Sprung CG height",
+    "path": [
+     "sprung_cg_height"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Roll-axis height at CG",
+    "path": [
+     "roll_axis_height_at_cg"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 1
+   },
+   {
+    "label": "Front track",
+    "path": [
+     "front",
+     "track"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Rear track",
+    "path": [
+     "rear",
+     "track"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Front wheel rate",
+    "path": [
+     "front",
+     "wheel_rate"
+    ],
+    "dim": "stiffness",
+    "factor": 0.001,
+    "unit": "N/mm",
+    "decimals": 2
+   },
+   {
+    "label": "Rear wheel rate",
+    "path": [
+     "rear",
+     "wheel_rate"
+    ],
+    "dim": "stiffness",
+    "factor": 0.001,
+    "unit": "N/mm",
+    "decimals": 2
+   },
+   {
+    "label": "Front RC height",
+    "path": [
+     "front",
+     "rc_height"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 1
+   },
+   {
+    "label": "Rear RC height",
+    "path": [
+     "rear",
+     "rc_height"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 1
+   },
+   {
+    "label": "Front roll stiffness",
+    "path": [
+     "front",
+     "roll_stiffness"
+    ],
+    "dim": "force*length/angle",
+    "factor": 0.017453292519943295,
+    "unit": "N m/deg",
+    "decimals": 0
+   },
+   {
+    "label": "Rear roll stiffness",
+    "path": [
+     "rear",
+     "roll_stiffness"
+    ],
+    "dim": "force*length/angle",
+    "factor": 0.017453292519943295,
+    "unit": "N m/deg",
+    "decimals": 0
+   },
+   {
+    "label": "Total roll stiffness",
+    "path": [
+     "roll_stiffness_total"
+    ],
+    "dim": "force*length/angle",
+    "factor": 0.017453292519943295,
+    "unit": "N m/deg",
+    "decimals": 0
+   },
+   {
+    "label": "Roll gradient",
+    "path": [
+     "roll_gradient"
+    ],
+    "dim": "angle/gload",
+    "factor": 57.29577951308232,
+    "unit": "deg/g",
+    "decimals": 2
+   },
+   {
+    "label": "Front TLLTD",
+    "path": [
+     "tlltd_front"
+    ],
+    "dim": "ratio",
+    "factor": 100.0,
+    "unit": "%",
+    "decimals": 1
+   },
+   {
+    "label": "Front roll camber",
+    "path": [
+     "front",
+     "roll_camber"
+    ],
+    "dim": "ratio",
+    "factor": 1.0,
+    "unit": "deg/deg",
+    "decimals": 3
+   },
+   {
+    "label": "Rear roll camber",
+    "path": [
+     "rear",
+     "roll_camber"
+    ],
+    "dim": "ratio",
+    "factor": 1.0,
+    "unit": "deg/deg",
+    "decimals": 3
+   },
+   {
+    "label": "Front roll steer",
+    "path": [
+     "front",
+     "roll_steer"
+    ],
+    "dim": "ratio",
+    "factor": 1.0,
+    "unit": "deg/deg",
+    "decimals": 3
+   },
+   {
+    "label": "Rear roll steer",
+    "path": [
+     "rear",
+     "roll_steer"
+    ],
+    "dim": "ratio",
+    "factor": 1.0,
+    "unit": "deg/deg",
+    "decimals": 3
+   },
+   {
+    "label": "Anti-dive (front)",
+    "path": [
+     "anti_dive_front"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 1
+   },
+   {
+    "label": "Anti-lift (rear)",
+    "path": [
+     "anti_lift_rear"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 1
+   },
+   {
+    "label": "Anti-squat (rear)",
+    "path": [
+     "anti_squat_rear"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 1
+   },
+   {
+    "label": "Pitch centre x",
+    "path": [
+     "pitch_centre_x"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Pitch centre z",
+    "path": [
+     "pitch_centre_z"
+    ],
+    "dim": "length",
+    "factor": 1000.0,
+    "unit": "mm",
+    "decimals": 0
+   },
+   {
+    "label": "Max steer (inner)",
+    "path": [
+     "max_steer_inner"
+    ],
+    "dim": "angle",
+    "factor": 57.29577951308232,
+    "unit": "deg",
+    "decimals": 1
+   },
+   {
+    "label": "Max steer (outer)",
+    "path": [
+     "max_steer_outer"
+    ],
+    "dim": "angle",
+    "factor": 57.29577951308232,
+    "unit": "deg",
+    "decimals": 1
+   },
+   {
+    "label": "Ackermann @ 5 deg",
+    "path": [
+     "ackermann_5deg"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 0
+   },
+   {
+    "label": "Ackermann @ 10 deg",
+    "path": [
+     "ackermann_10deg"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 0
+   },
+   {
+    "label": "Ackermann @ 15 deg",
+    "path": [
+     "ackermann_15deg"
+    ],
+    "dim": "percent",
+    "factor": 1.0,
+    "unit": "%",
+    "decimals": 0
+   },
+   {
+    "label": "Steering ratio",
+    "path": [
+     "steering_ratio"
+    ],
+    "dim": "ratio",
+    "factor": 1.0,
+    "unit": "",
+    "decimals": 2
+   },
+   {
+    "label": "Turning radius",
+    "path": [
+     "turning_radius"
+    ],
+    "dim": "length",
+    "factor": 1.0,
+    "unit": "m",
+    "decimals": 2
+   }
+  ]
+ }
+}

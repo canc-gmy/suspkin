@@ -1,0 +1,6 @@
+{
+ "status": 400,
+ "body": {
+  "detail": "the file name must end in .yaml or .yml"
+ }
+}

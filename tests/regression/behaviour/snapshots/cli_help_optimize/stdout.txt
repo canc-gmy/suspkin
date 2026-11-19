@@ -1,0 +1,27 @@
+                                                                                                   
+ Usage: root optimize [OPTIONS] {study_yaml}                                                       
+                                                                                                   
+ Optimise a study's design variables against its objectives and constraints.                       
+                                                                                                   
+ Writes a run folder (history.csv, best.yaml, result.json, figures, report). With                  
+ --surrogate the networks of `surrogate train` search a trust region and the FOM verifies          
+ the infill points (`--evaluations` is then the FOM budget; al.csv logs the iterations).           
+ Exit code 2 on a study or argument error, 1 if no feasible design was found, 0 otherwise.         
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    study_yaml      <path>  Study YAML with objectives and optimizer. [required]               │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --out                <path>  Run folder (default results/opt/<study>_<timestamp>).              │
+│ --resume             <bool>  Continue the run in --out from its history.csv.                    │
+│ --workers            <str>   Worker processes: an integer or auto (default: study).             │
+│ --evaluations        <int>   Evaluation budget override.                                        │
+│ --time               <str>   Wall-time budget override, e.g. "30 min".                          │
+│ --method             <str>   nsga2 | de | slsqp | trust-constr | de+slsqp.                      │
+│ --no-report          <bool>  Skip the before/after report.                                      │
+│ --surrogate          <path>  Surrogate folder (dataset/, models/): active-learning optimizer    │
+│                              (experimental).                                                    │
+│ --device             <str>   auto | cpu | cuda for the networks (needs --surrogate).            │
+│ --help               <bool>  Show this message and exit.                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

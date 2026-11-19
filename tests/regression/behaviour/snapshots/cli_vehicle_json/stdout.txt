@@ -1,0 +1,48 @@
+front.track                      1220.0000  mm
+front.wheel_rate                   34.5673  N/mm
+front.arb_wheel_rate_roll          32.2912  N/mm
+front.roll_stiffness_springs      448.9858  N*m/deg
+front.roll_stiffness_arb          419.4215  N*m/deg
+front.roll_stiffness_tyres       1298.8740  N*m/deg
+front.roll_stiffness              520.4454  N*m/deg
+front.rc_height                    33.7206  mm
+front.roll_camber                   0.8131  deg/deg
+front.roll_steer                    0.0009  deg/deg
+front.rc_migration                 65.9205  mm/deg (+ = toward left of the car centreline, for left-up roll)
+front.rc_height_curvature          -0.5924  mm/deg^2
+rear.track                       1180.0000  mm
+rear.wheel_rate                    40.9483  N/mm
+rear.arb_wheel_rate_roll           21.9619  N/mm
+rear.roll_stiffness_springs       497.5625  N*m/deg
+rear.roll_stiffness_arb           266.8588  N*m/deg
+rear.roll_stiffness_tyres        1215.0982  N*m/deg
+rear.roll_stiffness               469.2285  N*m/deg
+rear.rc_height                     39.9991  mm
+rear.roll_camber                    0.7602  deg/deg
+rear.roll_steer                     0.0030  deg/deg
+rear.rc_migration                  51.2329  mm/deg (+ = toward left of the car centreline, for left-up roll)
+rear.rc_height_curvature           -0.4032  mm/deg^2
+wheelbase                        1550.0000  mm
+sprung_mass                       250.0000  kg
+sprung_cg_height                  288.3200  mm
+roll_axis_height_at_cg             37.0784  mm
+roll_stiffness_total              989.6740  N*m/deg
+roll_gradient                       0.6292  deg/g
+ay_ref                              9.8100  m/s^2
+load_transfer_front               336.7155  N
+load_transfer_rear                332.6660  N
+tlltd_front                        50.3025  %
+anti_dive_front                     0.0000  %
+anti_lift_rear                      0.0000  %
+anti_squat_rear                     0.0000  %
+anti_lift_front_accel                  n/a  %
+pitch_centre_x                         nan  mm
+pitch_centre_z                         nan  mm
+max_steer_inner                    22.7415  deg
+max_steer_outer                    22.7650  deg
+ackermann_5deg                      0.3590  %
+ackermann_10deg                     0.2459  %
+ackermann_15deg                     0.0858  %
+steering_ratio                      5.4164  deg/deg (handwheel/road wheel)
+turning_radius                      3.6957  m
+<TMP>/out/vehicle.json

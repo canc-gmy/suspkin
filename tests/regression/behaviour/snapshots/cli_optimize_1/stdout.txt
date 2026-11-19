@@ -1,0 +1,27 @@
+optimize: method de+slsqp, mode weighted, 11 variables, 12 constraints, 4 objectives, 1 workers, budget 30 evaluations / 900 s
+done: 44 new evaluations (44 in history), <DUR>, 1 workers
+
+objectives
+objective     baseline   best  unit    f base  f best
+camber_curve     0.870  0.931  deg      8.702   9.314
+rc_f             6.279  1.021  mm       1.256   0.204
+bump_steer_f     0.011  0.013  deg/mm   1.076   1.275
+mr_linearity     0.006  0.006  -        0.633   0.604
+f_total: baseline 11.350 -> best 11.095
+
+constraints
+constraint      baseline     best  unit      g base    g best  status
+camber_band_f     -0.629   -0.530  deg       -0.629    -0.530  PASS
+toe_band_f        -0.135   -0.180  deg       -3.654    -3.205  PASS
+bump_steer_r       0.000    0.000  deg/mm    -0.493    -0.493  PASS
+mr_front           0.980    0.981  -         -0.402    -0.403  PASS
+mr_rear            0.993    0.986  -         -0.464    -0.428  PASS
+travel_f          10.224   10.192  mm       -10.224   -10.192  PASS
+ubj_angle          5.931    5.897  deg     -190.687  -191.028  PASS
+rc_height_f       33.721   38.979  mm        -0.339    -0.414  PASS
+tlltd_front        0.503    0.508  -         -0.353    -0.387  PASS
+uca_front_zone   -40.000  -34.500  mm       -40.000   -34.500  PASS
+tie_len          435.018  449.065  mm       -35.018   -49.065  PASS
+uca_above_lca    325.000  324.500  mm      -100.000   -99.500  PASS
+feasible: baseline yes, best yes
+<TMP>/out/run

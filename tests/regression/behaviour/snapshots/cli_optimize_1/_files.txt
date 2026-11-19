@@ -1,0 +1,9 @@
+run/best.yaml
+run/figures/constraint_margins.png
+run/figures/convergence.png
+run/figures/parallel.png
+run/history.csv
+run/meta.json
+run/result.json
+run/study.yaml
+run/vehicle.yaml

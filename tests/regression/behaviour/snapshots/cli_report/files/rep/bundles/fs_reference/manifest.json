@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "suspkin-bundle",
+  "label": "fs_reference",
+  "suspkin_version": "<VERSION>",
+  "created": "<TS>",
+  "source": null,
+  "params": {
+    "travel": 0.03,
+    "rack": null,
+    "roll_deg": 2.0,
+    "heave": 0.025,
+    "pitch_deg": 1.5,
+    "steps": 5
+  }
+}

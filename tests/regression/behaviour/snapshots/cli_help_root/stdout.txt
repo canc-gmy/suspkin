@@ -1,0 +1,28 @@
+                                                                                                   
+ Usage: root [OPTIONS] COMMAND [ARGS]...                                                           
+                                                                                                   
+ suspkin - suspension kinematics toolkit.                                                          
+                                                                                                   
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --install-completion        <bool>  Install completion for the current shell.                   │
+│ --show-completion           <bool>  Show completion for the current shell, to copy it or        │
+│                                     customize the installation.                                 │
+│ --help                      <bool>  Show this message and exit.                                 │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Commands ──────────────────────────────────────────────────────────────────────────────────────┐
+│ version     Print the installed suspkin version.                                                │
+│ show        Show the 3D suspension geometry, static or at a solved body pose.                   │
+│ animate     Animate a body-pose sweep (heave, roll, pitch or rack) of the 3D geometry.          │
+│ sweep       Sweep one corner over wheel travel or rack (inputs in mm); the CSV is in SI units.  │
+│ summary     Print static alignment, centre and gradient metrics of FL and RL (display units).   │
+│ vehicle     Print the vehicle-level summary (rates, roll, anti-features, steering) in display   │
+│             units.                                                                              │
+│ vsweep      Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).  │
+│ report      Run the standard studies and write a report folder (HTML, Markdown, CSV, figures).  │
+│ check       Evaluate the baseline vehicle against all constraints of a study.                   │
+│ optimize    Optimise a study's design variables against its objectives and constraints.         │
+│ app         Start the experimental local web app (needs the 'app' extra).                       │
+│ app-export  Export a self-contained HTML snapshot of the given results (needs the 'app' extra). │
+│ surrogate   Neural-network surrogate (experimental).                                            │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

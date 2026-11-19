@@ -1,0 +1,6 @@
+{
+ "status": 400,
+ "body": {
+  "detail": "not a bundle, report or optimizer run folder: plain"
+ }
+}

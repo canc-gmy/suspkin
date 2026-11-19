@@ -1,0 +1,20 @@
+                                                                                                   
+ Usage: root surrogate sample [OPTIONS] {study_yaml}                                               
+                                                                                                   
+ Sample the initial Latin-hypercube dataset of the surrogate (experimental).                       
+                                                                                                   
+ Writes ROOT/dataset/<axle>/shard_*.npz and meta.json. Exit code 2 on a study or argument          
+ error.                                                                                            
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    study_yaml      <path>  Study YAML with a surrogate block. [required]                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --root           <path>              Surrogate folder (dataset/ is written here).               │
+│ --axle           <str>               front | rear | both. [default: both]                       │
+│ --n              <int range> [x>=1]  LHS samples per axle (default: study).                     │
+│ --workers        <str>               Worker processes: an integer or auto.                      │
+│ --resume         <bool>              Continue an interrupted sampling in --root.                │
+│ --help           <bool>              Show this message and exit.                                │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

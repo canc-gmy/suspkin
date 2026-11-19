@@ -1,0 +1,21 @@
+                                                                                                   
+ Usage: root report [OPTIONS] {vehicle_yaml}                                                       
+                                                                                                   
+ Run the standard studies and write a report folder (HTML, Markdown, CSV, figures).                
+                                                                                                   
+ Designs are labelled by their YAML file name. Tables are SI, figures and the HTML                 
+ summary are in mm and deg.                                                                        
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out            <path>              Output directory. [required]                            │
+│    --compare        <list[Path]>        Further vehicle YAML to overlay (repeatable).           │
+│    --no-3d          <bool>              Skip the 3D view and GIF.                               │
+│    --formats        <str>               Figure file formats, comma separated.                   │
+│                                         [default: png,svg]                                      │
+│    --steps          <int range> [x>=3]  Points per sweep. [default: 31]                         │
+│    --help           <bool>              Show this message and exit.                             │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

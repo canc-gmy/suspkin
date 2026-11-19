@@ -1,0 +1,17 @@
+                                                                                                   
+ Usage: root app-export [OPTIONS] {paths}...                                                       
+                                                                                                   
+ Export a self-contained HTML snapshot of the given results (needs the 'app' extra).               
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    paths...      <list[Path]>  Vehicle YAMLs, bundles, report or optimizer run folders to     │
+│                                  embed.                                                         │
+│                                  [required]                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --out              <path>  Output HTML file. [default: compare.html]                            │
+│ --workspace        <path>  Root folder the paths must be inside (default: cwd).                 │
+│ --no-scene         <bool>  Leave out the 3D scenes (smaller file).                              │
+│ --help             <bool>  Show this message and exit.                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

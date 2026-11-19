@@ -1,0 +1,28 @@
+                                                                                                   
+ Usage: root vsweep [OPTIONS] {vehicle_yaml}                                                       
+                                                                                                   
+ Sweep the body pose (heave, roll, pitch or rack) and write a CSV table (SI units).                
+                                                                                                   
+ Heave, rack and pivot are given in MILLIMETRES and roll and pitch in DEGREES on the               
+ command line (converted to SI); the CSV is in SI (m, rad). Give exactly one of --heave,           
+ --roll, --pitch, --rack.                                                                          
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out               <path>                  Output CSV path. [required]                      │
+│    --heave             <float,float>...        Heave range MIN MAX (mm).                        │
+│    --roll              <float,float>...        Roll range MIN MAX (deg).                        │
+│    --pitch             <float,float>...        Pitch range MIN MAX (deg).                       │
+│    --rack              <float,float>...        Rack range MIN MAX (mm).                         │
+│    --steps             <int range> [x>=2]      Number of sweep points. [default: 21]            │
+│    --base-heave        <float>                 Fixed heave (mm). [default: 0.0]                 │
+│    --base-roll         <float>                 Fixed roll (deg). [default: 0.0]                 │
+│    --base-pitch        <float>                 Fixed pitch (deg). [default: 0.0]                │
+│    --base-rack         <float>                 Fixed rack (mm). [default: 0.0]                  │
+│    --pivot             <float,float,float>...  Body rotation centre X Y Z (mm; default: the     │
+│                                                CG).                                             │
+│    --help              <bool>                  Show this message and exit.                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

@@ -1,0 +1,39 @@
+# bench_kinematics.py baseline before the refactor (this machine, numba installed); timings are machine dependent
+one-off kernel load + first vehicle sweep: 0.869 s
+case                         time [ms]
+corner solve, 1 pose             0.142
+corner sweep FL travel, 31       0.733
+vehicle sweep heave, 31          5.930
+vehicle sweep roll, 31           5.921
+vehicle sweep rack, 31           5.890
+corner sweep FL travel, 61       1.354
+vehicle sweep heave, 61         11.714
+vehicle sweep roll, 61          11.616
+vehicle sweep rack, 61          11.301
+corner sweep FL travel, 121      2.638
+vehicle sweep heave, 121        23.010
+vehicle sweep roll, 121         22.309
+vehicle sweep rack, 121         22.487
+run_standard_studies, 31        63.722
+run_standard_studies, 61        89.475
+run_standard_studies, 121      150.720
+
+# --no-numba
+one-off kernel load + first vehicle sweep: 0.002 s
+case                         time [ms]
+corner solve, 1 pose             0.270
+corner sweep FL travel, 31       1.228
+vehicle sweep heave, 31         13.759
+vehicle sweep roll, 31          13.536
+vehicle sweep rack, 31          10.882
+corner sweep FL travel, 61       2.238
+vehicle sweep heave, 61         25.930
+vehicle sweep roll, 61          25.712
+vehicle sweep rack, 61          20.768
+corner sweep FL travel, 121      4.340
+vehicle sweep heave, 121        51.094
+vehicle sweep roll, 121         52.198
+vehicle sweep rack, 121         40.049
+run_standard_studies, 31       107.118
+run_standard_studies, 61       161.123
+run_standard_studies, 121      262.897

@@ -1,0 +1,24 @@
+                                                                                                   
+ Usage: root show [OPTIONS] {vehicle_yaml}                                                         
+                                                                                                   
+ Show the 3D suspension geometry, static or at a solved body pose.                                 
+                                                                                                   
+ Heave and rack are in MILLIMETRES and roll and pitch in DEGREES (all commands use                 
+ the same user-facing units; files are SI). With none of them given the static                     
+ geometry is drawn. --html writes an interactive file (to --out, default                           
+ <vehicle>.html in the current directory) instead of a matplotlib figure.                          
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --out           <path>   Save figure to this path.                                              │
+│ --labels        <bool>   Label hardpoints.                                                      │
+│ --heave         <float>  Body heave (mm).                                                       │
+│ --roll          <float>  Body roll (deg).                                                       │
+│ --pitch         <float>  Body pitch (deg).                                                      │
+│ --rack          <float>  Rack displacement (mm).                                                │
+│ --html          <bool>   Write an interactive plotly HTML (needs the viz extra).                │
+│ --help          <bool>   Show this message and exit.                                            │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

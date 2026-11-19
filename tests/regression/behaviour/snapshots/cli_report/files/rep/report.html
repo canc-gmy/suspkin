@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>suspkin report</title><style>
+body{font:15px/1.5 system-ui,Segoe UI,Arial,sans-serif;max-width:1100px;margin:0 auto;
+padding:1.5rem;color:#222}
+h1{font-size:1.7rem;margin-bottom:.2rem}
+h2{margin-top:2.2rem;border-bottom:1px solid #ccc;padding-bottom:.2rem;font-size:1.25rem}
+table{border-collapse:collapse;margin:.8rem 0}
+th,td{padding:.25rem .8rem;border-bottom:1px solid #e2e2e2;text-align:right}
+th:first-child,td:first-child,td.unit{text-align:left}
+th{background:#f4f4f4}
+.meta td{text-align:left}
+img{max-width:100%;height:auto}
+@media print{body{max-width:none;padding:0}h2{break-after:avoid}img{break-inside:avoid}}
+</style></head><body>
+<h1>Suspension kinematics report</h1>
+<table class='meta'>
+<tr><td>suspkin version</td><td><VERSION></td></tr>
+<tr><td>Date</td><td>2026-11-20</td></tr>
+<tr><td>Design fs_reference</td><td>fs_reference</td></tr>
+<tr><td>Units</td><td>figures and tables in mm, deg, N, N/mm; CSV and JSON files in SI</td></tr>
+</table>
+<h2>Summary comparison</h2>
+<table><tr><th>Quantity</th><th>fs_reference</th><th>Unit</th></tr><tr><td>Wheelbase</td><td>1550</td><td class="unit">mm</td></tr><tr><td>Sprung mass</td><td>250.0</td><td class="unit">kg</td></tr><tr><td>Sprung CG height</td><td>288</td><td class="unit">mm</td></tr><tr><td>Roll-axis height at CG</td><td>37.1</td><td class="unit">mm</td></tr><tr><td>Front track</td><td>1220</td><td class="unit">mm</td></tr><tr><td>Rear track</td><td>1180</td><td class="unit">mm</td></tr><tr><td>Front wheel rate</td><td>34.57</td><td class="unit">N/mm</td></tr><tr><td>Rear wheel rate</td><td>40.95</td><td class="unit">N/mm</td></tr><tr><td>Front RC height</td><td>33.7</td><td class="unit">mm</td></tr><tr><td>Rear RC height</td><td>40.0</td><td class="unit">mm</td></tr><tr><td>Front roll stiffness</td><td>520</td><td class="unit">N m/deg</td></tr><tr><td>Rear roll stiffness</td><td>469</td><td class="unit">N m/deg</td></tr><tr><td>Total roll stiffness</td><td>990</td><td class="unit">N m/deg</td></tr><tr><td>Roll gradient</td><td>0.63</td><td class="unit">deg/g</td></tr><tr><td>Front TLLTD</td><td>50.3</td><td class="unit">%</td></tr><tr><td>Front roll camber</td><td>0.813</td><td class="unit">deg/deg</td></tr><tr><td>Rear roll camber</td><td>0.760</td><td class="unit">deg/deg</td></tr><tr><td>Front roll steer</td><td>0.001</td><td class="unit">deg/deg</td></tr><tr><td>Rear roll steer</td><td>0.003</td><td class="unit">deg/deg</td></tr><tr><td>Anti-dive (front)</td><td>0.0</td><td class="unit">%</td></tr><tr><td>Anti-lift (rear)</td><td>0.0</td><td class="unit">%</td></tr><tr><td>Anti-squat (rear)</td><td>0.0</td><td class="unit">%</td></tr><tr><td>Pitch centre x</td><td>-</td><td class="unit">mm</td></tr><tr><td>Pitch centre z</td><td>-</td><td class="unit">mm</td></tr><tr><td>Max steer (inner)</td><td>22.7</td><td class="unit">deg</td></tr><tr><td>Max steer (outer)</td><td>22.8</td><td class="unit">deg</td></tr><tr><td>Ackermann @ 5 deg</td><td>0</td><td class="unit">%</td></tr><tr><td>Ackermann @ 10 deg</td><td>0</td><td class="unit">%</td></tr><tr><td>Ackermann @ 15 deg</td><td>0</td><td class="unit">%</td></tr><tr><td>Steering ratio</td><td>5.42</td><td class="unit">-</td></tr><tr><td>Turning radius</td><td>3.70</td><td class="unit">m</td></tr></table>
+<h2>3D geometry (static)</h2>
+<img alt='3D geometry (static)' src='data:image/png;base64,<B64>'>
+<h2>3D roll sweep (+-2 deg)</h2>
+<img alt='3D roll sweep (+-2 deg)' src='data:image/gif;base64,<B64>'>
+<h2>Wheel alignment (front corner)</h2>
+<img alt='Wheel alignment (front corner)' src='data:image/png;base64,<B64>'>
+<h2>Wheel alignment (rear corner)</h2>
+<img alt='Wheel alignment (rear corner)' src='data:image/png;base64,<B64>'>
+<h2>Wheel position (front corner)</h2>
+<img alt='Wheel position (front corner)' src='data:image/png;base64,<B64>'>
+<h2>Wheel position (rear corner)</h2>
+<img alt='Wheel position (rear corner)' src='data:image/png;base64,<B64>'>
+<h2>Geometry centres (front corner)</h2>
+<img alt='Geometry centres (front corner)' src='data:image/png;base64,<B64>'>
+<h2>Geometry centres (rear corner)</h2>
+<img alt='Geometry centres (rear corner)' src='data:image/png;base64,<B64>'>
+<h2>Actuation and rates (front corner)</h2>
+<img alt='Actuation and rates (front corner)' src='data:image/png;base64,<B64>'>
+<h2>Actuation and rates (rear corner)</h2>
+<img alt='Actuation and rates (rear corner)' src='data:image/png;base64,<B64>'>
+<h2>Steering</h2>
+<img alt='Steering' src='data:image/png;base64,<B64>'>
+<h2>Roll</h2>
+<img alt='Roll' src='data:image/png;base64,<B64>'>
+<h2>Heave and pitch</h2>
+<img alt='Heave and pitch' src='data:image/png;base64,<B64>'>
+<h2>Summary table: fs_reference</h2>
+<img alt='Summary table: fs_reference' src='data:image/png;base64,<B64>'>
+</body></html>

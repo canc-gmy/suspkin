@@ -1,0 +1,19 @@
+                                                                                                   
+ Usage: root check [OPTIONS] {study_yaml}                                                          
+                                                                                                   
+ Evaluate the baseline vehicle against all constraints of a study.                                 
+                                                                                                   
+ Prints one row per constraint (display units); status is PASS, FAIL, UNSOLVED,                    
+ INFEASIBLE or OFF (disabled). Exit code 2 on a study file or output error, 1 with                 
+ --strict if the baseline is not feasible or lies outside a variable domain.                       
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    study_yaml      <path>  Study YAML file. [required]                                        │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ --csv           <path>  Write the constraint table (SI) as CSV.                                 │
+│ --plot          <path>  Write the 3D study view as an image.                                    │
+│ --strict        <bool>  Exit with code 1 if the baseline is not feasible.                       │
+│ --help          <bool>  Show this message and exit.                                             │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

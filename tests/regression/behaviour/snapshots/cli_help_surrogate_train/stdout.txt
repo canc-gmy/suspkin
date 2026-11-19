@@ -1,0 +1,20 @@
+                                                                                                   
+ Usage: root surrogate train [OPTIONS] {study_yaml}                                                
+                                                                                                   
+ Search the architecture and train the networks (experimental).                                    
+                                                                                                   
+ Writes ROOT/models/<axle>/ (optuna.db, trials.csv, model/). Exit code 2 on a study,               
+ argument or data error.                                                                           
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    study_yaml      <path>  Study YAML with a surrogate block. [required]                      │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --root           <path>              Surrogate folder (holds dataset/). [required]           │
+│    --axle           <str>               front | rear | both. [default: both]                    │
+│    --trials         <int range> [x>=1]  Optuna trials (default: study).                         │
+│    --timeout        <str>               Search time budget, e.g. '2 h' (default: study).        │
+│    --device         <str>               auto | cpu | cuda (default: study).                     │
+│    --help           <bool>              Show this message and exit.                             │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

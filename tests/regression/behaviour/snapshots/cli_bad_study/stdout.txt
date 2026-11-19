@@ -1,0 +1,4 @@
+<REPO>/tests/regression/behaviour/cases/bad_study.yaml: 1 validation error for Study
+variables.0.domain
+  Value error, unknown unit or dimension 'furlong' in 'furlong'; expected a unit of dimension 'length' in '-10 furlong' [type=value_error, input_value={'offset': {'x': ['-10 furlong', '10 mm']}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.14/v/value_error

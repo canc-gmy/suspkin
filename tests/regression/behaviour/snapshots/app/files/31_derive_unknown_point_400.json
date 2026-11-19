@@ -1,0 +1,6 @@
+{
+ "status": 400,
+ "body": {
+  "detail": "front.nope does not exist in this vehicle (points cannot be added)"
+ }
+}

@@ -1,0 +1,39 @@
+{
+ "status": 200,
+ "body": {
+  "dir": "rep",
+  "parent": "",
+  "entries": [
+   {
+    "name": "bundles",
+    "path": "rep/bundles",
+    "kind": "dir"
+   },
+   {
+    "name": "data",
+    "path": "rep/data",
+    "kind": "dir"
+   },
+   {
+    "name": "figures",
+    "path": "rep/figures",
+    "kind": "dir"
+   },
+   {
+    "name": "report.html",
+    "path": "rep/report.html",
+    "kind": "other"
+   },
+   {
+    "name": "report.md",
+    "path": "rep/report.md",
+    "kind": "other"
+   },
+   {
+    "name": "summary.json",
+    "path": "rep/summary.json",
+    "kind": "other"
+   }
+  ]
+ }
+}

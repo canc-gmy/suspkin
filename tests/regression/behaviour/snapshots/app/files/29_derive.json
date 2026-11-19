@@ -1,0 +1,41 @@
+{
+ "status": 200,
+ "body": {
+  "id": "<ID3>",
+  "label": "raised",
+  "kind": "edited",
+  "source": "car.yaml",
+  "color": 0,
+  "studies": [
+   "front_corner",
+   "rear_corner",
+   "rack",
+   "heave",
+   "roll",
+   "pitch"
+  ],
+  "run_id": null,
+  "params": {
+   "travel": 0.02,
+   "rack": null,
+   "roll_deg": 1.0,
+   "heave": 0.025,
+   "pitch_deg": 1.5,
+   "steps": 7
+  },
+  "steps": 7,
+  "resolution_fixed": false,
+  "parent_id": "<ID1>",
+  "edits": [
+   {
+    "axle": "front",
+    "point": "uca_outer",
+    "side": "both",
+    "x": null,
+    "y": null,
+    "z": 0.3
+   }
+  ],
+  "has_study": false
+ }
+}

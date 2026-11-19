@@ -1,0 +1,19 @@
+                                                                                                   
+ Usage: root sweep [OPTIONS] {vehicle_yaml}                                                        
+                                                                                                   
+ Sweep one corner over wheel travel or rack (inputs in mm); the CSV is in SI units.                
+                                                                                                   
+┌─ Arguments ─────────────────────────────────────────────────────────────────────────────────────┐
+│ *    vehicle_yaml      <path>  Vehicle YAML file. [required]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+┌─ Options ───────────────────────────────────────────────────────────────────────────────────────┐
+│ *  --out               <path>              Output CSV path. [required]                          │
+│    --corner            <str>               Corner: FL, FR, RL or RR. [default: FL]              │
+│    --travel            <float,float>...    Wheel travel range MIN MAX (mm, bump positive).      │
+│    --rack-sweep        <float,float>...    Rack range MIN MAX (mm) at zero travel.              │
+│    --steps             <int range> [x>=2]  Number of sweep points. [default: 21]                │
+│    --rack              <float>             Fixed rack offset (mm, travel sweep). [default: 0.0] │
+│    --metrics           <bool>              Add metric and gradient columns (>= 3 steps).        │
+│    --help              <bool>              Show this message and exit.                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+

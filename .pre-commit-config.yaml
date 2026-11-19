@@ -21,7 +21,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        exclude: ^tests/regression/behaviour/snapshots/
       - id: end-of-file-fixer
+        exclude: ^tests/regression/behaviour/snapshots/
       - id: check-yaml
         args: [--unsafe]  # mkdocs.yml uses !!python/name tags
       - id: check-toml

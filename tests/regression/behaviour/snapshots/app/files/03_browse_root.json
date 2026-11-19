@@ -1,0 +1,59 @@
+{
+ "status": 200,
+ "body": {
+  "dir": "",
+  "parent": null,
+  "entries": [
+   {
+    "name": "b1",
+    "path": "b1",
+    "kind": "bundle"
+   },
+   {
+    "name": "other",
+    "path": "other",
+    "kind": "dir"
+   },
+   {
+    "name": "plain",
+    "path": "plain",
+    "kind": "dir"
+   },
+   {
+    "name": "rep",
+    "path": "rep",
+    "kind": "report"
+   },
+   {
+    "name": "run1",
+    "path": "run1",
+    "kind": "run"
+   },
+   {
+    "name": "studies",
+    "path": "studies",
+    "kind": "dir"
+   },
+   {
+    "name": "vehicles",
+    "path": "vehicles",
+    "kind": "dir"
+   },
+   {
+    "name": "car.yaml",
+    "path": "car.yaml",
+    "kind": "vehicle"
+   },
+   {
+    "name": "junk.yaml",
+    "path": "junk.yaml",
+    "kind": "other"
+   },
+   {
+    "name": "notes.txt",
+    "path": "notes.txt",
+    "kind": "other"
+   }
+  ]
+ }
+}
