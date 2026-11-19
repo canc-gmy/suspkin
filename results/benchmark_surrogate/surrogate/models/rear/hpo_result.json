@@ -1,0 +1,37 @@
+{
+  "axle": "rear",
+  "best_params": {
+    "n_layers": 6,
+    "width": 943,
+    "activation": "silu",
+    "residual": true,
+    "layernorm": false,
+    "dropout": 0.09726902218740636,
+    "lr": 0.0007863613057900951,
+    "weight_decay": 5.088084453659525e-05,
+    "batch_size": 308,
+    "output": "raw",
+    "lam_feas": 0.05758141662606778
+  },
+  "best_value": 1.1377367667624365,
+  "n_trials": 60,
+  "n_complete": 14,
+  "final_score": 0.4725865974294016,
+  "final_epochs": 600,
+  "final_seconds": 595.25,
+  "search_seconds": null,
+  "total_seconds": 598.219000000041,
+  "device": "cuda",
+  "n_train": 15957,
+  "n_val": 2058,
+  "n_test": 1985,
+  "retrain_only": true,
+  "n_trials_requested": 60,
+  "timeout_s": 5400.0,
+  "subsample": 5000,
+  "trial_budget": {
+    "max_epochs": 300,
+    "patience": 30,
+    "subsample": 5000
+  }
+}

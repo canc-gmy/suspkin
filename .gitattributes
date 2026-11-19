@@ -3,3 +3,4 @@
 *.gif binary
 *.mp4 binary
 *.ps1 text eol=crlf
+results/benchmark_surrogate/surrogate/models/**/*.pt filter=lfs diff=lfs merge=lfs -text
