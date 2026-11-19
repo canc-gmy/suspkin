@@ -7,8 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `suspkin optimize --surrogate ROOT` runs with `ROOT/models/` alone: without `ROOT/dataset/<axle>`
+  the model metadata is checked against the study, fine-tuning is disabled for that axle
+  (`skip_reason` `no_dataset`) and the networks stay as trained.
+- Active learning fine-tuning is 5 to 6 times faster (about 50 s instead of about 315 s per
+  iteration for both axles on the benchmark networks, decision S18): the replay rows and validation
+  split are kept on the device between iterations, `active_learning.finetune` defaults are now
+  `epochs` 60, `replay` 2048 (drawn once per run) and a new `patience` 30 (counted from the best
+  epoch of the run). New optional keys `trigger` (1.0), `skip_after` (2), `skip_for` (2) and
+  `stall_override` (3): an axle is fine-tuned only if the residual of the new verified point exceeds
+  the trigger, and is skipped for a while after repeated fine-tunes that kept the previous weights.
+  `al.csv` gets `skipped_front` and `skipped_rear`; older tables resume unchanged. Use
+  `trigger: 0, skip_for: 0` for the previous always-fine-tune behaviour.
+- Active learning no longer fine-tunes the networks on the CPU by default (`--device cpu`, or `auto`
+  without CUDA): it takes minutes per iteration. New optional key `active_learning.finetune.on_cpu`
+  (`skip` default, `run` to force); the reason is logged once and recorded per axle in the new
+  `al.csv` columns `skip_reason_front` / `skip_reason_rear`; older tables resume unchanged.
+
+- Surrogate inner loop about 5x faster (14 ms to under 3.3 ms per design): the design decode, vehicle build, cache keys and history rows are vectorised over the batch (`DesignSpace.points_batch`, `cache_keys`); results are bit-identical.
+- Surrogate channels: the three swing angles are now one channel each holding the line angle wrapped
+  to (-90, 90] degrees (tolerance 0.05 deg) instead of (cos, sin) of a direction, which jumped by
+  180 degrees when the instant centre changed side. Channel counts: 29 front, 28 rear. Datasets and
+  models of the old encoding are refused (sample and train again). The final model stores per-channel
+  RMSE/tolerance ratios and the HPO report shows their median, max and the worst 5 channels.
+
 ### Added
 
+- Report `docs/reports/surrogate-training.md`: first full surrogate training (Nov 2026), runs,
+  problems and fixes, per-axle results and open points.
+- Hardpoint grid: study key `resolution` (length, default `0.5 mm`, `null` = continuous) and a
+  per-variable `resolution` override. Chosen designs are snapped to absolute multiples of it
+  (`DesignSpace.quantise_x`, `points(quantise=)`, `to_vehicle(quantise=)`,
+  `suspkin.optimize.quantise`); a domain without a grid node is a study error.
+
+- Surrogate search report `models/hpo_report.md` (`suspkin.surrogate.report.write_hpo_report`, `scripts/surrogate_hpo_report.py`), `hpo_result.json`, and `hpo.max_epochs` / `hpo.subsample` study keys.
+- Retrain the best configuration of an existing surrogate search without new trials (`suspkin.surrogate.hpo.retrain_best`, `scripts/surrogate_retrain_best.py`).
 - Reloadable result bundles (`suspkin.report.bundle`: `save_bundle`, `load_bundle`); `build_report`
   writes one per design under `bundles/`.
 - Declarative figure spec (`suspkin.plotting.spec`) built from the figure panels, and
@@ -18,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   generated TypeScript types.
 - `suspkin app` and `suspkin app-export` (self-contained HTML snapshot), the web app guide and
   ADR 0001, and a CI `frontend` job.
+- Surrogate optimisation guide (`docs/guides/surrogate.md`) for the experimental v1.1 NN surrogate.
 - Setup scripts build the frontend when Node is available (`-NoFrontend` / `--no-frontend` skips).
 - Experimental neural-network surrogate `suspkin.surrogate` (v1.1, see `docs/DESIGN_PLAN.md`
   §13 and `docs/ARCHITECTURE.md` section 15). Not exported in `suspkin.__all__`; its API may
@@ -46,6 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Optimisers now evaluate and report producible designs: every optimised hardpoint coordinate
+  is a multiple of 0.5 mm by default (classic optimiser, surrogate optimisation, active-learning
+  infill, best / Pareto designs and exported YAML). Set `resolution: null` for the old behaviour.
+  The surrogate training dataset stays continuous and the dataset / model hashes ignore the
+  resolution. The active-learning trust-region radius is at least one grid step, and the loop
+  stops with `no_candidates` when no new grid design is left. Finite-difference steps are at
+  least one grid step. Golden snapshots are unchanged (the baseline is evaluated as it is).
+- Surrogate search trials are capped by `hpo.max_epochs` (default 300) and `hpo.subsample`; the best configuration is still retrained in full. Resuming a study under another trial budget is refused.
 - `mr_progression` is shown in 1/mm in the figures (as in the CLI).
 - `save_vehicle` writes LF line endings.
 - `build_report` writes `bundles/` and raises an error on duplicate design slugs.

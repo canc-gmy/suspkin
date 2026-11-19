@@ -19,6 +19,7 @@ objectives and an optimizer block).
 |---|---|
 | `schema` | Must be `1`. |
 | `vehicle` | Path to the vehicle YAML, relative to the study file. |
+| `resolution` | Grid of the chosen hardpoint coordinates, default `0.5 mm`; `null` = continuous. |
 | `variables` | Hardpoints that may move, each with a domain. |
 | `sweeps` | Named corner or vehicle sweeps that constraints and objectives refer to. |
 | `constraints` | Requirements. |
@@ -42,6 +43,34 @@ Each entry: `point: <axle>.<hardpoint>`, `domain` (exactly one of the below), op
 | `hexahedron` | `vertices`: 8 points in FEM order (0-3 bottom face counter-clockwise seen from +z, 4-7 above 0-3); must be convex. |
 | `box` | `min`, `max` corner points. |
 | `offset` | Per-axis ranges around the baseline point, e.g. `{x: [-10 mm, 10 mm], z: [-8 mm, 8 mm]}`. |
+
+Optional `resolution` per variable (a length, or `null` for continuous) overrides the
+study-level value; see below.
+
+### `resolution`: producible hardpoints
+
+Every optimised hardpoint coordinate is an integer multiple of `resolution` (default
+`0.5 mm`, absolute vehicle-frame coordinates, not an offset from the baseline). The optimisers
+search continuously; each design is snapped to the nearest grid node before it is evaluated,
+and the history, best design, Pareto designs and exported YAML hold the snapped design.
+
+```yaml
+resolution: 0.5 mm          # default; `null` = continuous (the old behaviour)
+variables:
+  - point: front.uca_front
+    domain: {hexahedron: {vertices: [...]}}
+    resolution: 1 mm        # per-variable override (or `null`)
+```
+
+- Box and offset domains: each free axis snaps to the nearest node inside the bounds (floor or
+  ceil at an off-grid bound). A fixed axis of an offset domain stays at the baseline value.
+- Hexahedron: if the rounded point leaves the region, the nearest grid node inside it is taken.
+- A domain without any grid node is rejected when the study loads.
+- The baseline (reference) design is evaluated as it is, even if some of its points are off the
+  grid (for example `pushrod_outer` at 337.4 mm); candidate designs are on the grid.
+- The surrogate training dataset is not snapped. Surrogate predictions and active-learning
+  infill points use the snapped design (see the [surrogate guide](surrogate.md)).
+- Only length-valued hardpoint coordinates are snapped.
 
 `sphere` and `cylinder` regions are constraint-only (`inside` / `outside`); they are not
 valid variable domains.
@@ -117,12 +146,14 @@ left corner of each axle on a fixed grid. Only symmetric variables are supported
 | `hpo.n_trials` | Optuna trials per axle (default 100). |
 | `hpo.timeout` | Search time budget with a unit, e.g. `4 h` (default `4 h`; `null` for none). |
 | `hpo.parallel` | `auto` (axles in parallel on CUDA, sequential on CPU), `true` or `false`. |
+| `hpo.max_epochs` | Epoch cap of each search trial (default 300; `null`: `training.max_epochs`). The effective cap is the smaller of the two. The final retrain of the best configuration still uses `training.max_epochs`. |
+| `hpo.subsample` | Training rows each search trial uses (default `null`: all). Same seeded subset for all trials; the validation split stays complete. The final retrain uses all rows. |
 | `active_learning.max_iterations` | Iteration cap of `optimize --surrogate` (default 50). |
 | `active_learning.fom_evaluations` | FOM evaluation budget of the whole run, baseline included (default 2000). |
 | `active_learning.time` | Wall-time budget with a unit, e.g. `2 h` (default none). |
 | `active_learning.surrogate_evaluations` | Budget of each inner optimisation on the networks (default 20000). |
 | `active_learning.infill` | `top` extra candidates (default 0) and `perturb` random points (default 4) besides the predicted optimum. |
-| `active_learning.finetune` | `epochs` (default 200), `weight` (default 5.0) of the new dataset rows, and `replay` (default 4096): each fine-tuning uses all active-learning rows plus a fresh random subset of `replay` earlier train rows (validation split unchanged); early stopping scores the mean of the validation score and the score on all active-learning rows. |
+| `active_learning.finetune` | `epochs` (cap, default 60), `weight` (default 5.0) of the new dataset rows, `replay` (default 2048) and `patience` (default 30). Each fine-tuning uses all active-learning rows plus `replay` earlier train rows (drawn once per run, kept on the device; validation split unchanged); early stopping scores the mean of the validation score and the score on all active-learning rows and stops after `patience` epochs without a new best. Scheduling: `trigger` (default 1.0) fine-tunes an axle only if the residual of the new verified point exceeds it (tolerance units; 0 = always); after `skip_after` (2) consecutive fine-tunes that kept the previous weights the axle is skipped for `skip_for` (2) iterations unless the residual exceeds `stall_override * trigger` (default 3; `skip_for: 0` disables the rule). `on_cpu` (`skip` default, or `run`): with the networks on the CPU fine-tuning is skipped unless set to `run`. All optional. |
 | `active_learning.margin` | Constraint margin on the normalised `g` during the network search (default 0.05). |
 | `active_learning.trust_region` | `initial`, `min`, `max` radius in the unit cube (defaults 0.2, 0.01, 0.5). |
 | `active_learning.stop` | `eps_f` (relative agreement, default 0.01) and `patience` (iterations, default 5). |
@@ -142,7 +173,7 @@ surrogate:
     fom_evaluations: 2000
     surrogate_evaluations: 20000
     infill: {top: 0, perturb: 4}
-    finetune: {epochs: 200, weight: 5.0, replay: 4096}
+    finetune: {epochs: 60, weight: 5.0, replay: 2048, patience: 30, trigger: 1.0}
     margin: 0.05
     trust_region: {initial: 0.2, min: 0.01, max: 0.5}
     stop: {eps_f: 0.01, patience: 5}

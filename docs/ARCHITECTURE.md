@@ -2055,7 +2055,7 @@ The surrogate predicts the **left corner** of each axle on a fixed grid (front: 
 
 | Module | Role |
 |---|---|
-| [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry: name, source column, encoding (`value`, `cos`, `sin`), SI tolerance, axle membership. 32 front and 31 rear channels. |
+| [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry: name, source column, encoding (`value`, `line_angle`), SI tolerance, axle membership; `wrap_line_angle`. 29 front and 28 rear channels. |
 | [grid.py](../src/suspkin/surrogate/grid.py) | Fixed output grid per axle (`AxleGrid`): travel and, on the front, rack; both contain 0. |
 | [extract.py](../src/suspkin/surrogate/extract.py) | Corner extractor: one design's left-corner sweep gives the channel tensor `Y` and the validity mask. |
 | [data_types.py](../src/suspkin/surrogate/data_types.py) | `AxleDataset`: the in-memory contract between sampling and training. |
@@ -2141,7 +2141,7 @@ Options and exit codes are in the [CLI guide](guides/cli.md). Settings are in th
 - Process pools: FOM workers never import torch. On Windows the pools use the spawn method, so a script that calls `sample_axle`, `search_axles` or `run_active_learning` directly needs an `if __name__ == "__main__":` guard. The CLI is safe.
 - Reproducibility: with the same seed, a run repeats on the same device. CPU and CUDA runs are not bit-identical, because deterministic algorithms are requested in warn-only mode.
 - Fine-tuning uses `training.finetune_lr_factor` (default 0.1) and no warm-up. The returned model is never worse than the starting weights on the scoring set.
-- Compatibility: models and datasets store the grid, design-space and vehicle hashes and the channel list. The entry points `sample --resume`, `train`, `validate` and `optimize --surrogate` are being changed to refuse a mismatch. Until that change lands, do not rely on this check.
+- Compatibility: models and datasets store the grid, design-space and vehicle hashes and the channel list. The entry points `sample --resume`, `train`, `validate` and `optimize --surrogate` refuse a mismatch.
 
 ### 15.6 Where `metrics.batch` fits
 
@@ -2167,7 +2167,7 @@ Options and exit codes are in the [CLI guide](guides/cli.md). Settings are in th
 - **One ARB type per batch**: mixed ARB types in one batch are unsupported.
 - **Unsupported vehicle-sweep columns**: a constraint or objective that needs a column the vehicle layer does not provide is reported as unsolved, not approximated.
 - **Mask and extrapolation**: the mask is "kinematically solved and finite" only. Coilover range and toggle margin are constraints and channels, not mask. A query outside the grid, or touching a masked node, gives NaN for the affected outputs; the layer never extrapolates.
-- **Channels**: no ARB channel (the drop-link position is rebuilt from the rocker angle) and no wheel-centre z (it follows from the travel). Swing angles are cos/sin pairs.
+- **Channels**: no ARB channel (the drop-link position is rebuilt from the rocker angle) and no wheel-centre z (it follows from the travel). Swing angles are line angles wrapped to (-90, 90] degrees (direction dropped, see DESIGN_PLAN S17).
 - **Derived rates**: gains, motion ratios and wheel rates come from finite differences of the grid curves, so their accuracy is bounded by the grid spacing. Spring rates and ARB stiffness are not design variables on this path.
 - **Bound networks**: a model is bound to one vehicle baseline, one design space and one output grid. Changing any of them needs a new dataset ([15.5](#155-device-handling-and-installation)).
 - **Benchmark not yet run**: the claim that the active-learning optimizer matches direct DE at the same FOM budget is unmeasured ([DESIGN_PLAN 13.13](DESIGN_PLAN.md)).

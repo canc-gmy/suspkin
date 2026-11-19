@@ -306,6 +306,15 @@ written through `right_overrides`, and their regions are in right-side coordinat
 
 Regions are in the vehicle frame (ISO 8855), on the left side (y > 0) unless stated otherwise.
 
+**Hardpoint grid (S16).** Designs must be producible: the study has a `resolution` (default
+0.5 mm; `null` = continuous; optional per-variable override). `DesignSpace.points`,
+`to_vehicle` and `quantise_x` round every free coordinate to an integer multiple of the
+resolution in absolute vehicle-frame coordinates: per axis to the nearest node inside the bounds
+for box and offset domains, and to the nearest node inside the region (searching neighbouring
+nodes in growing cubes) for a hexahedron. A domain that contains no node is a study error at load
+time. `Problem.evaluate_batch` evaluates, caches (raw `x` as alias) and logs the snapped design;
+the finite-difference step is at least one grid step. The baseline vehicle is evaluated as it is.
+
 ### 7.3 Units (O11)
 
 A value is a plain number (SI) or a string with a unit (`"30 mm"`, `"-1.5 deg"`,
@@ -578,7 +587,7 @@ The package name `suspkin` is a placeholder.
 | D10 | Corner solver | Own damped Newton with analytic Jacobian replaces `scipy.optimize.root` as the primary corner solver (decided 2026-11-17); scipy `hybr` with the same Jacobian stays as fallback, and far guesses go through staged continuation from the guess. Why: finite-difference `hybr` needed about 15 residual evaluations per solve with numpy overhead on 3-vectors; Newton needs about 3 on the reference car and a scalar evaluation is much cheaper, with results identical to 1e-9. Continuation gained a linear predictor and a 0.05 rad branch-jump guard that triggers step halving (extra work in rack sweeps near lock). |
 | S1 | Surrogate scope | v1.1.0 (was planned as v0.9.0 before v1.0.0 shipped) brings the NN surrogate forward from v3.x, for kinematics only (no stresses). Every reported design is FOM-verified (§13). Symmetric variables only; asymmetric variables deferred (decided 2026-11-18). |
 | S2 | Axle split (decided 2026-11-18) | Two independent models, front and rear. Inputs = the axle's design variables in the unit cube; vehicle data are not inputs. |
-| S3 | Outputs (decided 2026-11-18) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as (cos, sin) to avoid the ±π wrap. As built: the mask is "solved and finite" only; `toggle_margin` and the solver coordinates `theta_uca`, `theta_lca`, `psi` are channels; there is no ARB or wheel-centre-z channel (§13.4). |
+| S3 | Outputs (decided 2026-11-18) | Left-corner curves on a fixed grid (front: travel × rack, rear: travel), channel registry of §13.4, with a validity mask. Swing angles instead of instant-centre coordinates, each encoded as a (cos, sin) pair to avoid the ±π wrap (replaced by the wrapped line angle, S17). As built: the mask is "solved and finite" only; `toggle_margin` and the solver coordinates `theta_uca`, `theta_lca`, `psi` are channels; there is no ARB or wheel-centre-z channel (§13.4). |
 | S4 | Derived quantities (decided 2026-11-18) | Rates (gains, motion ratios, wheel and ride rates) are finite differences of predicted curves, not network outputs. |
 | S5 | Vehicle metrics (decided 2026-11-18) | Computed by an analytic, vectorised layer from the curves (§13.5), never predicted. Layer error measured separately from network error. As built: layer error is far below the §13.5 tolerances (§13.16). |
 | S6 | Sampling (decided 2026-11-18) | Latin hypercube (`random-cd`), seeded, baseline as row 0; default 20 000 samples per axle; infeasible samples kept. As built: `dataset.lhs_optimization: auto` (`random-cd` up to 5000 samples, none above); the LHS matrix is computed once and cached in `lhs.npy`. |
@@ -590,6 +599,10 @@ The package name `suspkin` is a placeholder.
 | S12 | Stopping (decided 2026-11-18) | Model–FOM agreement for p iterations, or stagnation of the best FOM-verified f, or budgets. As built: also `radius_min` (radius at its minimum without improvement for p iterations) and `no_candidates`; see §13.9. |
 | S13 | Interface (decided 2026-11-18) | `SurrogateProblem` with the v0.8 `evaluate_batch` interface, so existing drivers run unchanged; `suspkin surrogate sample|train|validate`, `suspkin optimize --surrogate DIR`. As built: `SurrogateProblem` subclasses the v0.8 `Problem`; the sample, train and validate commands take `--root` (`--out` is a deprecated alias of `--root` for `sample`). |
 | S14 | Go/no-go (decided 2026-11-18) | Slice S0 profiles the FOM first; the plan goes on only if a surrogate evaluation is at least 100× cheaper. Result: go (§13.15). |
+| S15 | Search trial budget (decided 2026-11-18) | Search trials are screening runs: capped at `hpo.max_epochs` epochs (default 300) on a seeded `hpo.subsample` of the train rows, scored on the full validation split; the best configuration is retrained with the full budget. The budget is stored in the study and a resume with a different one is refused (§13.8). |
+| S16 | Producible hardpoints (decided 2026-11-18) | Every hardpoint coordinate an optimiser chooses is a multiple of the study `resolution` (default 0.5 mm, absolute vehicle-frame grid, `null` = continuous, per-variable override). Quantised at decode time (round to the nearest node; nearest node inside the domain for bounds and hexahedra); the optimisers keep a continuous population and evaluate, record and export the snapped design. The surrogate input is the snapped design re-encoded; the training dataset and its hashes stay continuous. The baseline is evaluated as it is. Active learning verifies snapped candidates, dedupes infill by design and clamps the trust-region radius to one grid step (§13.9). |
+| S17 | Swing angles as line angles (decided 2026-11-19) | The three swing-angle channels hold the angle of the line (reference point → instant centre) wrapped to (−π/2, π/2], tolerance 0.05 deg, instead of the (cos, sin) of a direction: the direction flips by π when the IC changes side (parallel arms), a step the network cannot fit (rear search score stuck near 15). Roll centre, pitch centre and anti-features need only the line. The search objective stays the mean over channels; per-channel ratios (median, max, worst 5) are stored in the model meta and shown in the HPO report so one bad channel cannot hide. `toggle_margin = min(a, π − a)` has a kink at a = π/2 (maximum margin); the smooth alternative is to predict `a` (angle between pushrod and rocker lever) and derive the margin, not done. |
+| S18 | Fine-tuning cost (decided 2026-11-19) | In the smoke run the per-iteration fine-tune took 309 to 361 s (about 55 % of an iteration), about 90 % of it in training epochs and the rest in data load and normalisation; the front never improved on its starting weights (kept_init) from iteration 1 on. Replay rows and validation split are now normalised and moved to the device once and extended with the new rows (replay drawn once per run); `epochs` 60 (cosine schedule compressed to it), `replay` 2048, `patience` 30 counted from the best epoch of the run; an axle is fine-tuned only if the residual of the new verified point exceeds `trigger` (1.0 tolerance), and after `skip_after` 2 kept-init fine-tunes it is skipped for `skip_for` 2 iterations unless the residual exceeds 3x the trigger. Skips are logged (`skipped_<axle>` and `skip_reason_<axle>` in al.csv). Addendum: when the networks run on the CPU (resolved device `cpu`) fine-tuning is skipped by default (`finetune.on_cpu: skip`, reason `cpu`; `run` forces it), because a CPU fine-tune of the front network takes many minutes; CUDA is unchanged; the never-worse guarantee and the trust-region rules are unchanged. Measured on the benchmark networks: both axles about 50 s worst case (front 39 s, rear 9 s with warm cache) instead of about 315 s. |
 
 ---
 
@@ -660,14 +673,25 @@ Channels per grid point, left corner, body frame, SI (registry in code; starting
 |---|---|
 | Alignment | camber, toe, steer angle (front only), caster, KPI, scrub radius, mechanical trail |
 | Wheel position | half-track change, contact-patch dx and dy, wheel-centre recession |
-| Centres | front-view swing angle, side-view swing angle, side-view wheel-centre angle, each as (cos, sin) |
+| Centres | front-view swing angle, side-view swing angle, side-view wheel-centre angle, each as the line angle wrapped to (−π/2, π/2] (S17) |
 | Actuation | coilover length, rocker angle, pushrod angle, toggle margin |
 | Joints | misalignment angle per rod end and ball joint (the 8 entries of `JOINTS`) |
 | Solver coordinates | `theta_uca`, `theta_lca`, `psi`: rebuild the exact corner states in the evaluator |
 | Validity | per-point mask: kinematically solved and finite only |
 
-**As built.** The registry has 32 channels on the front (11 alignment and wheel position, 6 swing-angle components, 4 actuation, 8 joints, 3 solver coordinates) and 31 on the rear (the steer angle is front only). There is no ARB channel: the drop-link point follows exactly from the rocker angle, so the vehicle layer rebuilds it. There is no wheel-centre z: it equals the static z plus the travel. Coilover range and toggle margin are constraints and channels, not part of the mask.
+**As built.** The registry has 29 channels on the front (11 alignment and wheel position, 3 swing-line angles, 4 actuation, 8 joints, 3 solver coordinates) and 28 on the rear (the steer angle is front only). There is no ARB channel: the drop-link point follows exactly from the rocker angle, so the vehicle layer rebuilds it. There is no wheel-centre z: it equals the static z plus the travel. Coilover range and toggle margin are constraints and channels, not part of the mask.
 
+- **Swing-line angles (S17).** The three swing angles are stored as the angle of the line
+  reference point → instant centre, taken modulo π and wrapped to (−π/2, π/2] (0 = horizontal
+  line; the sign is that of the metric tables: positive = anti-geometry for the side view, IC above
+  the patch for the front view). The metric tables give a direction, which jumps by π when
+  the IC moves from one side of the reference point to the other (nearly parallel arms, about 48 %
+  of the rear designs of the surrogate study): a step function of the design that capped the
+  search score near 15. Every consumer needs only the line: the roll centre and pitch centre are
+  intersections of lines, and anti-dive / anti-squat / anti-lift are tan(angle), which has period π.
+  The wrapped angle is smooth and small (a few degrees). Tolerance 0.05 deg. The channel
+  list changed, so datasets and models of the old encoding are refused by the channel check.
+  Caveat: a vertical line (angle ±π/2) would still wrap; it does not occur for real suspensions.
 - **Swing angles, not instant-centre coordinates.** Instant centres go to infinity for
   parallel arms; the angles stay bounded and smooth. Anti-features use tan(angle)
   (`metrics.vehicle`); the symmetric roll centre follows from the front-view angle and
@@ -773,6 +797,19 @@ Front and rear train in two separate processes, each with its own Optuna study.
   validation error.
 - **Storage and budget:** SQLite in the model folder, so a search resumes. Budget is
   `n_trials` plus `timeout`.
+- **Trial budget vs final retrain (S15):** one full-length trial on 20 000 samples took
+  about 85 min, so a 90 min search ran 1 or 2 trials. Each trial now trains at most
+  `hpo.max_epochs` epochs (effective cap = min with `training.max_epochs`; patience
+  `min(training.patience, max(10, cap // 10))`; Hyperband `max_resource` = cap) on
+  `hpo.subsample` training rows (seeded by the dataset seed, same rows for all trials).
+  The validation split is always complete, so trial scores are comparable with the
+  retrained model. The best configuration is then retrained on the full train split with
+  `training.max_epochs` and `training.patience`. The budget is recorded in the study; a
+  resume under another budget is an error, and trials left RUNNING by a killed process
+  are marked FAIL.
+- **Report:** `models/hpo_report.md` (written after the search, or on demand by
+  `scripts/surrogate_hpo_report.py --root DIR`, read-only on `optuna.db`) summarises
+  budget, trial states, best and top trials, pruning and the final model.
 - **When it runs:**
   - once on the initial dataset;
   - in the active-learning loop the best architecture is kept and retrained;
@@ -798,8 +835,10 @@ Iteration k:
 4. **Residual.** r = y_FOM − y_NN on the curves at the infill points, and the
    prediction errors of f and g. Logged per iteration.
 5. **Training on the residual** (S10, variant A): add the infill points to the dataset
-   with weight w and fine-tune from the current weights for a fixed number of epochs
-   (early stopping on validation). The loss on those points is the residual
+   with weight w and fine-tune from the current weights for at most `epochs` epochs
+   (early stopping with `patience` on validation and the new points; S18). On the CPU
+   fine-tuning is skipped unless `finetune.on_cpu: run` (S18); the reason is logged per axle
+   in `al.csv` (`skip_reason_<axle>`). The loss on those points is the residual
    y_FOM − y_NN. Variant B (frozen base + correction model δ(x)) was considered and not
    chosen: the residual points are few and clustered along the optimizer path.
 6. **Trust region.** Compute ρ = FOM improvement / predicted improvement. Expand the
@@ -824,6 +863,17 @@ Result: the best FOM-verified design, with the v0.8 run outputs (§7.14).
 - Stop reasons: `agreement`, `stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget`, `no_candidates` (the network search returns nothing).
 - The FOM budget counts every row of the run folder's history, baseline and resumed rows included. A resume refuses a study whose constraints or objectives changed.
 - The inner network search budget is `active_learning.surrogate_evaluations` (default 20 000).
+- Hardpoint grid (S16). The network input is the snapped design re-encoded to the unit cube; the
+  FOM verifies the snapped candidate. Infill points (top-m and perturbations) are snapped, then
+  deduplicated against the FOM history; if no new grid design remains the loop stops with
+  `no_candidates`. The effective minimum radius is `max(trust_region.min, one grid step)` (largest
+  step over the variables, capped by `max`), and the boundary test of the doubling rule allows
+  half a grid step of slack. The `baseline` history row is the snapped baseline. The training
+  dataset is not snapped and the hashes ignore the resolution.
+
+Shared models: with only `ROOT/models/` (no dataset) `optimize --surrogate` checks the model
+metadata alone and disables fine-tuning per axle (`skip_reason` `no_dataset`); `validate` and
+`train` still need the dataset.
 
 ### 13.10 Study YAML: `surrogate` block
 
@@ -839,7 +889,7 @@ surrogate:
     max_iterations: 50
     fom_evaluations: 2000
     infill: {top: 0, perturb: 4}
-    finetune: {epochs: 200, weight: 5.0}   # S10 variant A
+    finetune: {epochs: 60, weight: 5.0, replay: 2048, patience: 30, trigger: 1.0}   # S10, S18
     margin: 0.05                        # delta on normalised g
     trust_region: {initial: 0.2, min: 0.01, max: 0.5}
     stop: {eps_f: 0.01, patience: 5}
@@ -923,6 +973,8 @@ Side finding, outside v1.1: the same vectorisation applied to the FOM tables and
 `vehicle_summary` would make every v0.8 evaluation about 2× faster.
 
 **Benchmark (v1.1, not yet run).** Study `configs/studies/fs_reference_surrogate.yaml`: 90 variables (all 15 hardpoints of each axle as ±10 mm offsets, wheel centres ±5 mm, symmetric). Runner `scripts/benchmark_surrogate.py` with resumable stages `sample`, `train`, `validate`, `al`, `de_same`, `de_total` and `report`. Command: `python -m uv run python scripts/benchmark_surrogate.py --device cuda --workers auto`. Estimated wall time about 4 to 6 h: sampling about 30 min, architecture search about 1.5 to 2 h, active learning about 1 to 3 h, direct DE at the total cost about 30 min. The report with both numbers of §13.13 is written to `results/benchmark_surrogate/run/benchmark.md`.
+
+**Inner-loop timing note (2026-11-19).** On the benchmark study (90 variables, DE `weighted`, GTX 1650, GPU shared with other work) one design cost about 14 ms in the active-learning inner loop (20 000 evaluations in 275 to 300 s), against 2.5 ms for the network alone. The rest was per-design Python in the design decode (`DesignSpace.points` 4.5 ms per call, called three times per design: vehicle, history row, history header), plus cache keys and history flushes. After vectorising the decode over the batch, caching the baseline encoding and flushing the history once per batch it is about 2.6 to 3.3 ms per design (about 50 to 62 s for 20 000 evaluations, depending on machine load). The stored history is bit-identical.
 
 ### 13.16 As-built performance and accuracy (v1.1.0)
 

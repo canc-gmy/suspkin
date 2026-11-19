@@ -55,6 +55,7 @@ print(sk.vehicle_summary(vehicle))
 - [Tutorial](getting-started/tutorial.md): the CLI and the Python API on the reference car.
 - [Vehicle YAML](guides/vehicle-yaml.md) and [Study YAML](guides/study-yaml.md): file formats.
 - [Python API](reference/api.md) and [Command line](guides/cli.md).
+- [Surrogate optimisation](guides/surrogate.md) (experimental): neural-network surrogate for many-variable studies.
 - [Architecture & math](ARCHITECTURE.md): conventions, formulas and module reference.
 - [Stability and versioning](guides/stability.md): what is covered by SemVer.
 - Source: [github.com/canc-gmy/suspkin](https://github.com/canc-gmy/suspkin).
