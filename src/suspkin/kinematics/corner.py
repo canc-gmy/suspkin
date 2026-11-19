@@ -30,6 +30,7 @@ from scipy.optimize import root
 
 from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId
+from suspkin.kinematics import _fast
 from suspkin.kinematics.rocker import KinematicsError, RockerCtx, RockerTuple, side_sign
 
 _RESIDUAL_TOL = 1e-9
@@ -157,6 +158,7 @@ class _Ctx:
         self.spin0_t = _tup(self.spin0)
         self.static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
         self.spring_chassis = _tup(p["spring_chassis"])
+        self.fast_arrays: tuple[Vec, Vec] | None = None  # packed lazily by ``_fast.arrays``
 
 
 def _eval(
@@ -302,6 +304,10 @@ def _solve3(j: list[list[float]], f: _V3) -> _V3 | None:
 
 def _newton(c: _Ctx, x0: _V3, travel: float, ti: _V3) -> tuple[_V3, _V3] | None:
     """Damped Newton on the 3x3 closing system; None if it does not converge."""
+    if _fast.available():
+        handled, res = _fast.newton(c, x0, travel, ti)
+        if handled:
+            return res
     x = x0
     try:
         f, jm = _eval(c, x[0], x[1], x[2], travel, ti, True)

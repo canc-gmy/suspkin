@@ -75,8 +75,53 @@ tables and the summary at 31, 61 and 121 points, against the previous code:
 
 The golden snapshot tests pass unchanged, without `--update-golden`.
 
-## Not done
+## Optional numba fast path
 
-What remains is spread over the scalar Newton core (`_eval`, `_newton`) with no single hot
-spot. Going further would need batching the four corners of a pose into numpy arrays, or an
-optional numba kernel.
+Install the `fast` extra (`uv sync --extra fast`, or `pip install suspkin[fast]`) to compile the
+solver core with numba:
+
+- `newton` compiles the corner Newton solve (`_eval`, the analytic Jacobian, `_solve3`).
+- `ground` compiles the whole ground-contact secant of one corner, including the rocker, the wheel
+  centre and the contact height.
+
+These kernels live in `kinematics/_nb_kernels.py`; `kinematics/_fast.py` loads them lazily.
+Without numba, or with `SUSPKIN_NO_NUMBA=1`, the pure-Python path runs and the results above
+are reproduced bit for bit. Fallbacks:
+
+- A kernel that reports a failure (no convergence, branch jump, unreachable rocker, and so on)
+  makes that corner re-run in pure Python, so errors and continuation fallbacks are unchanged.
+- A numba failure at import, compile or call time disables the fast path for the process, with
+  one `RuntimeWarning`.
+
+Measured on the same machine, in ms:
+
+| Case | Points | Pure Python | numba | Speed-up |
+|---|---:|---:|---:|---:|
+| Corner solve, 1 pose | 1 | 0.28 | 0.15 | 1.9x |
+| Corner sweep, FL travel | 61 | 2.3 | 1.4 | 1.6x |
+| Vehicle sweep, heave | 61 | 26.8 | 12.1 | 2.2x |
+| Vehicle sweep, roll | 61 | 26.8 | 11.9 | 2.3x |
+| Vehicle sweep, rack | 61 | 21.6 | 11.8 | 1.8x |
+| `run_standard_studies` | 31 | 110.3 | 65.4 | 1.7x |
+| | 61 | 162.9 | 92.1 | 1.8x |
+| | 121 | 317.1 | 144.7 | 2.2x |
+
+Against the code before this work, `run_standard_studies` at 61 points goes from 336 ms to 92 ms,
+3.6 times faster.
+
+The compile cost is paid once per process:
+
+- The first compile takes about 2 s. After that, numba's on-disk cache (`cache=True`) brings the
+  one-off cost to about 0.8 s for the numba import and the cache load.
+- That cost pays off in long-lived processes and long runs: the web app, an optimizer run, or
+  surrogate dataset generation.
+- For a single one-shot `run_standard_studies` it is more than the time saved. Set
+  `SUSPKIN_NO_NUMBA=1` there if startup latency matters.
+
+The numba results match the pure-Python path to rtol 1e-9; both are checked in
+`tests/unit/test_fast_kernel.py`. Against the old code, the comparison above gives the same
+worst-case numbers in both modes.
+
+After the kernels, the remaining time is Python: `_pose` and `_finish`, the ARB solve, building
+the `CornerState` arrays, and the metric tables. Going further would mean moving those into
+kernels too.

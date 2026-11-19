@@ -34,14 +34,19 @@ from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.models import Vehicle
+from suspkin.kinematics import _fast
 from suspkin.kinematics.arb import ArbState, solve_arb
 from suspkin.kinematics.corner import (
     _NEWTON_F_TOL,
     CornerState,
     _Ctx,
+    _finish,
     _Pose,
+    _pose,
     _solve_light,
     _state,
+    _tie_inner,
+    _tup,
 )
 from suspkin.kinematics.rocker import KinematicsError
 
@@ -150,6 +155,20 @@ def _solve_corner_ground(
         else:
             cp = _contact(st.wheel_center, st.spin_axis, n, radius)
         return cp, float(n @ cp) + offset - z_static
+
+    if guess is not None and _fast.available() and (c.rack_axis is not None or rack == 0.0):
+        tie_inner = _tie_inner(c, rack)
+        res = _fast.ground(c, n, offset, z_static, _tup(tie_inner), guess, slope0)
+        if res is not None:
+            t_k, x_k, f_k, phi0, slope_k = res
+            try:
+                pose = _pose(c, x_k, f_k, t_k, rack, tie_inner, phi0)
+            except KinematicsError:
+                pose = None
+            if pose is not None:
+                cp, g = height(pose)
+                return _finish(c, pose), cp, g, slope_k
+        # Any failure: run the pure-Python path below from the same inputs.
 
     if guess is not None:
         t = guess.travel

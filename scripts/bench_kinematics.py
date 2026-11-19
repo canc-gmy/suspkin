@@ -7,7 +7,8 @@ Times, on ``configs/vehicles/fs_reference.yaml`` (median of repeats, single proc
    solver only;
 3. ``run_standard_studies`` end to end at 31/61/121 points (solve + metric tables).
 
-Run: ``python -m uv run python scripts/bench_kinematics.py [--repeats N] [--profile]``.
+Run: ``python -m uv run python scripts/bench_kinematics.py [--repeats N] [--profile]
+[--no-numba]``. ``--no-numba`` forces the pure-Python path (sets ``SUSPKIN_NO_NUMBA``).
 ``--profile`` prints a cProfile top list of ``run_standard_studies(steps=61)``.
 """
 
@@ -15,8 +16,10 @@ from __future__ import annotations
 
 import argparse
 import cProfile
+import os
 import pstats
 import statistics
+import sys
 import time
 from collections.abc import Callable
 from functools import partial
@@ -24,7 +27,11 @@ from pathlib import Path
 
 import numpy as np
 
+if "--no-numba" in sys.argv:  # must be set before suspkin is used
+    os.environ["SUSPKIN_NO_NUMBA"] = "1"
+
 from suspkin.geometry import build_corners, load_vehicle
+from suspkin.kinematics import _fast
 from suspkin.kinematics.corner import solve_corner, sweep_corner
 from suspkin.report.studies import run_standard_studies
 from suspkin.sweeps import sweep_vehicle
@@ -47,12 +54,19 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--repeats", type=int, default=7)
     ap.add_argument("--profile", action="store_true")
+    ap.add_argument("--no-numba", action="store_true", help="force the pure-Python path")
     args = ap.parse_args()
 
     vehicle = load_vehicle(VEHICLE)
     corners = build_corners(vehicle)
     fl = corners["FL"]
     rack_lo, rack_hi = vehicle.front.steering.rack_travel  # type: ignore[union-attr]
+
+    t0 = time.perf_counter()
+    path = "numba" if _fast.available() else "pure Python"  # loads/compiles the kernels
+    sweep_vehicle(vehicle, heave=np.linspace(-0.005, 0.005, 3))
+    print(f"path: {path}")
+    print(f"one-off kernel load + first vehicle sweep: {time.perf_counter() - t0:.3f} s")
 
     reps = args.repeats
     rows: list[tuple[str, float]] = [
