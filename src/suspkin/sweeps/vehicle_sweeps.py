@@ -9,7 +9,8 @@ import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import Corner, CornerId, build_corners
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
+from suspkin.geometry.vectors import body_rotation_batch
 from suspkin.kinematics.corner import _Ctx
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.kinematics.vehicle import VehicleState, solve_vehicle
@@ -142,23 +143,6 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
     return pd.DataFrame(cols)
 
 
-def _rot_batch(roll: Arr, pitch: Arr) -> Arr:
-    """Batched ``body_rotation``: ``R_y(pitch) R_x(roll)``, shape ``(N, 3, 3)``."""
-
-    def axis_rot(k: Arr, ang: Arr) -> Arr:
-        out: Arr = (
-            np.eye(3)
-            + np.sin(ang)[:, None, None] * k
-            + (1.0 - np.cos(ang))[:, None, None] * (k @ k)
-        )
-        return out
-
-    kx = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
-    ky = np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
-    out: Arr = axis_rot(ky, pitch) @ axis_rot(kx, roll)
-    return out
-
-
 def _ground_arrays(
     states: Sequence[VehicleState],
     corners: dict[CornerId, Corner],
@@ -171,7 +155,7 @@ def _ground_arrays(
     pitch = np.array([s.pitch for s in states], dtype=np.float64)
     heave = np.array([s.heave for s in states], dtype=np.float64)
     pivot = np.array([s.pivot for s in states], dtype=np.float64).reshape(-1, 3)
-    rot = _rot_batch(roll, pitch)
+    rot = body_rotation_batch(roll, pitch)
     for cid in _CORNERS:
         spin = np.array([s.corners[cid].spin_axis for s in states], dtype=np.float64)
         sw = np.einsum("nij,nj->ni", rot, spin.reshape(-1, 3))

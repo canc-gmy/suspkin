@@ -28,8 +28,16 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import root
 
-from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId
+from suspkin.geometry.vectors import (
+    _V3,
+    _as3,
+    _cross3,
+    _dot3,
+    _sub3,
+    _unit3,
+    wheel_spin_axis,
+)
 from suspkin.kinematics import _fast
 from suspkin.kinematics.rocker import KinematicsError, RockerCtx, RockerTuple, side_sign
 
@@ -45,7 +53,6 @@ _NEWTON_STALL_F_TOL = 1e-10
 _MAX_BACKTRACKS = 10
 
 Vec = NDArray[np.float64]
-_V3 = tuple[float, float, float]
 
 
 @dataclass(frozen=True)
@@ -69,32 +76,6 @@ class CornerState:
     toggle_margin: float
     max_residual: float
     coilover_in_range: bool = True
-
-
-def _tup(v: ArrayLike) -> _V3:
-    a = np.asarray(v, dtype=np.float64)
-    return (float(a[0]), float(a[1]), float(a[2]))
-
-
-def _sub(a: _V3, b: _V3) -> _V3:
-    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-
-def _unit(a: _V3) -> _V3:
-    n = sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
-    return (a[0] / n, a[1] / n, a[2] / n)
-
-
-def _cross(a: _V3, b: _V3) -> _V3:
-    return (
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
-
-
-def _dot(a: _V3, b: _V3) -> float:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
 def _rodrigues(k: _V3, cs: float, sn: float, v: _V3) -> _V3:
@@ -131,21 +112,21 @@ class _Ctx:
         self.corner = corner
         self.sign = side_sign(corner)
         self.p = p
-        self.uca_front = _tup(p["uca_front"])
-        self.lca_front = _tup(p["lca_front"])
-        self.uca_hat = _unit(_tup(p["uca_rear"] - p["uca_front"]))
-        self.lca_hat = _unit(_tup(p["lca_rear"] - p["lca_front"]))
+        self.uca_front = _as3(p["uca_front"])
+        self.lca_front = _as3(p["lca_front"])
+        self.uca_hat = _unit3(_as3(p["uca_rear"] - p["uca_front"]))
+        self.lca_hat = _unit3(_as3(p["lca_rear"] - p["lca_front"]))
         self.ubj0 = np.asarray(p["uca_outer"])
         self.lbj0 = np.asarray(p["lca_outer"])
         d0 = self.ubj0 - self.lbj0
         self.len_ubj = float(np.linalg.norm(d0))
         self.len_tie = float(np.linalg.norm(p["tie_outer"] - p["tie_inner"]))
         self.wc0 = np.asarray(p["wheel_center"])
-        self.r_ubj = _sub(_tup(self.ubj0), self.uca_front)
-        self.r_lbj = _sub(_tup(self.lbj0), self.lca_front)
-        self.d0_hat = _unit(_tup(d0))
-        self.r_tie = _tup(p["tie_outer"] - self.lbj0)
-        self.r_wc = _tup(self.wc0 - self.lbj0)
+        self.r_ubj = _sub3(_as3(self.ubj0), self.uca_front)
+        self.r_lbj = _sub3(_as3(self.lbj0), self.lca_front)
+        self.d0_hat = _unit3(_as3(d0))
+        self.r_tie = _as3(p["tie_outer"] - self.lbj0)
+        self.r_wc = _as3(self.wc0 - self.lbj0)
         self.wc0_z = float(self.wc0[2])
         cfg = corner.axle_cfg
         self.spin0 = wheel_spin_axis(corner.side, cfg.wheel.static_camber, cfg.wheel.static_toe)
@@ -153,11 +134,11 @@ class _Ctx:
         self.mount = cfg.pushrod_mount
         self.rack_axis = None if cfg.steering is None else np.asarray(cfg.steering.rack_axis)
         self.rocker = RockerCtx(corner)
-        self.po0 = _tup(p["pushrod_outer"])
-        self.r_po = _sub(self.po0, _tup(self.lbj0))
-        self.spin0_t = _tup(self.spin0)
+        self.po0 = _as3(p["pushrod_outer"])
+        self.r_po = _sub3(self.po0, _as3(self.lbj0))
+        self.spin0_t = _as3(self.spin0)
         self.static_push = float(np.linalg.norm(p["pushrod_outer"] - p["pushrod_inner"]))
-        self.spring_chassis = _tup(p["spring_chassis"])
+        self.spring_chassis = _as3(p["spring_chassis"])
         self.fast_arrays: tuple[Vec, Vec] | None = None  # packed lazily by ``_fast.arrays``
 
 
@@ -180,21 +161,21 @@ def _eval(
     uf, lf = c.uca_front, c.lca_front
     ubj = (uf[0] + ru[0], uf[1] + ru[1], uf[2] + ru[2])
     lbj = (lf[0] + lr[0], lf[1] + lr[1], lf[2] + lr[2])
-    d = _sub(ubj, lbj)
-    dn = sqrt(_dot(d, d))
+    d = _sub3(ubj, lbj)
+    dn = sqrt(_dot3(d, d))
     n = (d[0] / dn, d[1] / dn, d[2] / dn)
     u0 = c.d0_hat
-    cc = _dot(u0, n)
+    cc = _dot3(u0, n)
     if cc < -1.0 + 1e-12:
         raise ValueError("upright axis flipped")
     ik = 1.0 / (1.0 + cc)
-    w = _cross(u0, n)
+    w = _cross3(u0, n)
     phi = s * psi
     cph, sph = cos(phi), sin(phi)
     pt = _rodrigues(n, cph, sph, _min_rot(w, ik, c.r_tie))
     pw = _rodrigues(n, cph, sph, _min_rot(w, ik, c.r_wc))
     e = (lbj[0] + pt[0] - ti[0], lbj[1] + pt[1] - ti[1], lbj[2] + pt[2] - ti[2])
-    en = sqrt(_dot(e, e))
+    en = sqrt(_dot3(e, e))
     f = (dn - c.len_ubj, en - c.len_tie, lbj[2] + pw[2] - c.wc0_z - travel)
     if not jac:
         return f, None
@@ -208,7 +189,7 @@ def _eval(
     vc = 1.0 - cph
 
     def column(dd: _V3, dl: _V3) -> _V3:
-        # Vector helpers inlined (hot path); same operation order as _cross/_dot.
+        # Vector helpers inlined (hot path); same operation order as _cross3/_dot3.
         k = n0 * dd[0] + n1 * dd[1] + n2 * dd[2]
         p0 = (dd[0] - n0 * k) / dn
         p1 = (dd[1] - n1 * k) / dn
@@ -235,14 +216,14 @@ def _eval(
             dl[2] + (o0 * pw1 - o1 * pw0),
         )
 
-    da = _cross(c.uca_hat, ru)
-    db = _cross(c.lca_hat, lr)
+    da = _cross3(c.uca_hat, ru)
+    db = _cross3(c.lca_hat, lr)
     dl_b = (s * db[0], s * db[1], s * db[2])
     col_a = column((s * da[0], s * da[1], s * da[2]), (0.0, 0.0, 0.0))
     col_b = column((-dl_b[0], -dl_b[1], -dl_b[2]), dl_b)
     om = (s * n[0], s * n[1], s * n[2])
-    vt = _cross(om, pt)
-    vw = _cross(om, pw)
+    vt = _cross3(om, pt)
+    vw = _cross3(om, pw)
     col_p = (0.0, (e[0] * vt[0] + e[1] * vt[1] + e[2] * vt[2]) / en, vw[2])
     return f, [
         [col_a[0], col_b[0], col_p[0]],
@@ -261,12 +242,12 @@ def _upright_map(
     uf, lf = c.uca_front, c.lca_front
     ubj = (uf[0] + ru[0], uf[1] + ru[1], uf[2] + ru[2])
     lbj = (lf[0] + lr[0], lf[1] + lr[1], lf[2] + lr[2])
-    n = _unit(_sub(ubj, lbj))
-    cc = _dot(c.d0_hat, n)
+    n = _unit3(_sub3(ubj, lbj))
+    cc = _dot3(c.d0_hat, n)
     if cc < -1.0 + 1e-12:
         raise ValueError("upright axis flipped")
     ik = 1.0 / (1.0 + cc)
-    w = _cross(c.d0_hat, n)
+    w = _cross3(c.d0_hat, n)
     cph, sph = cos(s * psi), sin(s * psi)
 
     def rot(v: _V3) -> _V3:
@@ -276,12 +257,12 @@ def _upright_map(
 
 
 def _residuals(c: _Ctx, x: Vec, travel: float, tie_inner: Vec) -> Vec:
-    f, _ = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _tup(tie_inner), False)
+    f, _ = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _as3(tie_inner), False)
     return np.array(f)
 
 
 def _jacobian(c: _Ctx, x: Vec, travel: float, tie_inner: Vec) -> Vec:
-    _, jm = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _tup(tie_inner), True)
+    _, jm = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _as3(tie_inner), True)
     assert jm is not None
     return np.array(jm)
 
@@ -488,7 +469,7 @@ def _solve_pose(
 ) -> _Pose:
     """Solve the closing angles and the rocker (no point table, see ``_finish``)."""
     tie_inner = _tie_inner(c, rack)
-    ti = _tup(tie_inner)
+    ti = _as3(tie_inner)
 
     if guess is None:
         starts: list[_V3] = [(0.0, 0.0, 0.0)]
@@ -560,10 +541,10 @@ def _pose(
     if c.mount == "upright":
         po = on_upright(c.r_po)
     elif c.mount == "lca":
-        rr = _rodrigues(c.lca_hat, cos(s * th_l), sin(s * th_l), _sub(c.po0, c.lca_front))
+        rr = _rodrigues(c.lca_hat, cos(s * th_l), sin(s * th_l), _sub3(c.po0, c.lca_front))
         po = (rr[0] + c.lca_front[0], rr[1] + c.lca_front[1], rr[2] + c.lca_front[2])
     else:
-        rr = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), _sub(c.po0, c.uca_front))
+        rr = _rodrigues(c.uca_hat, cos(s * th_u), sin(s * th_u), _sub3(c.po0, c.uca_front))
         po = (rr[0] + c.uca_front[0], rr[1] + c.uca_front[1], rr[2] + c.uca_front[2])
     try:
         rk = c.rocker.solve_tuple(po, phi0)
@@ -584,7 +565,7 @@ def _pose(
         wheel_center=on_upright(c.r_wc),
         pushrod_outer=po,
         rocker=rk,
-        spin_axis=_unit(rot(c.spin0_t)),
+        spin_axis=_unit3(rot(c.spin0_t)),
     )
 
 
@@ -593,7 +574,7 @@ def _finish(c: _Ctx, q: _Pose) -> CornerState:
     angle, p_in, p_spring, p_arb, toggle = q.rocker
     wc, spin = q.wheel_center, q.spin_axis
     fz = spin[2]
-    up = _unit((-fz * spin[0], -fz * spin[1], 1.0 - fz * spin[2]))
+    up = _unit3((-fz * spin[0], -fz * spin[1], 1.0 - fz * spin[2]))
     # Static points are shared with the corner (read-only); moved points are new arrays.
     pts: dict[str, Vec] = dict(c.p)
     moved: dict[str, Vec] = {
@@ -615,11 +596,11 @@ def _finish(c: _Ctx, q: _Pose) -> CornerState:
         v.setflags(write=False)
     pts.update(moved)
 
-    d_coil = _sub(p_spring, c.spring_chassis)
-    cl = sqrt(_dot(d_coil, d_coil))
+    d_coil = _sub3(p_spring, c.spring_chassis)
+    cl = sqrt(_dot3(d_coil, d_coil))
     coil = c.corner.axle_cfg.coilover
-    d_push = _sub(q.pushrod_outer, p_in)
-    push_len = sqrt(_dot(d_push, d_push))
+    d_push = _sub3(q.pushrod_outer, p_in)
+    push_len = sqrt(_dot3(d_push, d_push))
     f = q.residual
     max_res = max(max(abs(f[0]), abs(f[1]), abs(f[2])), abs(push_len - c.static_push))
     return CornerState(

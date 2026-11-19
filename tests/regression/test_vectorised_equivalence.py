@@ -10,12 +10,12 @@ import pytest
 from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
-from suspkin.geom_math.lines import plane_from_points, plane_section_2d
 from suspkin.geometry import Vehicle, build_corners, load_vehicle
-from suspkin.geometry.models import HARDPOINT_NAMES
+from suspkin.geometry.model import HARDPOINT_NAMES
+from suspkin.geometry.vectors import body_rotation, plane_from_points, plane_section_2d
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
-from suspkin.kinematics.vehicle import VehicleState, body_rotation
+from suspkin.kinematics.vehicle import VehicleState
 from suspkin.metrics import actuation
 from suspkin.metrics.alignment import alignment_metrics
 from suspkin.metrics.batch import corner_metric_arrays, joint_angle_arrays

@@ -24,9 +24,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.geom_math.rotations import rotation_between
-from suspkin.geom_math.vectors import unit
 from suspkin.geometry.corners import Corner
+from suspkin.geometry.vectors import rotation_between, unit
 from suspkin.kinematics.corner import CornerState
 
 Vec = NDArray[np.float64]

@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from suspkin.geom_math import mirror_y, wheel_spin_axis
 from suspkin.geometry import Vehicle, build_corners
 from suspkin.geometry.corners import CornerId
+from suspkin.geometry.vectors import mirror_y, wheel_spin_axis
 from suspkin.kinematics import KinematicsError, solve_corner
 from tests.unit.helpers import (
     fixture_corners,
@@ -230,7 +230,7 @@ def _kabsch(src: np.ndarray, dst: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 def test_upright_pose_matches_brute_force_6dof(cid: CornerId, travel: float, rack: float) -> None:
     from scipy.optimize import least_squares
 
-    from suspkin.geom_math.rotations import axis_angle_matrix
+    from suspkin.geometry.vectors import axis_angle_matrix
 
     c = fixture_corners()[cid]
     s = solve_corner(c, travel, rack)
@@ -274,7 +274,7 @@ def test_upright_pose_matches_brute_force_6dof(cid: CornerId, travel: float, rac
     for n in names:
         np.testing.assert_allclose(pose(sol.x, p[n]), s.points[n], atol=1e-8, err_msg=n)
     spin0 = np.asarray(s.spin_axis)  # solver spin; compare with rigidly carried static axis
-    from suspkin.geom_math import wheel_spin_axis
+    from suspkin.geometry.vectors import wheel_spin_axis
 
     cfg = c.axle_cfg
     s0 = wheel_spin_axis(c.side, cfg.wheel.static_camber, cfg.wheel.static_toe)

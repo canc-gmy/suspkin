@@ -3,9 +3,8 @@
 import numpy as np
 import pytest
 
-from suspkin.geom_math import mirror_y
-from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geometry.corners import CornerId
+from suspkin.geometry.vectors import axis_angle_matrix, mirror_y
 from suspkin.kinematics import KinematicsError, solve_rocker
 from tests.unit.helpers import fixture_corners
 

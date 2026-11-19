@@ -13,7 +13,6 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from suspkin.geom_math.vectors import mirror_y
 from suspkin.geometry import (
     Axle,
     BeamARB,
@@ -25,6 +24,7 @@ from suspkin.geometry import (
     load_vehicle,
     save_vehicle,
 )
+from suspkin.geometry.vectors import mirror_y
 from suspkin.kinematics import KinematicsError, arb_energy, arb_stiffness, solve_arb, solve_corner
 from suspkin.metrics.arb import arb_metrics, arb_rates
 

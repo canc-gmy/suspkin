@@ -21,8 +21,8 @@ from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 
-from suspkin.geom_math.vectors import wheel_spin_axis as wheel_spin_axis
 from suspkin.geometry import Corner, CornerId, Vehicle, arb_points, build_corners
+from suspkin.geometry.vectors import wheel_spin_axis as wheel_spin_axis
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

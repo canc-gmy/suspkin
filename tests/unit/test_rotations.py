@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from suspkin.geom_math import axis_angle_matrix, rotation_between
+from suspkin.geometry.vectors import axis_angle_matrix, rotation_between
 
 
 def test_quarter_turn_about_z() -> None:

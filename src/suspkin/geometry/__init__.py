@@ -2,7 +2,7 @@
 
 from suspkin.geometry.corners import Corner, CornerId, arb_points, build_corners
 from suspkin.geometry.io import VehicleConfigError, load_vehicle, save_vehicle, vehicle_yaml
-from suspkin.geometry.models import (
+from suspkin.geometry.model import (
     HARDPOINT_NAMES,
     Axle,
     BeamARB,

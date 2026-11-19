@@ -24,14 +24,14 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.geom_math.lines import (
+from suspkin.geometry.corners import Corner
+from suspkin.geometry.vectors import (
     intersect_lines_2d,
     line_direction_2d,
     line_through_2d,
     plane_from_points,
     plane_section_2d,
 )
-from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState
 
 Vec = NDArray[np.float64]

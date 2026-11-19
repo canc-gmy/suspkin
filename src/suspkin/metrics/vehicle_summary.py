@@ -32,7 +32,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import build_corners
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
 from suspkin.kinematics.corner import CornerState, sweep_corner
 from suspkin.kinematics.vehicle import solve_vehicle
 from suspkin.metrics import vehicle as vm

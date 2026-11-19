@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from suspkin.geometry import build_corners, load_vehicle
+from suspkin.geometry.vectors import _as3
 from suspkin.kinematics import _fast, corner, vehicle
 from suspkin.kinematics.corner import _Ctx, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
@@ -283,7 +284,7 @@ def _ground_args(veh: Any, cid: str = "FL", heave: float = 0.004) -> list[Any]:
     ctx = _Ctx(c)
     guess = solve_corner(c, 0.001)
     z_static = float(_static_contact(c, ctx.spin0)[2])
-    ti = corner._tup(corner._tie_inner(ctx, 0.0))
+    ti = _as3(corner._tie_inner(ctx, 0.0))
     geom, rk = _fast.arrays(ctx)
     return [
         geom, rk, 0.0, 0.0, 1.0, heave, z_static, *ti,

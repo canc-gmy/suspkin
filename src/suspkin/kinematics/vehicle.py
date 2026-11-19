@@ -30,10 +30,9 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.geom_math.rotations import axis_angle_matrix
-from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId, build_corners
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
+from suspkin.geometry.vectors import _as3, body_rotation, wheel_spin_axis
 from suspkin.kinematics import _fast
 from suspkin.kinematics.arb import ArbState, solve_arb
 from suspkin.kinematics.corner import (
@@ -46,7 +45,6 @@ from suspkin.kinematics.corner import (
     _solve_light,
     _state,
     _tie_inner,
-    _tup,
 )
 from suspkin.kinematics.rocker import KinematicsError
 
@@ -109,12 +107,6 @@ def cg_pivot(vehicle: Vehicle) -> Vec:
     return np.array([-a, 0.0, vehicle.vehicle.cg_height])
 
 
-def body_rotation(roll: float, pitch: float) -> Vec:
-    """Body-to-world rotation ``R_y(pitch) R_x(roll)``."""
-    r: Vec = axis_angle_matrix([0.0, 1.0, 0.0], pitch) @ axis_angle_matrix([1.0, 0.0, 0.0], roll)
-    return r
-
-
 def _static_contact(corner: Corner, spin: Vec | None = None) -> Vec:
     cfg = corner.axle_cfg
     s = (
@@ -158,7 +150,7 @@ def _solve_corner_ground(
 
     if guess is not None and _fast.available() and (c.rack_axis is not None or rack == 0.0):
         tie_inner = _tie_inner(c, rack)
-        res = _fast.ground(c, n, offset, z_static, _tup(tie_inner), guess, slope0)
+        res = _fast.ground(c, n, offset, z_static, _as3(tie_inner), guess, slope0)
         if res is not None:
             t_k, x_k, f_k, phi0, slope_k = res
             try:

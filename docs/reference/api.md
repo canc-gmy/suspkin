@@ -15,7 +15,7 @@ The reference below documents each name at its defining module.
 
 ## Geometry
 
-::: suspkin.geometry.models.Vehicle
+::: suspkin.geometry.model.Vehicle
 
 ::: suspkin.geometry.io
     options:

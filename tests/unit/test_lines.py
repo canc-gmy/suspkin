@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from suspkin.geom_math.lines import (
+from suspkin.geometry.vectors import (
     intersect_lines_2d,
     line_direction_2d,
     line_through_2d,

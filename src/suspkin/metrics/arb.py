@@ -22,7 +22,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
-from suspkin.geometry.models import Axle
+from suspkin.geometry.model import Axle
 from suspkin.kinematics.arb import ArbState, arb_energy, arb_stiffness, solve_arb
 from suspkin.kinematics.corner import CornerState, solve_corner
 

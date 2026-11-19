@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 __version__ = "1.1.0"
 
 _LAZY: dict[str, str] = {
-    "Vehicle": "suspkin.geometry.models",
+    "Vehicle": "suspkin.geometry.model",
     "VehicleConfigError": "suspkin.geometry.io",
     "load_vehicle": "suspkin.geometry.io",
     "save_vehicle": "suspkin.geometry.io",
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from suspkin.geometry.io import VehicleConfigError as VehicleConfigError
     from suspkin.geometry.io import load_vehicle as load_vehicle
     from suspkin.geometry.io import save_vehicle as save_vehicle
-    from suspkin.geometry.models import Vehicle as Vehicle
+    from suspkin.geometry.model import Vehicle as Vehicle
     from suspkin.kinematics.corner import solve_corner as solve_corner
     from suspkin.kinematics.corner import sweep_corner as sweep_corner
     from suspkin.kinematics.corner import sweep_rack as sweep_rack

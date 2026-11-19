@@ -40,8 +40,8 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.geom_math.vectors import mirror_y
-from suspkin.geometry.models import ARB, Axle, BeamARB, TorsionalARB
+from suspkin.geometry.model import ARB, Axle, BeamARB, TorsionalARB
+from suspkin.geometry.vectors import _as3, mirror_y
 from suspkin.kinematics.corner import CornerState
 from suspkin.kinematics.rocker import KinematicsError
 
@@ -86,13 +86,6 @@ def _drop_length(axle_cfg: Axle, side_left: bool) -> float:
     return float(np.linalg.norm(r - arm))
 
 
-_V3 = tuple[float, float, float]
-
-
-def _t3(v: Vec) -> _V3:
-    return (float(v[0]), float(v[1]), float(v[2]))
-
-
 def _circle_angle(
     pivot: Vec, axis: Vec, p0: Vec, target: Vec, length: float, guess: float
 ) -> float:
@@ -101,10 +94,10 @@ def _circle_angle(
     Closed form ``A cos + B sin = C``; of the two roots the nearest to ``guess``.
     Scalar arithmetic (3-vectors are too small for numpy to pay off).
     """
-    px, py, pz = _t3(pivot)
-    a0, a1, a2 = _t3(axis)
-    q0, q1, q2 = _t3(p0)
-    t0, t1, t2 = _t3(target)
+    px, py, pz = _as3(pivot)
+    a0, a1, a2 = _as3(axis)
+    q0, q1, q2 = _as3(p0)
+    t0, t1, t2 = _as3(target)
     v0, v1, v2 = q0 - px, q1 - py, q2 - pz
     f = v0 * a0 + v1 * a1 + v2 * a2
     p0_, p1_, p2_ = f * a0, f * a1, f * a2
@@ -127,13 +120,13 @@ def _circle_angle(
 
 def _rotate_about(pivot: Vec, axis: Vec, angle: float, p: Vec) -> Vec:
     """``pivot + R(axis, angle) (p - pivot)`` (Rodrigues, axis normalized)."""
-    a0, a1, a2 = _t3(axis)
+    a0, a1, a2 = _as3(axis)
     na = math.sqrt(a0 * a0 + a1 * a1 + a2 * a2)
     if na < 1e-12:
         raise ValueError("rotation axis must be non-zero")
     k0, k1, k2 = a0 / na, a1 / na, a2 / na
-    c0, c1, c2 = _t3(pivot)
-    q0, q1, q2 = _t3(p)
+    c0, c1, c2 = _as3(pivot)
+    q0, q1, q2 = _as3(p)
     v0, v1, v2 = q0 - c0, q1 - c1, q2 - c2
     cs, sn = math.cos(angle), math.sin(angle)
     f = (k0 * v0 + k1 * v1 + k2 * v2) * (1.0 - cs)

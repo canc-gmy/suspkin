@@ -74,7 +74,7 @@ import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import Corner, build_corners
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
 from suspkin.kinematics import KinematicsError
 from suspkin.kinematics.corner import solve_corner, sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary

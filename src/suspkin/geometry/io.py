@@ -1,4 +1,4 @@
-"""YAML load/save for :class:`~suspkin.geometry.models.Vehicle`."""
+"""YAML load/save for :class:`~suspkin.geometry.model.Vehicle`."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
 
 
 class VehicleConfigError(ValueError):

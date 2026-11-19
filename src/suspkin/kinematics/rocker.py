@@ -9,8 +9,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import Corner
-
-_V3 = tuple[float, float, float]
+from suspkin.geometry.vectors import _V3, _as3, _cross3, _dot3, _sub3
 
 
 class KinematicsError(RuntimeError):
@@ -39,27 +38,6 @@ def side_sign(corner: Corner) -> float:
     return 1.0 if corner.side == "left" else -1.0
 
 
-def _t(v: ArrayLike) -> _V3:
-    a = np.asarray(v, dtype=np.float64)
-    return (float(a[0]), float(a[1]), float(a[2]))
-
-
-def _sub(a: _V3, b: _V3) -> _V3:
-    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-
-
-def _dot(a: _V3, b: _V3) -> float:
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-def _cross(a: _V3, b: _V3) -> _V3:
-    return (
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    )
-
-
 RockerTuple = tuple[float, _V3, _V3, _V3 | None, float]
 
 
@@ -69,33 +47,33 @@ class RockerCtx:
     def __init__(self, corner: Corner) -> None:
         pts = corner.points
         self.sign = side_sign(corner)
-        self.pivot = _t(pts["rocker_pivot"])
-        self.axis = _t(corner.rocker_axis)
-        n = math.sqrt(_dot(self.axis, self.axis))
+        self.pivot = _as3(pts["rocker_pivot"])
+        self.axis = _as3(corner.rocker_axis)
+        n = math.sqrt(_dot3(self.axis, self.axis))
         if n < 1e-12:
             raise ValueError("rotation axis must be non-zero")
         self.k: _V3 = (self.axis[0] / n, self.axis[1] / n, self.axis[2] / n)
-        pin = _t(pts["pushrod_inner"])
-        d = _sub(pin, _t(pts["pushrod_outer"]))
-        self.length = math.sqrt(_dot(d, d))
-        self.r_in = _sub(pin, self.pivot)
-        self.r_spring = _sub(_t(pts["rocker_spring"]), self.pivot)
+        pin = _as3(pts["pushrod_inner"])
+        d = _sub3(pin, _as3(pts["pushrod_outer"]))
+        self.length = math.sqrt(_dot3(d, d))
+        self.r_in = _sub3(pin, self.pivot)
+        self.r_spring = _sub3(_as3(pts["rocker_spring"]), self.pivot)
         arb = pts.get("rocker_arb")
-        self.r_arb = None if arb is None else _sub(_t(arb), self.pivot)
+        self.r_arb = None if arb is None else _sub3(_as3(arb), self.pivot)
         ax = self.axis
-        f = _dot(self.r_in, ax)
+        f = _dot3(self.r_in, ax)
         self.v_par: _V3 = (f * ax[0], f * ax[1], f * ax[2])
-        self.w = _sub(self.r_in, self.v_par)
-        self.ww = _dot(self.w, self.w)
-        self.axw = _cross(ax, self.w)
+        self.w = _sub3(self.r_in, self.v_par)
+        self.ww = _dot3(self.w, self.w)
+        self.axw = _cross3(ax, self.w)
 
     def _rotate(self, angle: float, v: _V3) -> _V3:
         """``pivot + R(sign * angle) v`` for a vector ``v`` relative to the pivot."""
         a = self.sign * angle
         cs, sn = math.cos(a), math.sin(a)
         k = self.k
-        kx = _cross(k, v)
-        f = _dot(k, v) * (1.0 - cs)
+        kx = _cross3(k, v)
+        f = _dot3(k, v) * (1.0 - cs)
         pv = self.pivot
         return (
             pv[0] + v[0] * cs + kx[0] * sn + k[0] * f,
@@ -118,10 +96,10 @@ class RockerCtx:
         """``solve`` returning plain tuples (angle, inner, spring, arb, toggle margin)."""
         sign = self.sign
         pivot, axis, v_par = self.pivot, self.axis, self.v_par
-        r = _sub(_sub(po, pivot), v_par)
-        ca = _dot(r, self.w)
-        cb = _dot(r, self.axw)
-        cc = 0.5 * (_dot(r, r) + self.ww - self.length**2)
+        r = _sub3(_sub3(po, pivot), v_par)
+        ca = _dot3(r, self.w)
+        cb = _dot3(r, self.axw)
+        cc = 0.5 * (_dot3(r, r) + self.ww - self.length**2)
         amp = math.hypot(ca, cb)
         if amp < 1e-12 or abs(cc) > amp * (1.0 + 1e-12):
             raise KinematicsError("pushrod cannot reach the rocker circle (no rocker solution)")
@@ -139,14 +117,14 @@ class RockerCtx:
         p_spring = self._rotate(angle, self.r_spring)
         p_arb = None if self.r_arb is None else self._rotate(angle, self.r_arb)
 
-        lever = _sub(p_in, pivot)
-        f = _dot(lever, axis)
+        lever = _sub3(p_in, pivot)
+        f = _dot3(lever, axis)
         lever = (lever[0] - f * axis[0], lever[1] - f * axis[1], lever[2] - f * axis[2])
-        push = _sub(po, p_in)
-        f = _dot(push, axis)
+        push = _sub3(po, p_in)
+        f = _dot3(push, axis)
         push = (push[0] - f * axis[0], push[1] - f * axis[1], push[2] - f * axis[2])
-        nl, npu = math.sqrt(_dot(lever, lever)), math.sqrt(_dot(push, push))
-        cosang = _dot(lever, push) / (nl * npu) if nl * npu > 1e-12 else 1.0
+        nl, npu = math.sqrt(_dot3(lever, lever)), math.sqrt(_dot3(push, push))
+        cosang = _dot3(lever, push) / (nl * npu) if nl * npu > 1e-12 else 1.0
         a = math.acos(max(-1.0, min(1.0, cosang)))
         return angle, p_in, p_spring, p_arb, min(a, math.pi - a)
 
@@ -163,4 +141,4 @@ def solve_rocker(corner: Corner, pushrod_outer: ArrayLike, guess: float = 0.0) -
     KinematicsError
         If the pushrod cannot reach the rocker circle (no real solution).
     """
-    return RockerCtx(corner).solve(_t(pushrod_outer), guess)
+    return RockerCtx(corner).solve(_as3(pushrod_outer), guess)

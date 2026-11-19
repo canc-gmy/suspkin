@@ -14,7 +14,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.geometry.models import Axle, Vehicle
+from suspkin.geometry.model import Axle, Vehicle
 
 G = 9.80665  # m/s^2
 

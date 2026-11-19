@@ -16,7 +16,7 @@ from __future__ import annotations
 import difflib
 import re
 
-from suspkin.geometry.models import HARDPOINT_NAMES
+from suspkin.geometry.model import HARDPOINT_NAMES
 from suspkin.units import Dim, slope_dim
 
 __all__ = [

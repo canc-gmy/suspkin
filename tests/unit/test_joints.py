@@ -8,9 +8,9 @@ from typing import Literal
 import numpy as np
 import pytest
 
-from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import CornerId
+from suspkin.geometry.vectors import axis_angle_matrix
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner, sweep_rack
 from suspkin.metrics import joints as jt
 from tests.unit.helpers import FIXTURE, fixture_corners
@@ -141,7 +141,7 @@ def test_left_right_symmetry(left: CornerId, right: CornerId) -> None:
 def test_pushrod_mount_body(mount: Literal["upright", "lca", "uca"]) -> None:
     data = load_vehicle(FIXTURE).model_dump()
     data["front"]["pushrod_mount"] = mount
-    from suspkin.geometry.models import Vehicle
+    from suspkin.geometry.model import Vehicle
 
     c = build_corners(Vehicle.model_validate(data))["FL"]
     st = solve_corner(c, 0.0)

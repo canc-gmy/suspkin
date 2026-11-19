@@ -3,9 +3,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from suspkin.geom_math import distance, mirror_y
 from suspkin.geometry import arb_points, build_corners, load_vehicle
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
+from suspkin.geometry.vectors import distance, mirror_y
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "minimal_vehicle.yaml"
 LINKS = [

@@ -44,8 +44,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.geom_math.vectors import wheel_spin_axis
-from suspkin.geometry.models import Axle, BeamARB, Vehicle
+from suspkin.geometry.model import Axle, BeamARB, Vehicle
+from suspkin.geometry.vectors import wheel_spin_axis
 from suspkin.kinematics.arb import arb_stiffness
 from suspkin.kinematics.vehicle import cg_pivot
 from suspkin.metrics import vehicle as vm

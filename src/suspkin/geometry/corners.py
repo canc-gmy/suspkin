@@ -9,8 +9,8 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.geom_math.vectors import mirror_y
-from suspkin.geometry.models import HARDPOINT_NAMES, Axle, Vehicle
+from suspkin.geometry.model import HARDPOINT_NAMES, Axle, Vehicle
+from suspkin.geometry.vectors import mirror_y
 
 CornerId = Literal["FL", "FR", "RL", "RR"]
 

@@ -34,7 +34,7 @@ from numpy.typing import ArrayLike, NDArray
 from pydantic import ValidationError
 from scipy.optimize import least_squares
 
-from suspkin.geometry.models import Vehicle
+from suspkin.geometry.model import Vehicle
 from suspkin.optimize.quantise import snap_hexahedron, snap_interval
 from suspkin.optimize.regions import hex_inverse, hex_jacobian, hex_locate, hex_map
 from suspkin.optimize.spec import (

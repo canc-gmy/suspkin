@@ -4,7 +4,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
-from suspkin.geom_math import distance, mirror_y, unit
+from suspkin.geometry.vectors import distance, mirror_y, unit
 
 _f = st.floats(-1e3, 1e3, allow_nan=False)
 

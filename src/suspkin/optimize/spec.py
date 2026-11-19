@@ -31,7 +31,7 @@ from pydantic import (
 )
 
 from suspkin.geometry.io import VehicleConfigError, load_vehicle
-from suspkin.geometry.models import HARDPOINT_NAMES, Vehicle
+from suspkin.geometry.model import HARDPOINT_NAMES, Vehicle
 from suspkin.optimize.metric_registry import (
     MetricNameError,
     corner_metric_dim,
