@@ -24,7 +24,18 @@ X3 = np.array([0.1, 0.9, 0.5])
 def _prob(tmp_path: Path, **kw: Any) -> Problem:
     kw.setdefault("workers", 1)
     kw.setdefault("evaluations", 1000)
-    return Problem(FIX, tmp_path, **kw)
+    return Problem(kw.pop("study", FIX), tmp_path, **kw)
+
+
+def _continuous(tmp_path: Path) -> Path:
+    """The fixture study with ``resolution: null`` (the finite-difference tests need smooth f)."""
+    text = FIX.read_text(encoding="utf-8").replace(
+        "vehicle: ../minimal_vehicle.yaml",
+        "resolution: null\nvehicle: " + (FIX.parent.parent / "minimal_vehicle.yaml").as_posix(),
+    )
+    out = tmp_path / "continuous.yaml"
+    out.write_text(text, encoding="utf-8")
+    return out
 
 
 def _count_calls(monkeypatch: pytest.MonkeyPatch) -> list[int]:
@@ -113,7 +124,7 @@ def test_budget_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_fd_jacobian_vs_central_difference(tmp_path: Path) -> None:
     w = np.array([2.0, 1.0, 1.0, 1.0, 0.5, 1.0])  # objective weights of the fixture
-    with _prob(tmp_path) as p:
+    with _prob(tmp_path, study=_continuous(tmp_path)) as p:
         grad, g_jac, f_jac, (_f0, _g0, ft0) = p.fd_jacobian(X1, step=1e-4)
         assert grad.shape == (3,)
         assert g_jac.shape == (2, 3)
@@ -132,7 +143,7 @@ def test_fd_jacobian_vs_central_difference(tmp_path: Path) -> None:
 
 def test_fd_backward_step_at_bound(tmp_path: Path) -> None:
     x = np.array([0.5, 1.0, 0.5])
-    with _prob(tmp_path) as p:
+    with _prob(tmp_path, study=_continuous(tmp_path)) as p:
         p.fd_jacobian(x, step=1e-3)
     df = read_history(tmp_path / "history.csv")
     v = df["x_front.tie_inner.v"].to_numpy()

@@ -120,7 +120,7 @@ def _design_space_hash(space: DesignSpace, aspace: AxleSpace) -> str:
     slots = [s for s in space._slots if s.axle == aspace.axle]
     return _digest(
         {
-            "variables": [s.var.model_dump(mode="json") for s in slots],
+            "variables": [s.var.model_dump(mode="json", exclude={"resolution"}) for s in slots],
             "names": list(aspace.names),
             "hardpoints": axle.hardpoints.model_dump(mode="json"),
             "right_overrides": {k: list(v) for k, v in axle.right_overrides.items()},
@@ -186,7 +186,7 @@ def _eval_row(space: DesignSpace, aspace: AxleSpace, grid: AxleGrid, x: F64) -> 
     n_c = len(channels_for(aspace.axle))
     n_r, n_t = grid.shape
     try:
-        vehicle = space.to_vehicle(aspace.to_full(x))
+        vehicle = space.to_vehicle(aspace.to_full(x), quantise=False)  # training data: continuous
         s = extract_corner(vehicle, aspace.axle, grid)
     except (InfeasibleDesign, KinematicsError):
         return (

@@ -23,7 +23,8 @@ from numpy.typing import NDArray
 from suspkin.optimize.spec import StudyConfigError, SurrogateSpec, load_study
 from suspkin.surrogate.data_types import SPLIT_TEST, Axle, AxleDataset
 from suspkin.surrogate.dataset import DatasetError, check_dataset_matches, load_dataset
-from suspkin.surrogate.hpo import HpoResult, search_axles
+from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles
+from suspkin.surrogate.report import write_hpo_report
 from suspkin.surrogate.train import (
     EvalReport,
     TrainConfig,
@@ -33,7 +34,13 @@ from suspkin.surrogate.train import (
     resolve_device,
 )
 
-__all__ = ["display_unit", "train_surrogate", "validate_surrogate", "validation_table"]
+__all__ = [
+    "display_unit",
+    "retrain_surrogate",
+    "train_surrogate",
+    "validate_surrogate",
+    "validation_table",
+]
 
 _RAD2DEG = 180.0 / math.pi
 _MM_CHANNELS = frozenset(
@@ -56,9 +63,7 @@ _HASH_KEYS = ("grid_hash", "design_space_hash", "vehicle_hash")
 
 
 def display_unit(channel: str) -> tuple[str, float]:
-    """``(unit label, factor from SI)`` of a channel: mm, deg or ``-`` (cos / sin encodings)."""
-    if channel.endswith(("_cos", "_sin")):
-        return "-", 1.0
+    """``(unit label, factor from SI)`` of a channel: mm or deg."""
     if channel in _MM_CHANNELS:
         return "mm", 1e3
     return "deg", _RAD2DEG
@@ -83,6 +88,41 @@ def _load_checked(
 
 
 # --------------------------------------------------------------------------- training
+
+
+def _train_config(spec: SurrogateSpec) -> TrainConfig:
+    return TrainConfig(
+        max_epochs=spec.training.max_epochs,
+        patience=spec.training.patience,
+        num_threads=spec.training.num_threads,
+        finetune_lr_factor=spec.training.finetune_lr_factor,
+        seed=spec.dataset.seed,
+    )
+
+
+def retrain_surrogate(
+    study_path: str | Path,
+    root: str | Path,
+    *,
+    axle: Axle,
+    device: str | None = None,
+) -> HpoResult:
+    """Retrain the best configuration of an existing search of ``axle`` (no new trials).
+
+    Uses the same dataset check and training settings as :func:`train_surrogate`, then
+    refreshes ``models/hpo_report.md`` for every axle that has a study.
+    """
+    root = Path(root)
+    spec, datasets = _load_checked(study_path, root, [axle])
+    res = retrain_best(
+        datasets[axle],
+        root / "models" / str(axle),
+        device=device or spec.training.device,
+        base=_train_config(spec),
+    )
+    models = root / "models"
+    write_hpo_report(models, [a for a in ("front", "rear") if (models / a / "optuna.db").exists()])
+    return res
 
 
 def train_surrogate(
@@ -116,13 +156,7 @@ def train_surrogate(
     dev_name = device or spec.training.device
     dev = resolve_device(dev_name)
     say(f"device: {dev} (requested {dev_name})")
-    base = TrainConfig(
-        max_epochs=spec.training.max_epochs,
-        patience=spec.training.patience,
-        num_threads=spec.training.num_threads,
-        finetune_lr_factor=spec.training.finetune_lr_factor,
-        seed=spec.dataset.seed,
-    )
+    base = _train_config(spec)
     parallel = None if spec.hpo.parallel == "auto" else bool(spec.hpo.parallel)
     trials = spec.hpo.n_trials if n_trials is None else int(n_trials)
     tmo = spec.hpo.timeout if timeout is None else float(timeout)
@@ -144,6 +178,8 @@ def train_surrogate(
         device=dev_name,
         base=base,
         parallel=parallel,
+        trial_max_epochs=spec.hpo.max_epochs,
+        subsample=spec.hpo.subsample,
     )
     for ax, res in results.items():
         say(
@@ -185,12 +221,12 @@ def _parity_table(model: TrainedModel, sub: AxleDataset, y: NDArray[np.float64])
         m = sub.mask
         add(name, truth[:, i][m] * f, y[:, i][m] * f, unit)
     for base in _KEY_ANGLES:
-        if f"{base}_cos" not in names or f"{base}_sin" not in names:
+        if base not in names:
             continue
-        ic, is_ = names.index(f"{base}_cos"), names.index(f"{base}_sin")
+        i = names.index(base)
         m = sub.mask
-        fom = np.arctan2(truth[:, is_][m], truth[:, ic][m]) * _RAD2DEG
-        pred = np.arctan2(y[:, is_][m], y[:, ic][m]) * _RAD2DEG
+        fom = truth[:, i][m] * _RAD2DEG
+        pred = y[:, i][m] * _RAD2DEG
         add(base, fom, pred, "deg")
     if not frames:
         return pd.DataFrame({"channel": [], "unit": [], "fom": [], "pred": []})

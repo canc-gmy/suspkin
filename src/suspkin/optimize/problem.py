@@ -19,7 +19,7 @@ from suspkin.optimize.history import (
     CacheEntry,
     EvalCache,
     HistoryWriter,
-    cache_key,
+    cache_keys,
     read_history,
 )
 from suspkin.optimize.spec import Optimizer, load_study
@@ -187,13 +187,17 @@ class Problem:
     ) -> tuple[F64, F64, F64, F64, NDArray[np.bool_]]:
         """Evaluate rows of ``X``; returns ``(F, G, f_total, max_g, feasible)`` arrays.
 
-        Cached points are free; duplicates inside the batch are evaluated once. New points
+        Designs are snapped to the hardpoint grid first (``DesignSpace.quantise_x``): the
+        evaluation, cache, history and results belong to the producible design. The raw
+        ``x`` of a snapped row is kept as a cache alias of the snapped one. Cached points are
+        free; duplicates inside the batch are evaluated once. New points
         are appended to the history in input order. Raises :class:`BudgetExhausted` if some
         points need evaluating and the budget is already used up when the batch starts (a
         fully cached batch never raises); a batch crossing the limit completes.
         """
-        xm = np.atleast_2d(np.asarray(X, dtype=np.float64))
-        keys = [cache_key(x) for x in xm]
+        xraw = np.atleast_2d(np.asarray(X, dtype=np.float64))
+        xm = self.space.quantise_x(xraw)
+        keys = cache_keys(xm)
         misses: list[int] = []
         seen: set[tuple[float, ...]] = set()
         for i, k in enumerate(keys):
@@ -205,14 +209,31 @@ class Problem:
                 f"budget exhausted ({self.n_evals} evaluations, {self.elapsed:.1f} s)"
             )
         outs = self._run([xm[i] for i in misses])
-        for i, (ev, secs) in zip(misses, outs, strict=True):
-            self._writer.append(self._next_id, xm[i], ev, secs, source)
+        pts: F64 | None = None
+        if misses:
+            # decoded points of all new rows in one vectorised call (same values as per row)
+            pb = self.space.points_batch(xm[misses])
+            pts = np.concatenate(list(pb.values()), axis=1)
+        for j, (i, (ev, secs)) in enumerate(zip(misses, outs, strict=True)):
+            self._writer.append(
+                self._next_id,
+                xm[i],
+                ev,
+                secs,
+                source,
+                None if pts is None else pts[j],
+                flush=False,
+            )
             self._next_id += 1
             self.n_evals += 1
             self.cache[keys[i]] = CacheEntry(
                 ev.f_vector(), ev.g_vector(), ev.f_total, ev.max_g, ev.feasible
             )
+        if misses:
+            self._writer.flush()  # one flush per batch (rows are written in input order)
         ents = [self.cache[k] for k in keys]
+        for kr, e in zip(cache_keys(xraw), ents, strict=True):
+            self.cache.setdefault(kr, e)
         nf = len(self.study.objectives)
         ng = sum(1 for c in self.study.constraints if c.enabled)
         F = np.array([e.f_vector for e in ents], dtype=np.float64).reshape(len(ents), nf)
@@ -229,10 +250,16 @@ class Problem:
         F, G, ft, mg, fe = self.evaluate_batch(np.asarray(x, dtype=np.float64)[None, :], source)
         return F[0], G[0], float(ft[0]), float(mg[0]), bool(fe[0])
 
+    def _fd_min_step(self) -> F64:
+        """Smallest useful finite-difference step per parameter: one grid step."""
+        return self.space.grid_step_z()
+
     def fd_jacobian(
         self, x: ArrayLike, source: str = "fd", step: float | None = None
     ) -> tuple[F64, F64, F64, tuple[F64, F64, float]]:
         """Forward-difference Jacobians in the unit cube (backward step where ``x + h > 1``).
+
+        The step is ``h`` or one hardpoint grid step if that is larger.
 
         The base point and the ``n`` perturbed points form one parallel batch.
 
@@ -243,10 +270,13 @@ class Problem:
         h = FD_STEP if step is None else float(step)
         x0 = np.asarray(x, dtype=np.float64)
         n = x0.size
+        # on a hardpoint grid a step below one grid step would see a staircase: use at least one
+        hmin = np.maximum(h, self._fd_min_step())
         pts = [x0]
         hs = np.empty(n)
         for i in range(n):
-            hi = h if x0[i] + h <= 1.0 else -h
+            h_i = float(hmin[i])
+            hi = h_i if x0[i] + h_i <= 1.0 else -h_i
             xi = x0.copy()
             xi[i] += hi
             pts.append(xi)

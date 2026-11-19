@@ -42,7 +42,7 @@ def trained(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
 def test_units_of_channels() -> None:
     assert display_unit("camber")[0] == "deg"
     assert display_unit("coilover_length") == ("mm", 1e3)
-    assert display_unit("fv_swing_angle_cos") == ("-", 1.0)
+    assert display_unit("fv_swing_angle")[0] == "deg"
 
 
 def test_validate_writes_tables_and_figures(trained: tuple[Path, Path]) -> None:

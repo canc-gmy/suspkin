@@ -1167,16 +1167,19 @@ class SurrogateEvaluator:
 
     def _evaluate_chunk(self, xm: Arr) -> list[Evaluation]:
         space = self.space
+        # The network sees the producible design: decode -> snap to the grid -> re-encode.
+        xm = space.quantise_x(xm)
         t0 = time.perf_counter()
         results: list[Evaluation | None] = [None] * len(xm)
         vehicles: list[Vehicle] = []
         rows: list[int] = []
-        for i, x in enumerate(xm):
+        pb = space.points_batch(xm)  # one vectorised decode + snap for the whole chunk
+        for i in range(len(xm)):
             try:
-                vehicles.append(space.to_vehicle(x))
+                vehicles.append(space.vehicle_from_points({k: v[i] for k, v in pb.items()}))
                 rows.append(i)
             except InfeasibleDesign:
-                results[i] = evaluate(space, x)
+                results[i] = evaluate(space, infeasible=True)
             except Exception as exc:  # a crashing design must not abort the run
                 results[i] = failed_evaluation(space, f"{type(exc).__name__}: {exc}")
         t0 = self._tick("vehicles", t0)

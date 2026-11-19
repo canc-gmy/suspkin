@@ -247,6 +247,16 @@ def test_surrogate_training_hpo_defaults() -> None:
     assert (s.training.device, s.training.max_epochs, s.training.patience) == ("auto", 2000, 100)
     assert s.training.num_threads is None and s.training.finetune_lr_factor == 0.1
     assert s.hpo.n_trials == 100 and s.hpo.timeout == 4 * 3600.0 and s.hpo.parallel == "auto"
+    assert s.hpo.max_epochs == 300 and s.hpo.subsample is None
+
+
+def test_surrogate_hpo_trial_budget_keys() -> None:
+    from suspkin.optimize.spec import SurrogateSpec
+
+    s = SurrogateSpec.model_validate(
+        {"grid": _GRID, "hpo": {"max_epochs": None, "subsample": 5000}}
+    )
+    assert s.hpo.max_epochs is None and s.hpo.subsample == 5000
 
 
 def test_surrogate_training_hpo_units_and_values() -> None:
@@ -280,6 +290,8 @@ def test_surrogate_training_hpo_units_and_values() -> None:
         {"hpo": {"timeout": "-1 h"}},
         {"hpo": {"parallel": "yes"}},
         {"hpo": {"extra": 1}},
+        {"hpo": {"max_epochs": 0}},
+        {"hpo": {"subsample": 0}},
     ],
 )
 def test_surrogate_training_hpo_rejected(block: dict[str, Any]) -> None:
@@ -298,7 +310,10 @@ def test_active_learning_defaults_and_units() -> None:
     assert (al.max_iterations, al.fom_evaluations, al.surrogate_evaluations) == (50, 2000, 20000)
     assert al.time is None and al.margin == 0.05
     assert (al.infill.top, al.infill.perturb) == (0, 4)
-    assert (al.finetune.epochs, al.finetune.weight, al.finetune.replay) == (200, 5.0, 4096)
+    ft = al.finetune
+    assert (ft.epochs, ft.weight, ft.replay, ft.patience) == (60, 5.0, 2048, 30)
+    assert (ft.trigger, ft.skip_after, ft.skip_for, ft.stall_override) == (1.0, 2, 2, 3.0)
+    assert ft.on_cpu == "skip"
     tr = al.trust_region
     assert (tr.initial, tr.min, tr.max) == (0.2, 0.01, 0.5)
     assert (al.stop.eps_f, al.stop.patience) == (0.01, 5)
@@ -328,6 +343,12 @@ def test_active_learning_defaults_and_units() -> None:
         {"finetune": {"weight": 0}},
         {"finetune": {"epochs": 0}},
         {"finetune": {"replay": -1}},
+        {"finetune": {"patience": 0}},
+        {"finetune": {"trigger": -1}},
+        {"finetune": {"skip_after": 0}},
+        {"finetune": {"skip_for": -1}},
+        {"finetune": {"stall_override": 0.5}},
+        {"finetune": {"on_cpu": "maybe"}},
         {"trust_region": {"initial": 0.6}},
         {"trust_region": {"min": 0.3, "initial": 0.2}},
         {"stop": {"patience": 0}},

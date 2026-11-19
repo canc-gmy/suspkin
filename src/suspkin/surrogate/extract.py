@@ -18,7 +18,7 @@ from suspkin.geometry.models import Vehicle
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.metrics.batch import corner_metric_arrays, joint_angle_arrays
-from suspkin.surrogate.channels import channels_for
+from suspkin.surrogate.channels import channels_for, wrap_line_angle
 from suspkin.surrogate.grid import AxleGrid
 
 
@@ -109,9 +109,7 @@ def extract_corner(
         vals = np.empty((len(chans), len(solved)))
         for k, ch in enumerate(chans):
             v = cols[ch.source]
-            vals[k] = (
-                np.cos(v) if ch.encoding == "cos" else np.sin(v) if ch.encoding == "sin" else v
-            )
+            vals[k] = wrap_line_angle(v) if ch.encoding == "line_angle" else v
         ok = np.all(np.isfinite(vals), axis=0)
         mask[ri[ok], ti[ok]] = True
         y[:, ri[ok], ti[ok]] = vals[:, ok]

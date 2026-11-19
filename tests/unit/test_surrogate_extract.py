@@ -10,6 +10,7 @@ from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics.joints import joint_angles_frame
 from suspkin.metrics.table import metrics_frame
 from suspkin.surrogate import AxleGrid, channels_for, extract_axles, extract_corner
+from suspkin.surrogate.channels import wrap_line_angle
 
 REF = "configs/vehicles/fs_reference.yaml"
 
@@ -45,13 +46,12 @@ def test_front_matches_tables(veh: Vehicle) -> None:
             ref = jf[c.source].to_numpy()
         else:
             ref = np.array([getattr(st, c.source) for st in states])
-        ref = np.cos(ref) if c.encoding == "cos" else np.sin(ref) if c.encoding == "sin" else ref
+        ref = wrap_line_angle(ref) if c.encoding == "line_angle" else ref
         np.testing.assert_allclose(s.Y[k].reshape(-1), ref, atol=1e-12, rtol=0, err_msg=c.name)
 
     names = {c.name: k for k, c in enumerate(chans)}
     for base in ("fv_swing_angle", "sv_swing_angle", "sv_wc_angle"):
-        cs = s.Y[names[f"{base}_cos"]] ** 2 + s.Y[names[f"{base}_sin"]] ** 2
-        np.testing.assert_allclose(cs, 1.0, atol=1e-12)
+        assert np.all(np.abs(s.Y[names[base]]) <= np.pi / 2 + 1e-12)
 
     # static pose (rack 0, travel 0): relative channels vanish
     r0, t0 = 2, 3
@@ -93,3 +93,26 @@ def test_extract_axles(veh: Vehicle) -> None:
     out = extract_axles(veh, {"front": _grid("front", 3, 3), "rear": _grid("rear", 3)})
     assert set(out) == {"front", "rear"}
     assert out["front"].Y.shape[1:] == (3, 3) and out["rear"].Y.shape[1:] == (1, 3)
+
+
+def test_ic_behind_the_patch_gives_a_small_continuous_line_angle() -> None:
+    """Seeded design with the side-view IC behind the patch (raw direction angle ~ 180 deg)."""
+    from pathlib import Path
+
+    from suspkin.optimize.design import DesignSpace
+    from suspkin.optimize.spec import load_study
+
+    study, base = load_study(Path("configs/studies/fs_reference_surrogate.yaml"))
+    space = DesignSpace(study, base)
+    rng = np.random.default_rng(3)
+    for _ in range(40):
+        cand = space.to_vehicle(rng.random(space.n))
+        s = extract_corner(cand, "rear", _grid("rear"))
+        corner = build_corners(cand)["RL"]
+        raw = metrics_frame(sweep_corner(corner, _grid("rear").travel), corner)["sv_swing_angle"]
+        if s.feasible and np.abs(raw).min() > np.pi / 2:
+            y = s.Y[s.channels.index("sv_swing_angle"), 0]
+            np.testing.assert_allclose(y, wrap_line_angle(raw.to_numpy()), atol=1e-12)
+            assert np.abs(y).max() < np.radians(15) and np.abs(np.diff(y)).max() < np.radians(2)
+            return
+    pytest.fail("no design with the IC behind the patch found")

@@ -259,6 +259,70 @@ class _Split:
                 for t in self.tensors
             )
 
+    @classmethod
+    def concat(cls, a: _Split, b: _Split) -> _Split:
+        """Rows of ``a`` followed by rows of ``b`` (same device and residency)."""
+        out = cls.__new__(cls)
+        out.device, out.resident, out.n = a.device, a.resident, a.n + b.n
+        cat = tuple(torch.cat([x, y]) for x, y in zip(a.tensors, b.tensors, strict=True))
+        if not a.resident and a.device.type == "cuda":
+            cat = tuple(t.pin_memory() for t in cat)
+        out.tensors = cat
+        return out
+
+
+class FinetuneCache:
+    """Tensors reused by successive fine-tunes of one axle (active learning).
+
+    Holds the validation split and a fixed set of replayed train rows, normalised with the
+    scaler of ``init`` and moved to the device once, plus the growing set of active-learning
+    rows (:meth:`add_rows`). :func:`train` with ``cache=`` then skips the per-call data
+    assembly; the resulting splits equal the ones built from the same rows directly.
+    """
+
+    def __init__(
+        self,
+        init: TrainedModel,
+        static: AxleDataset,
+        device: torch.device | str = "auto",
+    ) -> None:
+        """``static``: the validation rows (split val) and the replay rows (split train)."""
+        if init.channels != static.channels or init.param_names != static.param_names:
+            raise ValueError("init model channels / param_names do not match the dataset")
+        va, rp = static.subset(SPLIT_VAL), static.subset(SPLIT_TRAIN)
+        if va.n == 0:
+            raise ValueError("fine-tune cache needs a non-empty val split")
+        self.device = resolve_device(device) if not isinstance(device, torch.device) else device
+        self.scaler = init.scaler
+        self.resident = _fits_on_device([va, rp], self.device)
+        self.val = _Split(va, self.scaler, self.device, self.resident)
+        self.replay = _Split(rp, self.scaler, self.device, self.resident) if rp.n else None
+        self.template = va.subset(np.arange(va.n) == 0)  # one row: shapes, names, meta
+        self.al: _Split | None = None
+
+    @property
+    def n_al(self) -> int:
+        """Number of cached active-learning rows."""
+        return self.al.n if self.al is not None else 0
+
+    def add_rows(self, rows: AxleDataset) -> None:
+        """Append active-learning rows (they are trained on and scored as ``extra_val``)."""
+        if rows.n == 0:
+            return
+        new = _Split(rows, self.scaler, self.device, self.resident)
+        self.al = new if self.al is None else _Split.concat(self.al, new)
+
+    def splits(self) -> tuple[_Split, _Split, _Split | None]:
+        """``(train, val, extra_val)``: train is the replay rows followed by the AL rows."""
+        if self.replay is None and self.al is None:
+            raise ValueError("fine-tune cache has no train rows")
+        if self.replay is None:
+            assert self.al is not None
+            return self.al, self.val, self.al
+        if self.al is None:
+            return self.replay, self.val, None
+        return _Split.concat(self.replay, self.al), self.val, self.al
+
 
 def _fits_on_device(arrays: list[AxleDataset], device: torch.device) -> bool:
     if device.type != "cuda":
@@ -268,15 +332,15 @@ def _fits_on_device(arrays: list[AxleDataset], device: torch.device) -> bool:
     return need < _MAX_RESIDENT_FRACTION * free
 
 
-def _score_split(
+def _channel_ratios(
     net: SurrogateMLP,
     split: _Split,
     pod_t: torch.Tensor | None,
     n_channels: int,
     std: NDArray[np.float64],
     tol: NDArray[np.float64],
-) -> float:
-    """Mean over channels of physical masked RMSE / tol, computed in standardised space."""
+) -> NDArray[np.float64]:
+    """Per channel physical masked RMSE / tol, computed in standardised space."""
     net.eval()
     se = torch.zeros(n_channels, dtype=torch.float64, device=split.device)
     cnt = torch.zeros((), dtype=torch.float64, device=split.device)
@@ -290,7 +354,20 @@ def _score_split(
             se += d.sum(dim=(0, 2)).double()
             cnt += m.sum().double()
     rmse = torch.sqrt(se / cnt.clamp(min=1.0)).cpu().numpy() * std
-    return float(np.mean(rmse / tol))
+    out: NDArray[np.float64] = rmse / tol
+    return out
+
+
+def _score_split(
+    net: SurrogateMLP,
+    split: _Split,
+    pod_t: torch.Tensor | None,
+    n_channels: int,
+    std: NDArray[np.float64],
+    tol: NDArray[np.float64],
+) -> float:
+    """Score: mean over channels of :func:`_channel_ratios` (the search objective)."""
+    return float(np.mean(_channel_ratios(net, split, pod_t, n_channels, std, tol)))
 
 
 # --------------------------------------------------------------------------- train
@@ -314,6 +391,7 @@ def train(
     init: TrainedModel | None = None,
     report: Callable[[int, float], None] | None = None,
     extra_val: AxleDataset | None = None,
+    cache: FinetuneCache | None = None,
 ) -> TrainedModel:
     """Fit on the train split, early-stop on the validation score, restore the best weights.
 
@@ -327,6 +405,12 @@ def train(
     ``extra_val`` (default ``None``: no change) is a second scoring set, all rows used whatever
     their split: the early-stopping score becomes ``mean(val score, extra_val score)``. The
     active-learning loop passes its new points, so the update cannot silently ignore them.
+
+    ``cache`` (needs ``init``; ``ds`` then only supplies shapes and metadata, e.g.
+    ``cache.template``) takes the train / val / extra splits from a :class:`FinetuneCache`
+    instead of building them. With ``init`` the patience counts epochs without a new best
+    score of this run (the score of ``init`` is not the reference), so a slow start still
+    gets its ``patience`` epochs.
     """
     torch.manual_seed(tcfg.seed)
     # Process-wide switch (not restored): deterministic kernels where available, warn otherwise.
@@ -335,32 +419,47 @@ def train(
     if device.type == "cpu" and tcfg.num_threads:
         torch.set_num_threads(tcfg.num_threads)
 
-    tr, va = ds.subset(SPLIT_TRAIN), ds.subset(SPLIT_VAL)
-    if tr.n == 0 or va.n == 0:
-        raise ValueError("dataset needs non-empty train and val splits")
     tol = channel_tolerances(ds.channels)
     n_c = len(ds.channels)
+    tr: AxleDataset | None = None
+    if cache is not None:
+        if init is None:
+            raise ValueError("cache needs init")
+        a, b = cache.scaler.to_dict(), init.scaler.to_dict()
+        if cache.device != device or a.keys() != b.keys():
+            raise ValueError("fine-tune cache was built for another device or model")
+        if not all(np.array_equal(a[k], b[k]) for k in a):
+            raise ValueError("fine-tune cache was built for another scaler")
+    else:
+        tr, va = ds.subset(SPLIT_TRAIN), ds.subset(SPLIT_VAL)
+        if tr.n == 0 or va.n == 0:
+            raise ValueError("dataset needs non-empty train and val splits")
 
     if init is not None:
         if init.channels != ds.channels or init.param_names != ds.param_names:
             raise ValueError("init model channels / param_names do not match the dataset")
         mcfg, scaler, pod = init.mcfg, init.scaler, init.pod
     else:
+        assert tr is not None
         scaler = ChannelScaler.fit(tr.Y, tr.mask)
         pod = None
         if mcfg.output == "pod":
             pod = PodBasis.fit(scaler.transform(tr.Y, tr.mask), mcfg.pod_k, seed=tcfg.seed)
 
-    resident = _fits_on_device([tr, va], device)
-    tr_s, va_s = _Split(tr, scaler, device, resident), _Split(va, scaler, device, resident)
     pod_t = (
         torch.from_numpy(pod.components.astype(np.float32)).to(device) if pod is not None else None
     )
-    ex_s = (
-        _Split(extra_val, scaler, device, resident)
-        if extra_val is not None and extra_val.n > 0
-        else None
-    )
+    if cache is not None:
+        tr_s, va_s, ex_s = cache.splits()
+    else:
+        assert tr is not None
+        resident = _fits_on_device([tr, va], device)
+        tr_s, va_s = _Split(tr, scaler, device, resident), _Split(va, scaler, device, resident)
+        ex_s = (
+            _Split(extra_val, scaler, device, resident)
+            if extra_val is not None and extra_val.n > 0
+            else None
+        )
 
     def val_score(net_: SurrogateMLP) -> float:
         v = _score_split(net_, va_s, pod_t, n_c, scaler.std, tol)
@@ -383,6 +482,7 @@ def train(
         best = val_score(net)
         history.append({"epoch": -1.0, "train": float("nan"), "val": best})
     init_score = best
+    run_best = float("inf")  # best epoch score of this run: the patience reference
     stale = 0
     for epoch in range(tcfg.max_epochs):
         for g in opt.param_groups:
@@ -402,8 +502,10 @@ def train(
         score = val_score(net)
         history.append({"epoch": float(epoch), "train": tot / max(nb, 1), "val": score})
         if score < best:
-            best, stale = score, 0
+            best = score
             best_state = {k: v.detach().cpu().clone() for k, v in net.state_dict().items()}
+        if score < run_best:
+            run_best, stale = score, 0
         else:
             stale += 1
         if report is not None:
@@ -411,6 +513,9 @@ def train(
         if stale >= tcfg.patience:
             break
 
+    # Per-channel ratios of the restored best weights (the score is only their mean).
+    net.load_state_dict(best_state)
+    ratios = _channel_ratios(net, va_s, pod_t, n_c, scaler.std, tol)
     return TrainedModel(
         axle=ds.axle,
         mcfg=mcfg,
@@ -426,6 +531,7 @@ def train(
         val_score=best,
         meta={
             **copy.deepcopy(ds.meta),
+            "val_channel_ratio": {c: float(r) for c, r in zip(ds.channels, ratios, strict=True)},
             **({"kept_init_weights": True} if init is not None and best == init_score else {}),
         },
     )

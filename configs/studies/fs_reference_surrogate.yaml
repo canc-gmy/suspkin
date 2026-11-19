@@ -126,14 +126,14 @@ surrogate:
     travel: {min: -30 mm, max: 30 mm, points: 41}
     rack: {min: -30 mm, max: 30 mm, points: 21}
   dataset: {n_initial: 20000, seed: 1, lhs_optimization: auto}
-  training: {device: auto}
-  hpo: {n_trials: 60, timeout: 90 min, parallel: auto}
+  training: {device: auto, max_epochs: 600, patience: 600}
+  hpo: {n_trials: 60, timeout: 90 min, parallel: auto, max_epochs: 300, subsample: 5000}
   active_learning:
     max_iterations: 50
     fom_evaluations: 2000
     surrogate_evaluations: 20000
     infill: {top: 0, perturb: 4}
-    finetune: {epochs: 200, weight: 5.0}
+    finetune: {epochs: 60, weight: 5.0}
     margin: 0.05
     trust_region: {initial: 0.2, min: 0.01, max: 0.5}
     stop: {eps_f: 0.01, patience: 5}

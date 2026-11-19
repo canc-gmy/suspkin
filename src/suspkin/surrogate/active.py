@@ -47,7 +47,7 @@ from suspkin.optimize.drivers import (
     _start_point,
 )
 from suspkin.optimize.evaluate import evaluate
-from suspkin.optimize.history import CacheEntry, cache_key, read_history
+from suspkin.optimize.history import CacheEntry, cache_key, cache_keys, read_history
 from suspkin.optimize.outputs import (
     _ok_feasible,
     best_row,
@@ -60,6 +60,7 @@ from suspkin.optimize.outputs import (
 from suspkin.optimize.problem import BudgetExhausted, Problem, resolve_workers
 from suspkin.optimize.spec import (
     ActiveLearningSpec,
+    FinetuneSpec,
     Optimizer,
     Study,
     StudyConfigError,
@@ -68,7 +69,7 @@ from suspkin.optimize.spec import (
 )
 from suspkin.plotting.optimization import knee_index
 from suspkin.surrogate.channels import CHANNELS, channels_for
-from suspkin.surrogate.data_types import SPLIT_TRAIN, SPLIT_VAL, Axle
+from suspkin.surrogate.data_types import SPLIT_TRAIN, SPLIT_VAL, Axle, AxleDataset
 from suspkin.surrogate.dataset import (
     DatasetError,
     append_rows,
@@ -88,11 +89,14 @@ Echo = Callable[[str], None]
 __all__ = [
     "ActiveResult",
     "BoxProblem",
+    "FinetuneState",
     "StopState",
+    "advance_finetune",
     "advance_stop",
     "box_bounds",
     "crowding_distance",
     "curve_residual",
+    "finetune_decision",
     "hits_boundary",
     "run_active_learning",
     "select_infill",
@@ -122,6 +126,10 @@ AL_COLUMNS = (
     "val_rear",
     "kept_init_front",
     "kept_init_rear",
+    "skipped_front",
+    "skipped_rear",
+    "skip_reason_front",
+    "skip_reason_rear",
     "agree",
     "improved",
     "at_min",
@@ -142,13 +150,20 @@ def box_bounds(center: ArrayLike, r: float) -> tuple[F64, F64]:
     return np.clip(c - r, 0.0, 1.0), np.clip(c + r, 0.0, 1.0)
 
 
-def hits_boundary(x: ArrayLike, center: ArrayLike, r: float, rtol: float = 1e-3) -> bool:
+def hits_boundary(
+    x: ArrayLike,
+    center: ArrayLike,
+    r: float,
+    rtol: float = 1e-3,
+    slack: ArrayLike = 0.0,
+) -> bool:
     """True if ``x`` reaches the trust-region boundary (``|x_i - c_i| = r``) in any coordinate.
 
-    A side clipped by the unit cube is not a trust-region boundary.
+    A side clipped by the unit cube is not a trust-region boundary. ``slack`` (scalar or per
+    coordinate) shortens the radius, e.g. by half a grid step when ``x`` was snapped to a grid.
     """
     d = np.abs(np.asarray(x, dtype=np.float64) - np.asarray(center, dtype=np.float64))
-    return bool(np.any(d >= r * (1.0 - rtol)))
+    return bool(np.any(d >= (r - np.asarray(slack, dtype=np.float64)) * (1.0 - rtol)))
 
 
 def trust_ratio(
@@ -272,12 +287,15 @@ def select_infill(
     r: float,
     rng: np.random.Generator,
     known: Container[tuple[float, ...]] = (),
+    quantise: Callable[[F64], F64] | None = None,
 ) -> tuple[F64, F64]:
     """Infill set from the surrogate history of an iteration.
 
     Returns ``(x_star, X)``; ``X[0]`` is ``x_star`` (always kept), then ``top`` further
     candidates and ``perturb`` points uniform in a box of radius ``r / 4`` around ``x_star``
-    (clipped to ``[lo, hi]``). Points already in ``known`` and duplicates are dropped (not
+    (clipped to ``[lo, hi]``). With ``quantise`` (``DesignSpace.quantise_x``) every point is
+    snapped to the hardpoint grid first, so points that round to the same design, or to one
+    in ``known``, are dropped. Points already in ``known`` and duplicates are dropped (not
     ``x_star``).
 
     Weighted mode: ``x_star`` is the best surrogate-feasible ``f_total`` (else the least
@@ -301,20 +319,22 @@ def select_infill(
         cands = [xs[front[i]] for i in order]
     else:
         cands = [xs[i] for i in ranked_rows(sur_history)]
-    x_star = cands[0].copy()
+    q: Callable[[F64], F64] = quantise if quantise is not None else (lambda a: a)
+    x_star = q(cands[0].copy())
     out = [x_star]
     seen = {cache_key(x_star)}
     for x in cands[1:]:
         if len(out) > top:
             break
+        x = q(x.copy())
         k = cache_key(x)
         if k in seen or k in known:
             continue
         seen.add(k)
-        out.append(x.copy())
+        out.append(x)
     lo_a, hi_a = np.asarray(lo, dtype=np.float64), np.asarray(hi, dtype=np.float64)
     for _ in range(perturb):
-        x = np.clip(x_star + rng.uniform(-r / 4.0, r / 4.0, size=x_star.size), lo_a, hi_a)
+        x = q(np.clip(x_star + rng.uniform(-r / 4.0, r / 4.0, size=x_star.size), lo_a, hi_a))
         k = cache_key(x)
         if k in seen or k in known:
             continue
@@ -368,8 +388,7 @@ class _CacheView:
         self._xkey: dict[tuple[float, ...], tuple[float, ...]] = {}
 
     def record(self, z: F64, x: F64) -> None:
-        for zi, xi in zip(z, x, strict=True):
-            self._xkey[cache_key(zi)] = cache_key(xi)
+        self._xkey.update(zip(cache_keys(z), cache_keys(x), strict=True))
 
     def __contains__(self, zkey: tuple[float, ...]) -> bool:
         xk = self._xkey.get(zkey)
@@ -410,6 +429,11 @@ class BoxProblem:
     def to_z(self, x: ArrayLike) -> F64:
         """Design vectors to box coordinates (clipped to ``[0, 1]``)."""
         out: F64 = np.clip((np.asarray(x, dtype=np.float64) - self.lo) / self.span, 0.0, 1.0)
+        return out
+
+    def _fd_min_step(self) -> F64:
+        """One grid step in box coordinates (the drivers' finite-difference floor)."""
+        out: F64 = self.inner.space.grid_step_z() / self.span
         return out
 
     # ---- Problem surface used by the drivers
@@ -574,6 +598,89 @@ def _dominated(obj: ArrayLike, front: F64) -> bool:
     return bool(np.any(np.all(front <= o, axis=1) & np.any(front < o, axis=1)))
 
 
+@dataclass(frozen=True)
+class FinetuneState:
+    """Per-axle fine-tuning history: consecutive kept-init fine-tunes and remaining skips."""
+
+    kept_run: int = 0
+    skip_left: int = 0
+
+
+def finetune_decision(
+    resid: float, state: FinetuneState, ft: FinetuneSpec, *, device_type: str = "cuda"
+) -> tuple[bool, str]:
+    """Whether to fine-tune an axle this iteration: ``(run, reason)``.
+
+    ``reason`` is ``"train"``, ``"cpu"`` (networks on the CPU and ``ft.on_cpu == "skip"``,
+    whatever the residual), ``"trigger"`` (residual of the new point within ``ft.trigger``,
+    tolerance units) or ``"stall"`` (skip window after repeated kept-init fine-tunes, unless
+    the residual exceeds ``ft.stall_override * ft.trigger``). A non-finite residual trains.
+    """
+    if device_type == "cpu" and ft.on_cpu == "skip":
+        return False, "cpu"
+    if not math.isfinite(resid):
+        return True, "train"
+    if resid <= ft.trigger:
+        return False, "trigger"
+    if state.skip_left > 0 and resid <= ft.stall_override * ft.trigger:
+        return False, "stall"
+    return True, "train"
+
+
+def advance_finetune(
+    state: FinetuneState, *, skipped: bool, kept: bool, ft: FinetuneSpec
+) -> FinetuneState:
+    """Next state after an iteration.
+
+    A skip uses up one skip iteration. A fine-tune that kept the init weights counts towards
+    ``ft.skip_after`` (then ``ft.skip_for`` skips start); an improving one resets the count.
+    """
+    if skipped:
+        return FinetuneState(state.kept_run, max(state.skip_left - 1, 0))
+    run = state.kept_run + 1 if kept else 0
+    if run >= ft.skip_after and ft.skip_for > 0:
+        return FinetuneState(0, ft.skip_for)
+    return FinetuneState(run, 0)
+
+
+def _replay_finetune_state(
+    rows: list[dict[str, Any]], axle: Axle, ft: FinetuneSpec
+) -> FinetuneState:
+    """Rebuild the fine-tuning state of ``axle`` from the rows of an earlier al.csv."""
+    st = FinetuneState()
+    for rw in rows:
+        skipped = bool(rw.get(f"skipped_{axle}", False))
+        if skipped and rw.get(f"skip_reason_{axle}") in ("cpu", "no_dataset"):
+            continue  # a CPU / no-dataset skip leaves the schedule untouched
+        val = rw.get(f"val_{axle}", math.nan)
+        trained = isinstance(val, int | float) and math.isfinite(val)
+        if skipped or trained:
+            st = advance_finetune(
+                st, skipped=skipped, kept=bool(rw.get(f"kept_init_{axle}", False)), ft=ft
+            )
+    return st
+
+
+def _shard_rows(path: Path, template: AxleDataset) -> AxleDataset:
+    """The rows of one appended shard as a dataset shaped like ``template``."""
+    with np.load(path) as z:
+        return AxleDataset(
+            axle=template.axle,
+            X=z["X"].astype(np.float64),
+            Y=z["Y"].astype(np.float32),
+            mask=z["mask"].astype(bool),
+            feasible=z["feasible"].astype(bool),
+            split=z["split"].astype(np.uint8),
+            source=z["source"],
+            weight=z["weight"].astype(np.float64),
+            channels=template.channels,
+            param_names=template.param_names,
+            travel=template.travel,
+            rack=template.rack,
+            meta=dict(template.meta),
+        )
+
+
 def _recover_dataset(
     root: Path,
     axle: Axle,
@@ -612,45 +719,55 @@ def _finetune(
     root: Path,
     axle: Axle,
     *,
-    epochs: int,
-    replay: int,
+    ft: FinetuneSpec,
     lr_factor: float,
     device: str,
     seed: int,
     k: int,
+    caches: dict[str, Any],
 ) -> tuple[float, bool]:
     """Fine-tune the current model of ``axle``; returns ``(score, kept_init_weights)``.
 
-    Trains on all active-learning rows plus ``replay`` random earlier train rows (drawn
-    afresh from ``seed`` and ``k``); the validation split is unchanged. The early-stopping
-    score is the mean of the validation score and the score on all active-learning rows.
+    Trains on all active-learning rows plus ``ft.replay`` earlier train rows (drawn once from
+    ``seed``, normalised and moved to the device on the first call, then reused through
+    ``caches``); the validation split is unchanged. The early-stopping score is the mean of
+    the validation score and the score on all active-learning rows; training stops after
+    ``ft.patience`` epochs without a new best.
     """
     from dataclasses import replace
 
-    from suspkin.surrogate.train import TrainedModel, train
+    from suspkin.surrogate.train import FinetuneCache, TrainedModel, train
 
     mdir = root / "models" / axle / "model"
     pre = root / "models" / axle / "pre_al"
     if not pre.exists():
         shutil.copytree(mdir, pre)
     model = TrainedModel.load(mdir, device=device)
-    full = load_dataset(root, axle)
-    is_al = np.char.startswith(full.source.astype(str), "al_")
-    pool = np.flatnonzero((full.split == SPLIT_TRAIN) & ~is_al)
-    rng = np.random.default_rng([seed, k, 4096])
-    pick = rng.choice(pool, size=min(replay, pool.size), replace=False) if pool.size else pool
-    keep = (full.split == SPLIT_VAL) | is_al
-    keep[pick] = True
-    extra = full.subset(is_al) if is_al.any() else None
-    ds = full.subset(keep)
+    cache: FinetuneCache | None = caches.get(axle)
+    if cache is None:
+        full = load_dataset(root, axle)
+        is_al = np.char.startswith(full.source.astype(str), "al_")
+        pool = np.flatnonzero((full.split == SPLIT_TRAIN) & ~is_al)
+        rng = np.random.default_rng([seed, 4096])
+        pick = (
+            rng.choice(pool, size=min(ft.replay, pool.size), replace=False) if pool.size else pool
+        )
+        keep = full.split == SPLIT_VAL
+        keep[pick] = True
+        cache = FinetuneCache(model, full.subset(keep), device)
+        if is_al.any():
+            cache.add_rows(full.subset(is_al))
+        caches[axle] = cache
+        del full
     tcfg = replace(
         model.tcfg,
-        max_epochs=epochs,
+        max_epochs=ft.epochs,
+        patience=ft.patience,
         device=cast(Any, device),
         finetune_lr_factor=lr_factor,
         seed=seed + k,
     )
-    new = train(ds, model.mcfg, tcfg, init=model, extra_val=extra)
+    new = train(cache.template, model.mcfg, tcfg, init=model, cache=cache)
     new.meta["al_iteration"] = k
     new.save(root / "models" / axle / f"al_{k}")
     new.save(mdir)
@@ -743,17 +860,26 @@ def run_active_learning(
     if dev_name not in ("auto", "cpu", "cuda"):
         raise ValueError(f"device must be auto, cpu or cuda, got {dev_name!r}")
     dev_used = "injected"
+    dev_type = "injected"
     if predictors is None:
         from suspkin.surrogate.train import resolve_device
 
-        dev_used = str(resolve_device(dev_name))
+        dev_resolved = resolve_device(dev_name)
+        dev_used, dev_type = str(dev_resolved), dev_resolved.type
     full_space = DesignSpace(study, vehicle)
     asps = {a: AxleSpace(full_space, a) for a in _AXLES}
     active_axles = [a for a in _AXLES if asps[a].n > 0]
     if not active_axles:
         raise StudyConfigError(f"{study_path}: the study has no design variable")
+    # Shared models: without ROOT/dataset/<axle> the model metadata alone is checked and the
+    # axle is never fine-tuned (reason "no_dataset").
+    no_ds = {
+        a: predictors is None and not (root / "dataset" / a / "meta.json").is_file()
+        for a in active_axles
+    }
     for ax in active_axles if predictors is None else []:
-        check_dataset_matches(study_path, root, ax)
+        if not no_ds[ax]:
+            check_dataset_matches(study_path, root, ax)
         if not (root / "models" / ax / "model" / "model.json").is_file():
             raise DatasetError(
                 f"{ax}: no trained model in {root / 'models' / ax / 'model'}; "
@@ -783,6 +909,11 @@ def run_active_learning(
         rows = [
             {str(a): b for a, b in rw.items()} for rw in pd.read_csv(al_path).to_dict("records")
         ]
+        for rw in rows:  # tables of earlier versions lack the skipped_<axle> columns
+            rw.setdefault("skipped_front", False)
+            rw.setdefault("skipped_rear", False)
+            rw.setdefault("skip_reason_front", "")
+            rw.setdefault("skip_reason_rear", "")
     state = StopState()
     for rw in rows:
         state = advance_stop(
@@ -792,7 +923,14 @@ def run_active_learning(
             at_min=bool(rw["at_min"]),
         )
     k0 = int(rows[-1]["k"]) + 1 if rows else 0
-    r = float(rows[-1]["radius_next"]) if rows else al.trust_region.initial
+    ft_state = {a: _replay_finetune_state(rows, a, al.finetune) for a in _AXLES}
+    ft_caches: dict[str, Any] = {}
+    # On a hardpoint grid the trust region cannot be smaller than one grid step per variable.
+    step_z = full_space.grid_step_z()
+    tr = al.trust_region
+    tr_min = min(max(tr.min, float(np.max(step_z, initial=0.0))), tr.max)
+    tr = tr.model_copy(update={"min": tr_min, "initial": max(tr.initial, tr_min)})
+    r = max(float(rows[-1]["radius_next"]) if rows else tr.initial, tr_min)
 
     t_start = _time.perf_counter()
     reason = "max_iterations"
@@ -811,12 +949,28 @@ def run_active_learning(
         f_scale = max(abs(baseline.f_total), 1.0)
         if resume and finetune:
             hist0 = read_history(fom.history_path)
-            for a in active_axles:
+            for a in (a for a in active_axles if not no_ds[a]):
                 n_rec = _recover_dataset(
                     root, a, asps[a], grids[a], space, hist0, al.finetune.weight
                 )
                 if n_rec:
                     say(f"resume: appended {n_rec} missing active-learning row(s), {a} dataset")
+        if finetune and predictors is None:
+            for a in active_axles:  # keep the starting networks (also if an axle is never tuned)
+                pre = root / "models" / a / "pre_al"
+                if not pre.exists():
+                    shutil.copytree(root / "models" / a / "model", pre)
+        if finetune and any(no_ds.values()):
+            miss = ", ".join(a for a in active_axles if no_ds[a])
+            say(
+                f"dataset not found for {miss} ({root / 'dataset'}): fine-tuning disabled, "
+                "the networks stay as trained"
+            )
+        if finetune and dev_type == "cpu" and al.finetune.on_cpu == "skip":
+            say(
+                "fine-tuning disabled on CPU (it takes minutes per iteration): the networks stay "
+                "as trained; set `active_learning.finetune.on_cpu: run` to force it"
+            )
         say(
             f"active learning: {len(active_axles)} axle network(s) on {dev_used}, "
             f"inner method {opt.method} / {opt.mode}, FOM budget {fom_budget}, "
@@ -883,7 +1037,11 @@ def run_active_learning(
                         r=r,
                         rng=rng,
                         known=known,
+                        quantise=space.quantise_x,
                     )
+                    if all(cache_key(x) in known for x in X):
+                        reason = "no_candidates"  # no new design on the grid
+                        break
                     ent = sp.cache[cache_key(x_star)]
                     f_nn, feas_nn = float(ent.f_total), bool(ent.feasible)
                     preds = cast(SurrogateProblem, sp).evaluator.predictors
@@ -932,8 +1090,8 @@ def run_active_learning(
                     s0 = all_samples[a][0]
                     resid[a] = curve_residual(pred_y[a], s0.Y, s0.mask, s0.channels)
                 if new_idx and finetune:
-                    for a in active_axles:
-                        append_rows(
+                    for a in (a for a in active_axles if not no_ds[a]):
+                        shard = append_rows(
                             root,
                             a,
                             X[new_idx][:, asps[a].idx],
@@ -941,23 +1099,49 @@ def run_active_learning(
                             f"al_{k}",
                             weight=al.finetune.weight,
                         )
+                        if a in ft_caches:  # keep the device tensors in step with the dataset
+                            ft_caches[a].add_rows(_shard_rows(shard, ft_caches[a].template))
                 t_ext = _time.perf_counter() - t0
 
                 # 5. fine-tune on the grown datasets
                 t0 = _time.perf_counter()
                 val: dict[str, float] = {}
                 kept: dict[str, bool] = {}
+                skipped: dict[str, bool] = {}
+                skip_why: dict[str, str] = {}
                 if new_idx and finetune:
                     for a in active_axles:
+                        if no_ds[a]:
+                            skipped[a] = True
+                            skip_why[a] = "no_dataset"
+                            continue
+                        run_ft, why = finetune_decision(
+                            resid[a], ft_state[a], al.finetune, device_type=dev_type
+                        )
+                        if not run_ft:
+                            skipped[a] = True
+                            skip_why[a] = why
+                            if why != "cpu":
+                                ft_state[a] = advance_finetune(
+                                    ft_state[a], skipped=True, kept=False, ft=al.finetune
+                                )
+                                say(
+                                    f"  iter {k}: {a} fine-tuning skipped ({why}, "
+                                    f"residual {resid[a]:.2f})"
+                                )
+                            continue
                         val[a], kept[a] = _finetune(
                             root,
                             a,
-                            epochs=al.finetune.epochs,
-                            replay=al.finetune.replay,
+                            ft=al.finetune,
                             lr_factor=spec.training.finetune_lr_factor,
                             device=dev_name,
                             seed=spec.dataset.seed,
                             k=k,
+                            caches=ft_caches,
+                        )
+                        ft_state[a] = advance_finetune(
+                            ft_state[a], skipped=False, kept=kept[a], ft=al.finetune
                         )
                         if kept[a]:
                             say(f"  warning: iter {k}: {a} fine-tuning kept the previous weights")
@@ -986,13 +1170,14 @@ def run_active_learning(
                         max_g_best=best0["max_g"],
                     )
                     improved = _improved(best0, best1, 0.1 * al.stop.eps_f * f_scale)
-                r_next = update_radius(r, rho, hits_boundary(x_star, x_b, r), al.trust_region)
+                hit = hits_boundary(x_star, x_b, r, slack=0.5 * step_z)
+                r_next = update_radius(r, rho, hit, tr)
                 agree = (
                     math.isfinite(f_fom)
                     and abs(f_nn - f_fom) / f_scale < al.stop.eps_f
                     and feas_nn == feas_fom
                 )
-                at_min = r_next <= al.trust_region.min * (1.0 + 1e-9)
+                at_min = r_next <= tr.min * (1.0 + 1e-9)
                 state = advance_stop(state, agree=agree, improved=improved, at_min=at_min)
                 rows.append(
                     {
@@ -1014,6 +1199,10 @@ def run_active_learning(
                         "val_rear": val.get("rear", math.nan),
                         "kept_init_front": kept.get("front", False),
                         "kept_init_rear": kept.get("rear", False),
+                        "skipped_front": skipped.get("front", False),
+                        "skipped_rear": skipped.get("rear", False),
+                        "skip_reason_front": skip_why.get("front", ""),
+                        "skip_reason_rear": skip_why.get("rear", ""),
                         "agree": agree,
                         "improved": improved,
                         "at_min": at_min,

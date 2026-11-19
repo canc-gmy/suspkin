@@ -307,7 +307,7 @@ AL_BLOCK = """  training: {device: cpu, max_epochs: 4, patience: 2}
     fom_evaluations: %d
     surrogate_evaluations: 300
     infill: {top: 1, perturb: 2}
-    finetune: {epochs: 3, weight: 5.0}
+    finetune: {epochs: 3, weight: 5.0, trigger: 0, skip_for: 0, on_cpu: run}
     margin: 0.05
     trust_region: {initial: 0.2, min: 0.01, max: 0.5}
     stop: {eps_f: 0.01, patience: 5}
@@ -789,3 +789,48 @@ def test_resume_recovers_interrupted_append(
     al_x = ds.X[np.char.startswith(ds.source.astype(str), "al_")]
     keys = [cache_key(x) for x in al_x]
     assert len(set(keys)) == len(keys) and len(keys) >= n_al  # recovered, no duplicates
+
+
+# --------------------------------------------------------------------------- shared models
+
+
+def test_no_dataset_models_only(work: tuple[Path, Path, Path]) -> None:
+    from suspkin.surrogate.active import run_active_learning
+    from suspkin.surrogate.dataset import DatasetError
+
+    study, root, run = work
+    shutil.rmtree(root / "dataset")
+    msgs: list[str] = []
+    res = run_active_learning(
+        study, root, run, workers=1, device="cpu", report=False, echo=msgs.append
+    )
+    assert res.new_iterations == 2 and not (root / "dataset").exists()
+    al = pd.read_csv(run / "al.csv", keep_default_na=False)
+    assert set(al["skip_reason_front"]) == {"no_dataset"} and al["skipped_front"].all()
+    assert sum("dataset not found" in m and "fine-tuning disabled" in m for m in msgs) == 1
+
+    # resume works too (no dataset recovery attempted)
+    study.write_text(tiny_text(max_iterations=3), encoding="utf-8")
+    res2 = run_active_learning(study, root, run, resume=True, workers=1, device="cpu", report=False)
+    assert res2.new_iterations == 1
+
+    # a model of another study is still refused
+    mj = root / "models" / "front" / "model" / "model.json"
+    info = json.loads(mj.read_text(encoding="utf-8"))
+    info["meta"]["grid_hash"] = "bogus"
+    mj.write_text(json.dumps(info), encoding="utf-8")
+    with pytest.raises(DatasetError, match="does not match the study"):
+        run_active_learning(study, root, run.with_name("run2"), workers=1, device="cpu")
+
+
+def test_with_dataset_not_flagged_no_dataset(work: tuple[Path, Path, Path]) -> None:
+    from suspkin.surrogate.active import run_active_learning
+
+    study, root, run = work
+    msgs: list[str] = []
+    run_active_learning(
+        study, root, run, workers=1, device="cpu", report=False, evaluations=4, echo=msgs.append
+    )
+    al = pd.read_csv(run / "al.csv", keep_default_na=False)
+    assert "no_dataset" not in set(al["skip_reason_front"])
+    assert not any("dataset not found" in m for m in msgs)

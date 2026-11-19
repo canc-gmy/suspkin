@@ -191,3 +191,41 @@ def test_other_fields_within_sanity_bounds(errors: dict[str, pd.DataFrame]) -> N
             if k not in TOLERANCES and not (float(v) <= _bound(str(k)))
         }
         assert not bad, f"{tag}: layer error above sanity bound (or NaN): {bad}"
+
+
+def _ic_behind_designs(n: int) -> list[Vehicle]:
+    """Seeded designs of the surrogate study whose rear side-view IC is behind the patch.
+
+    In the old direction encoding these had a rear swing angle near +-180 deg (cos -> -1).
+    """
+    from suspkin.geometry.corners import build_corners
+    from suspkin.kinematics.corner import solve_corner
+    from suspkin.kinematics.rocker import KinematicsError
+    from suspkin.metrics.batch import corner_metric_arrays
+
+    study, baseline = load_study(Path("configs/studies/fs_reference_surrogate.yaml"))
+    space = DesignSpace(study, baseline)
+    rng = np.random.default_rng(3)
+    out: list[Vehicle] = []
+    for _ in range(300):
+        if len(out) == n:
+            break
+        try:
+            cand = space.to_vehicle(rng.random(space.n))
+            corner = build_corners(cand)["RL"]
+            raw = float(
+                corner_metric_arrays([solve_corner(corner, 0.0)], corner)["sv_swing_angle"][0]
+            )
+        except (InfeasibleDesign, KinematicsError):
+            continue
+        if abs(raw) > math.pi / 2 and all(s.feasible for s in extract_axles(cand, GRIDS).values()):
+            out.append(cand)
+    assert len(out) == n, "could not draw designs with the IC behind the patch"
+    return out
+
+
+def test_layer_error_with_instant_centre_behind_the_patch() -> None:
+    df = layer_error(_ic_behind_designs(3), GRIDS)
+    for field, tol in TOLERANCES.items():
+        worst = float(df[field].max(skipna=False))
+        assert worst <= tol, f"{field}: {worst:.3e} > {tol:.3e}"

@@ -38,6 +38,7 @@ from suspkin.optimize.metric_registry import (
     summary_metric_dim,
     vehicle_metric_dim,
 )
+from suspkin.optimize.quantise import has_grid_node, node_range
 from suspkin.optimize.regions import check_hexahedron, is_convex_hexahedron
 from suspkin.units import Dim, normalize_dim, parse_quantity, slope_dim
 
@@ -62,6 +63,8 @@ _VEHICLE_INPUT_DIM: dict[str, Dim] = {
     "rack": "length",
 }
 _AXES = ("x", "y", "z")
+#: Default resolution of the hardpoint grid (m): designs are producible to 0.5 mm.
+DEFAULT_RESOLUTION = 5e-4
 _RANGE_TOL = 1e-12
 _COORD_RE = re.compile(r"^(front|rear)\.([a-z_]+)\.([xyz])$")
 
@@ -311,6 +314,16 @@ Region = Annotated[
 # --------------------------------------------------------------------------------------
 
 
+def _parse_resolution(v: Any) -> Any:
+    """``0.5 mm`` / number (SI) / ``None`` -> metres or ``None``; must be positive."""
+    if v is None:
+        return None
+    out = _scalar(v, "length")
+    if not out > 0.0:
+        raise ValueError(f"resolution must be a positive length, got {v!r}")
+    return out
+
+
 class Variable(_Frozen):
     """A hardpoint that moves inside ``domain`` (left point; the right side mirrors it)."""
 
@@ -320,6 +333,13 @@ class Variable(_Frozen):
     domain: Domain
     asymmetric: bool = False
     side: Literal["left", "right"] | None = None
+    resolution: float | None = None
+    """Grid override (m) of this variable; an explicit ``null`` means continuous."""
+
+    @field_validator("resolution", mode="before")
+    @classmethod
+    def _resolution(cls, v: Any) -> Any:
+        return _parse_resolution(v)
 
     @property
     def effective_side(self) -> Literal["left", "right"]:
@@ -1028,11 +1048,18 @@ class TrainingSpec(_Frozen):
 
 
 class HpoSpec(_Frozen):
-    """Architecture search budget (the ``surrogate.hpo`` block); ``timeout`` in seconds (SI)."""
+    """Architecture search budget (the ``surrogate.hpo`` block); ``timeout`` in seconds (SI).
+
+    ``max_epochs`` caps each search trial (``None``: ``training.max_epochs``; the effective cap
+    is the smaller of the two) and ``subsample`` is the number of training rows each trial
+    uses (``None``: all). The final retrain of the best configuration ignores both.
+    """
 
     n_trials: int = Field(default=100, ge=1)
     timeout: float | None = Field(default=4 * 3600.0, gt=0.0)
     parallel: Literal["auto"] | StrictBool = "auto"
+    max_epochs: int | None = Field(default=300, ge=1)
+    subsample: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="before")
     @classmethod
@@ -1055,11 +1082,28 @@ class InfillSpec(_Frozen):
 
 
 class FinetuneSpec(_Frozen):
-    """Fine-tuning: epochs, weight of the new rows, earlier train rows replayed per iteration."""
+    """Fine-tuning of the axle networks between active-learning iterations.
 
-    epochs: int = Field(default=200, ge=1)
+    ``epochs`` caps one fine-tune, ``patience`` stops it after that many epochs without a
+    new best score of the run. ``weight`` is the sample weight of the new rows, ``replay``
+    the number of earlier train rows replayed (drawn once, then kept on the device).
+    ``trigger`` is the residual (in tolerance units) of the new verified point above which an
+    axle is fine-tuned at all. After ``skip_after`` consecutive fine-tunes that kept the
+    previous weights an axle is skipped for ``skip_for`` iterations, unless its residual
+    exceeds ``stall_override * trigger``. ``trigger=0`` and ``skip_for=0`` always fine-tune.
+    ``on_cpu`` decides what happens when the networks run on the CPU: ``"skip"`` (default)
+    never fine-tunes (it takes minutes per iteration), ``"run"`` applies the rules above.
+    """
+
+    epochs: int = Field(default=60, ge=1)
     weight: float = Field(default=5.0, gt=0.0)
-    replay: int = Field(default=4096, ge=0)
+    replay: int = Field(default=2048, ge=0)
+    patience: int = Field(default=30, ge=1)
+    trigger: float = Field(default=1.0, ge=0.0)
+    skip_after: int = Field(default=2, ge=1)
+    skip_for: int = Field(default=2, ge=0)
+    stall_override: float = Field(default=3.0, ge=1.0)
+    on_cpu: Literal["skip", "run"] = "skip"
 
 
 class TrustRegionSpec(_Frozen):
@@ -1139,12 +1183,19 @@ class Study(_Frozen):
         return v
 
     vehicle: str
+    resolution: float | None = DEFAULT_RESOLUTION
+    """Hardpoint grid (m) of the chosen designs; ``None`` (``null``) means continuous."""
     variables: tuple[Variable, ...] = ()
     sweeps: dict[str, Sweep] = Field(default_factory=dict)
     constraints: tuple[Constraint, ...] = ()
     objectives: tuple[Objective, ...] = ()
     optimizer: Optimizer | None = None
     surrogate: SurrogateSpec | None = None
+
+    @field_validator("resolution", mode="before")
+    @classmethod
+    def _resolution(cls, v: Any) -> Any:
+        return _parse_resolution(v)
 
     @model_validator(mode="before")
     @classmethod
@@ -1272,6 +1323,48 @@ def _check_sweep_refs(study: Study) -> None:
                     )
 
 
+def variable_resolution(study: Study, var: Variable) -> float | None:
+    """Grid resolution (m) of a variable: its own override, else the study's (``None``: none)."""
+    return var.resolution if "resolution" in var.model_fields_set else study.resolution
+
+
+def _base_point(vehicle: Vehicle, var: Variable) -> tuple[float, float, float]:
+    axle, name = parse_point_ref(var.point)
+    ax = getattr(vehicle, axle)
+    left = getattr(ax.hardpoints, name)
+    if not (var.asymmetric and var.effective_side == "right"):
+        return (float(left[0]), float(left[1]), float(left[2]))
+    ov = ax.right_overrides.get(name)
+    p = ov if ov is not None else (left[0], -left[1], left[2])
+    return (float(p[0]), float(p[1]), float(p[2]))
+
+
+def check_grid(study: Study, vehicle: Vehicle) -> None:
+    """Every gridded variable must have at least one grid node inside its domain."""
+    for var in study.variables:
+        res = variable_resolution(study, var)
+        if res is None:
+            continue
+        d = var.domain
+        err = f"variable {var.point!r}: its domain contains no node of the {res * 1e3:g} mm grid"
+        if isinstance(d, HexahedronRegion):
+            if not has_grid_node(d.vertices, res):
+                raise ValueError(err)
+            continue
+        if isinstance(d, BoxRegion):
+            lo, hi = list(d.lo), list(d.hi)
+        else:
+            base = _base_point(vehicle, var)
+            lo, hi = [], []
+            for a, rng in enumerate((d.x, d.y, d.z)):
+                if rng is not None and rng[1] > rng[0]:
+                    lo.append(base[a] + rng[0])
+                    hi.append(base[a] + rng[1])
+        kmin, kmax = node_range(lo, hi, res)
+        if any(a > b for a, b in zip(kmin, kmax, strict=True)):
+            raise ValueError(err)
+
+
 def region_centroid(region: Any) -> tuple[float, float, float]:
     """Centroid of a region (vertex mean for a hexahedron)."""
     if isinstance(region, BoxRegion):
@@ -1352,6 +1445,7 @@ def check_against_vehicle(study: Study, vehicle: Vehicle) -> None:
         if isinstance(sw, VehicleSweep) and sw.input == "rack" and vehicle.front.steering is None:
             raise ValueError(f"sweep {sname!r}: the vehicle has no steering")
     _check_ranges(study, vehicle)
+    check_grid(study, vehicle)
 
 
 def load_study(path: str | Path) -> tuple[Study, Vehicle]:

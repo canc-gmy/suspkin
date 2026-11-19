@@ -33,6 +33,16 @@ def test_training_reduces_val_score() -> None:
     assert rep.worst
 
 
+def test_model_stores_per_channel_ratios() -> None:
+    ds = make_ds()
+    model = train(ds, MCFG, replace(TCFG, max_epochs=5, patience=5))
+    ratios = model.meta["val_channel_ratio"]
+    assert list(ratios) == list(ds.channels)
+    assert np.mean(list(ratios.values())) == pytest.approx(model.val_score, rel=1e-4)
+    rep = evaluate(model, ds, SPLIT_VAL)
+    np.testing.assert_allclose(list(ratios.values()), rep.per_channel_ratio, rtol=1e-3)
+
+
 def test_pod_training_runs() -> None:
     ds = make_ds()
     model = train(ds, replace(MCFG, output="pod", pod_k=12), replace(TCFG, max_epochs=20))
@@ -59,7 +69,9 @@ def test_save_load_and_predictor(tmp_path: Path) -> None:
     model.save(tmp_path / "m")
     for f in ("model.pt", "model.json", "norm.npz"):
         assert (tmp_path / "m" / f).exists()
-    assert TrainedModel.load(tmp_path / "m", device="cpu").meta == ds.meta
+    loaded = TrainedModel.load(tmp_path / "m", device="cpu")
+    assert {k: v for k, v in loaded.meta.items() if k != "val_channel_ratio"} == ds.meta
+    assert set(loaded.meta["val_channel_ratio"]) == set(ds.channels)
     p1 = SurrogatePredictor(model, device="cpu")
     p2 = SurrogatePredictor.load(tmp_path / "m", device="cpu")
     y1, v1 = p1.predict(ds.X[:20])

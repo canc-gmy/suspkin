@@ -737,6 +737,7 @@ def evaluate(
     *,
     vehicle: Vehicle | None = None,
     ctx: _Ctx | None = None,
+    infeasible: bool = False,
 ) -> Evaluation:
     """Evaluate all enabled constraints of ``space.study`` for a design.
 
@@ -745,11 +746,12 @@ def evaluate(
     ``infeasible`` (``g = G_FAIL``).
 
     ``ctx`` (internal, default ``None``) replaces the FOM sweep context; the surrogate
-    evaluator passes a context whose sweeps come from the networks.
+    evaluator passes a context whose sweeps come from the networks. ``infeasible=True``
+    (internal) reports a design already known to give an invalid vehicle without decoding it
+    again.
     """
     if x is not None and vehicle is not None:
         raise ValueError("give either x or vehicle, not both")
-    infeasible = False
     veh = space.baseline
     if vehicle is not None:
         veh = vehicle

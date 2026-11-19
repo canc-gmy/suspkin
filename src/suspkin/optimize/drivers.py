@@ -32,7 +32,7 @@ from scipy.stats import qmc
 
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.evaluate import Evaluation, evaluate
-from suspkin.optimize.history import CacheEntry, EvalCache, cache_key, read_history
+from suspkin.optimize.history import CacheEntry, EvalCache, cache_key, cache_keys, read_history
 from suspkin.optimize.outputs import (
     best_row,
     copy_inputs,
@@ -142,7 +142,7 @@ def _clip(x: ArrayLike) -> F64:
 
 def _lookup(problem: Problem, X: F64, source: str) -> list[CacheEntry]:
     """Cache entries of rows of ``X`` (evaluating the rows that are missing)."""
-    keys = [cache_key(x) for x in X]
+    keys = cache_keys(X)
     if any(k not in problem.cache for k in keys):
         problem.evaluate_batch(X, source)
     return [problem.cache[k] for k in keys]

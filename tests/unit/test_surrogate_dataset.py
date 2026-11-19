@@ -129,14 +129,14 @@ def test_infeasible_row_kept(study_path: Path, monkeypatch: pytest.MonkeyPatch) 
     grid = AxleGrid("rear", np.linspace(-0.01, 0.01, 5), np.array([0.0]))
 
     class Bad:
-        def to_vehicle(self, x: Any) -> Any:
+        def to_vehicle(self, x: Any, **kw: Any) -> Any:
             raise InfeasibleDesign("invalid")
 
     y, mask, feasible = mod._eval_row(Bad(), aspace, grid, aspace.baseline())  # type: ignore[arg-type]
     assert not feasible and not mask.any() and np.isnan(y).all() and y.dtype == np.float32
 
     class Fine:
-        def to_vehicle(self, x: Any) -> Any:
+        def to_vehicle(self, x: Any, **kw: Any) -> Any:
             return veh
 
     def boom(*a: Any, **k: Any) -> Any:

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time as _time
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
 from typing import Literal
 
@@ -23,7 +22,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.optimize.evaluate import ConstraintResult, Evaluation
-from suspkin.optimize.history import cache_key
+from suspkin.optimize.history import cache_keys
 from suspkin.optimize.problem import Problem
 from suspkin.optimize.spec import StudyConfigError
 from suspkin.surrogate.evaluate import (
@@ -51,7 +50,19 @@ def _shifted(ev: Evaluation, margin: float) -> Evaluation:
     for r in ev.results:
         if r.status in ("pass", "fail"):
             g = r.g + margin
-            res.append(replace(r, g=g, status="pass" if g <= 0.0 else "fail"))
+            res.append(
+                ConstraintResult(
+                    r.name,
+                    r.type,
+                    r.value,
+                    r.min,
+                    r.max,
+                    g,
+                    "pass" if g <= 0.0 else "fail",
+                    r.dim,
+                    r.detail,
+                )
+            )
         else:
             res.append(r)
     return Evaluation(tuple(res), ev.objectives)
@@ -147,8 +158,8 @@ class SurrogateProblem(Problem):
         evs = self.evaluator.evaluate(np.array(xs))
         per = (_time.perf_counter() - t0) / len(xs)
         out: list[tuple[Evaluation, float]] = []
-        for x, ev in zip(xs, evs, strict=True):
-            self.raw_g[cache_key(x)] = ev.g_vector()
+        for k, ev in zip(cache_keys(np.array(xs)), evs, strict=True):
+            self.raw_g[k] = ev.g_vector()
             out.append((_shifted(ev, self.margin), per))
         return out
 

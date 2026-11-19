@@ -19,8 +19,11 @@ Method (DESIGN_PLAN section 13.5):
   = static contact height" on the tilted ground, exactly like ``solve_vehicle``, with the
   wheel centre and spin axis rebuilt from the channels (camber, toe, contact-patch and
   wheel-centre offsets) and the static data.
+* Swing-angle channels hold the line angle wrapped to (-pi/2, pi/2] (smooth in the design);
+  every use below needs only the line (roll centre and pitch centre are line intersections,
+  anti-dive/squat/lift use tan, which has period pi), never the direction.
 * Roll centre: the two front-view lines through the (tilted-ground) contact patches with
-  the direction of the front-view swing angle; a line whose swing angle was taken at the
+  the front-view swing-angle line; a line whose swing angle was taken at the
   vertical contact patch differs slightly under roll because the instant centre itself is
   not a channel (error ~ patch shift / FVSA).
 * Anti-features, pitch centre: static swing angles with the ``metrics.vehicle`` formulas.
@@ -355,7 +358,7 @@ def _at_zero(y: Arr, x: Arr) -> Arr:
 
 # ----------------------------------------------------------------------------- pose solve
 _POSE_CORE = ("camber", "toe", "contact_patch_dy", "wheel_center_recession")
-_POSE_FULL = (*_POSE_CORE, "contact_patch_dx", "fv_swing_angle_cos", "fv_swing_angle_sin")
+_POSE_FULL = (*_POSE_CORE, "contact_patch_dx", "fv_swing_angle")
 
 
 @dataclass
@@ -464,7 +467,7 @@ def _solve_pose(
     sp_, cp_ = np.sin(pitch).reshape(1, 1, -1), np.cos(pitch).reshape(1, 1, -1)
     sw_x = cp_ * sp[0] + sp_ * sr * sp[1] + sp_ * cr * sp[2]
     sw_y = cr * sp[1] - sr * sp[2]
-    ang = np.arctan2(v[:, ix_full["fv_swing_angle_sin"]], v[:, ix_full["fv_swing_angle_cos"]])
+    ang = v[:, ix_full["fv_swing_angle"]]
     return _Pose(
         travel=s,
         camber=v[:, ix_full["camber"]],
@@ -663,10 +666,8 @@ def _axle_static(batch: AxleBatch, st: AxleStatics) -> _AxleStatic:
     names = (
         "coilover_length",
         "rocker_angle",
-        "sv_swing_angle_cos",
-        "sv_swing_angle_sin",
-        "sv_wc_angle_cos",
-        "sv_wc_angle_sin",
+        "sv_swing_angle",
+        "sv_wc_angle",
     )
     curves = _travel_curves(batch, names)
     length = curves.y[:, 0]  # (B, T)
@@ -677,8 +678,8 @@ def _axle_static(batch: AxleBatch, st: AxleStatics) -> _AxleStatic:
     wheel_rate = st.spring_rate * _at_zero(mr, x) ** 2 + force * _at_zero(prog, x)
     v = curves(np.array([_ARB_DELTA, -_ARB_DELTA, 0.0]))  # (B, K, 3)
     arb = _arb_wheel_rate_roll(st, v[:, 1, 0], v[:, 1, 1])
-    sv_cp = np.arctan2(v[:, 3, 2], v[:, 2, 2])
-    sv_wc = np.arctan2(v[:, 5, 2], v[:, 4, 2])
+    sv_cp = v[:, 2, 2]
+    sv_wc = v[:, 3, 2]
     return _AxleStatic(wheel_rate, arb, sv_cp, sv_wc)
 
 

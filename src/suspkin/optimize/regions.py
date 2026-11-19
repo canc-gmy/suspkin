@@ -105,6 +105,41 @@ def hex_inverse(
     return out
 
 
+def hex_locate(
+    vertices: ArrayLike, points: ArrayLike, tol: float = 1e-9, max_iter: int = 50
+) -> tuple[F64, NDArray[np.bool_]]:
+    """Unit-cube coordinates of ``points`` (``(..., 3)``) in the hexahedron, never raising.
+
+    Returns ``(uvw, inside)``: ``uvw`` is clipped to ``[0, 1]``; ``inside`` is True where
+    Newton converged to a point within ``tol`` (relative to the cube) of the unit cube.
+    """
+    v = _vertices(vertices)
+    p = np.asarray(points, dtype=np.float64)
+    uvw = np.full(p.shape, 0.5)
+    with np.errstate(all="ignore"):
+        for _ in range(max_iter):
+            r = hex_map(v, uvw) - p
+            jac = hex_jacobian(v, uvw)
+            det = np.linalg.det(jac)
+            bad = ~np.isfinite(det) | (np.abs(det) < 1e-300)
+            jac = np.where(bad[..., None, None], np.eye(3), jac)
+            step = np.linalg.solve(jac, r[..., None])[..., 0]
+            step = np.where(np.isfinite(step), step, 0.0)
+            uvw = np.clip(uvw - step, -2.0, 3.0)
+            if np.max(np.abs(step), initial=0.0) < 1e-13:
+                break
+        res = np.max(np.abs(hex_map(v, uvw) - p), axis=-1)
+    scale = max(float(np.max(np.abs(v - v.mean(axis=0)))), 1e-300)
+    ok = res <= 1e-9 * scale
+    inside = ok & np.all((uvw >= -tol) & (uvw <= 1.0 + tol), axis=-1)
+    return np.clip(uvw, 0.0, 1.0), inside
+
+
+def hex_contains(vertices: ArrayLike, points: ArrayLike, tol: float = 1e-9) -> NDArray[np.bool_]:
+    """Mask of ``points`` (``(..., 3)``) inside or on the boundary of the hexahedron."""
+    return hex_locate(vertices, points, tol)[1]
+
+
 # --------------------------------------------------------------------------------------
 # signed distances
 # --------------------------------------------------------------------------------------

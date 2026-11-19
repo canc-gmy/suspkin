@@ -53,7 +53,13 @@ class EvalCache(dict[tuple[float, ...], CacheEntry]):
 
 def cache_key(x: ArrayLike) -> tuple[float, ...]:
     """Cache key: ``x`` rounded to 12 decimals."""
-    return tuple(float(v) for v in np.round(np.asarray(x, dtype=np.float64), _KEY_DECIMALS))
+    return tuple(np.round(np.asarray(x, dtype=np.float64), _KEY_DECIMALS).tolist())
+
+
+def cache_keys(xs: ArrayLike) -> list[tuple[float, ...]]:
+    """:func:`cache_key` of every row of ``xs`` ``(m, n)`` in one vectorised pass."""
+    rows = np.round(np.atleast_2d(np.asarray(xs, dtype=np.float64)), _KEY_DECIMALS).tolist()
+    return [tuple(r) for r in rows]
 
 
 def objective_names(study: Study) -> list[str]:
@@ -99,6 +105,7 @@ class HistoryWriter:
         self.space = space
         self.study = study
         self.columns = history_columns(space, study)
+        self._n_pts = 3 * len(list(space.points(space.from_vehicle())))
         self.path.parent.mkdir(parents=True, exist_ok=True)
         append = resume and self.path.exists() and self.path.stat().st_size > 0
         self._fh: IO[str] = self.path.open("a" if append else "w", newline="", encoding="utf-8")
@@ -114,13 +121,21 @@ class HistoryWriter:
         evaluation: Evaluation,
         seconds: float,
         source: str,
+        points: ArrayLike | None = None,
+        *,
+        flush: bool = True,
     ) -> None:
-        """Write one row and flush."""
+        """Write one row and flush.
+
+        ``points`` optionally gives the already decoded point coordinates of ``x`` (flat,
+        ``3 * n_variables`` values in variable order) so that they need not be recomputed.
+        """
         xa = np.asarray(x, dtype=np.float64)
         status = evaluation_status(evaluation)
-        n_pts = 3 * len(list(self.space.points(self.space.from_vehicle())))
         if status == "infeasible":
-            pts = [float("nan")] * n_pts
+            pts = [float("nan")] * self._n_pts
+        elif points is not None:
+            pts = [float(c) for c in np.ravel(points)]
         else:
             pts = [float(c) for p in self.space.points(xa).values() for c in p]
         row: list[Any] = [eval_id, *map(float, xa), *pts]
@@ -130,6 +145,11 @@ class HistoryWriter:
         row += [float(evaluation.max_g), bool(evaluation.feasible), status]
         row += [float(seconds), source]
         self._csv.writerow(row)
+        if flush:
+            self._fh.flush()
+
+    def flush(self) -> None:
+        """Flush the file (after ``append(..., flush=False)`` rows)."""
         self._fh.flush()
 
     def close(self) -> None:
