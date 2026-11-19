@@ -8,7 +8,6 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geometry.corners import Corner
 
 _V3 = tuple[float, float, float]
@@ -38,20 +37,6 @@ class RockerResult:
 def side_sign(corner: Corner) -> float:
     """Return +1 for left corners and -1 for right corners (reflection sense)."""
     return 1.0 if corner.side == "left" else -1.0
-
-
-def rotate_rocker_points(
-    corner: Corner, angle: float
-) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64] | None]:
-    """Rotate ``pushrod_inner``, ``rocker_spring`` and ``rocker_arb`` by the reported ``angle``."""
-    pivot = np.asarray(corner.points["rocker_pivot"])
-    rot = axis_angle_matrix(corner.rocker_axis, side_sign(corner) * angle)
-    arb = corner.points.get("rocker_arb")
-    return (
-        pivot + rot @ (corner.points["pushrod_inner"] - pivot),
-        pivot + rot @ (corner.points["rocker_spring"] - pivot),
-        None if arb is None else pivot + rot @ (arb - pivot),
-    )
 
 
 def _t(v: ArrayLike) -> _V3:

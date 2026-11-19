@@ -23,16 +23,6 @@ def axis_angle_matrix(axis: ArrayLike, angle: float) -> NDArray[np.float64]:
     return out
 
 
-def rotate_about_line(
-    p: ArrayLike, origin: ArrayLike, axis: ArrayLike, angle: float
-) -> NDArray[np.float64]:
-    """Rotate point ``p`` by ``angle`` about the line through ``origin`` along ``axis``."""
-    o = np.asarray(origin, dtype=np.float64)
-    r = axis_angle_matrix(axis, angle)
-    out: NDArray[np.float64] = o + r @ (np.asarray(p, dtype=np.float64) - o)
-    return out
-
-
 def rotation_between(a: ArrayLike, b: ArrayLike) -> NDArray[np.float64]:
     """Minimal rotation matrix taking the direction of ``a`` onto the direction of ``b``."""
     u = np.asarray(a, dtype=np.float64)

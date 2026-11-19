@@ -6,7 +6,6 @@ import pytest
 
 from suspkin.units import (
     display_unit,
-    format_quantity,
     normalize_dim,
     parse_quantity,
     slope_dim,
@@ -77,9 +76,6 @@ def test_display_roundtrip() -> None:
     assert display_unit("stiffness") == "N/mm"
     assert display_unit("ratio") == ""
     assert display_unit("percent") == "%"
-    for dim, v in [("length", 0.03), ("angle", 0.2), ("stiffness", 35000.0), ("angle/length", 1.7)]:
-        text = format_quantity(v, dim, digits=10)
-        assert parse_quantity(text, dim) == pytest.approx(v)
 
 
 def test_mm_per_s2_is_not_confused_with_m_per_s2() -> None:

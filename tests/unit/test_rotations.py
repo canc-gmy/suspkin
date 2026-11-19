@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from suspkin.geom_math import axis_angle_matrix, rotate_about_line, rotation_between
+from suspkin.geom_math import axis_angle_matrix, rotation_between
 
 
 def test_quarter_turn_about_z() -> None:
@@ -20,17 +20,6 @@ def test_matrix_is_orthonormal() -> None:
 def test_zero_axis_rejected() -> None:
     with pytest.raises(ValueError):
         axis_angle_matrix([0, 0, 0], 1.0)
-
-
-def test_rotate_about_line_preserves_line_and_radius() -> None:
-    o, ax = np.array([1.0, 2.0, 3.0]), np.array([0.0, 1.0, 1.0])
-    on_line = o + 0.7 * ax
-    np.testing.assert_allclose(rotate_about_line(on_line, o, ax, 1.1), on_line, atol=1e-12)
-    p = np.array([2.0, -1.0, 0.5])
-    q = rotate_about_line(p, o, ax, 0.9)
-    u = ax / np.linalg.norm(ax)
-    assert np.linalg.norm(q - o) == pytest.approx(np.linalg.norm(p - o))
-    assert (q - o) @ u == pytest.approx((p - o) @ u)
 
 
 @pytest.mark.parametrize(

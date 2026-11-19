@@ -28,19 +28,9 @@ def m_to_mm(x: ArrayLike) -> ArrayLike:
     return np.multiply(x, 1000.0)
 
 
-def mm_to_m(x: ArrayLike) -> ArrayLike:
-    """Convert millimetres to metres."""
-    return np.multiply(x, 0.001)
-
-
 def rad_to_deg(x: ArrayLike) -> ArrayLike:
     """Convert radians to degrees."""
     return np.degrees(x)
-
-
-def deg_to_rad(x: ArrayLike) -> ArrayLike:
-    """Convert degrees to radians."""
-    return np.radians(x)
 
 
 _ATOMS: tuple[str, ...] = (
@@ -212,13 +202,6 @@ def display_unit(dim: Dim) -> str:
 def display_factor(dim: Dim) -> float:
     """Factor converting an SI value of ``dim`` to its display unit."""
     return _display(dim)[1]
-
-
-def format_quantity(v_si: float, dim: Dim, digits: int = 4) -> str:
-    """Format an SI value in display units, e.g. ``0.03 -> "30 mm"``."""
-    unit, factor = _display(dim)
-    txt = f"{v_si * factor:.{digits}g}"
-    return f"{txt} {unit}" if unit else txt
 
 
 def slope_dim(metric_dim: Dim, input_dim: Dim) -> Dim:

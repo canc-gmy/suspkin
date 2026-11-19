@@ -25,9 +25,8 @@ itself and the CLI commands `check` and `optimize` follow the stable rules above
 
 ## Deprecation policy
 
-A stable name is not removed without warning. It first emits a `DeprecationWarning` (via
-`suspkin._deprecation.deprecated`, which states the version of deprecation and of removal)
-and stays available for at least one minor release; removal happens in a later release.
+A stable name is not removed without warning. It first emits a `DeprecationWarning`
+stating the version of deprecation and of removal, and stays available for at least one minor release; removal happens in a later release.
 Deprecations are listed in the [Changelog](../changelog.md).
 
 ## Golden regression snapshots

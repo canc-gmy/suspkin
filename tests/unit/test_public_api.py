@@ -1,15 +1,13 @@
-"""Public API snapshot, schema versioning and deprecation helper."""
+"""Public API snapshot, schema versioning."""
 
 from __future__ import annotations
 
-import warnings
 from pathlib import Path
 
 import pytest
 import yaml
 
 import suspkin
-from suspkin._deprecation import deprecated
 from suspkin.geometry.io import VehicleConfigError, load_vehicle, save_vehicle
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "minimal_vehicle.yaml"
@@ -93,18 +91,3 @@ def test_save_writes_schema_first_and_roundtrips(tmp_path: Path) -> None:
     assert next(iter(saved)) == "schema"
     assert saved["schema"] == 1
     assert load_vehicle(out) == v
-
-
-def test_deprecated_warns_and_passes_through() -> None:
-    @deprecated("use g", since="1.0.0", removed_in="2.0.0")
-    def f(a: int, b: int = 1) -> int:
-        """Doc."""
-        return a + b
-
-    with pytest.warns(DeprecationWarning, match="since 1.0.0.*removed in 2.0.0.*use g") as rec:
-        assert f(1, b=2) == 3
-    assert rec[0].filename == __file__
-    assert f.__doc__ == "Doc."
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert f(2) == 3

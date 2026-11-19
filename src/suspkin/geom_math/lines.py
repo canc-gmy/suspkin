@@ -81,17 +81,3 @@ def intersect_lines_2d(
     if abs(det) < tol * float(np.linalg.norm(n1) * np.linalg.norm(n2)):
         return None
     return np.linalg.solve(np.array([n1, n2]), np.array([l1[1], l2[1]]))
-
-
-def intersect_line_plane(
-    p0: ArrayLike, direction: ArrayLike, plane_point: ArrayLike, normal: ArrayLike
-) -> Vec | None:
-    """3D line ``p0 + t d`` with a plane; ``None`` if the line is parallel to the plane."""
-    p = np.asarray(p0, dtype=np.float64)
-    d = np.asarray(direction, dtype=np.float64)
-    n = np.asarray(normal, dtype=np.float64)
-    denom = float(n @ d)
-    if abs(denom) < PARALLEL_TOL * float(np.linalg.norm(n) * np.linalg.norm(d)):
-        return None
-    t = float(n @ (np.asarray(plane_point, dtype=np.float64) - p)) / denom
-    return p + t * d

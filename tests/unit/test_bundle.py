@@ -18,7 +18,6 @@ from suspkin.report import (
     BundleError,
     StudyResults,
     build_report,
-    bundle_to_results,
     is_bundle,
     load_bundle,
     run_standard_studies,
@@ -68,10 +67,8 @@ def test_round_trip(results: StudyResults, tmp_path: Path) -> None:
     assert m["params"]["roll_deg"] == 1.0
     assert set(m["params"]) == {"travel", "rack", "roll_deg", "heave", "pitch_deg", "steps"}
     json.dumps(b.summary)  # JSON-safe: nan became null
-    back = bundle_to_results(b)
-    assert _same(back.summary.to_dict(), results.summary.to_dict())
-    assert back.params == results.params
-    assert len(back.roll) == 5
+    assert _same(b.summary, json_safe(results.summary.to_dict()))
+    assert len(b.tables["roll"]) == 5
 
 
 def test_files_use_lf(results: StudyResults, tmp_path: Path) -> None:
@@ -125,8 +122,7 @@ def test_lossless_floats_nan_int_and_empty_rack(results: StudyResults, tmp_path:
                 np.testing.assert_array_equal(
                     b.tables[name][col].to_numpy(), df[col].to_numpy()
                 )  # bitwise, nan == nan
-    back = bundle_to_results(b)
-    assert len(back.rack) == 0 and len(back.roll) == len(roll)
+    assert len(b.tables["roll"]) == len(roll)
 
 
 def test_save_overwrite_and_stale_tables(results: StudyResults, tmp_path: Path) -> None:

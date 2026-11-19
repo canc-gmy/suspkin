@@ -22,12 +22,9 @@ from suspkin.units import Dim, slope_dim
 __all__ = [
     "MetricNameError",
     "corner_metric_dim",
-    "corner_metric_names",
     "slope_dim",
     "summary_metric_dim",
-    "summary_metric_names",
     "vehicle_metric_dim",
-    "vehicle_metric_names",
 ]
 
 CORNER_IDS: tuple[str, ...] = ("FL", "FR", "RL", "RR")
@@ -194,11 +191,6 @@ def corner_metric_dim(name: str) -> Dim:
     return _lookup(name, _CORNER, [], "corner")
 
 
-def corner_metric_names() -> list[str]:
-    """Sorted corner metric names (point coordinate columns excluded)."""
-    return sorted(_CORNER)
-
-
 def vehicle_metric_dim(name: str) -> Dim:
     """Dimension of a vehicle-sweep column (``FL_camber_ground``, ``rc_front_z``, ...)."""
     if name in _VEHICLE_OWN:
@@ -220,16 +212,6 @@ def _expanded() -> dict[str, Dim]:
     return out
 
 
-def vehicle_metric_names() -> list[str]:
-    """Sorted vehicle metric names."""
-    return sorted({**_VEHICLE_OWN, **_expanded()})
-
-
 def summary_metric_dim(name: str) -> Dim:
     """Dimension of a ``VehicleSummary`` field (dotted for axle fields)."""
     return _lookup(name, _SUMMARY, [], "summary")
-
-
-def summary_metric_names() -> list[str]:
-    """Sorted summary metric names."""
-    return sorted(_SUMMARY)

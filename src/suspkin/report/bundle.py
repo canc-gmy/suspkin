@@ -45,7 +45,6 @@ __all__ = [
     "BUNDLE_SCHEMA",
     "Bundle",
     "BundleError",
-    "bundle_to_results",
     "is_bundle",
     "json_safe",
     "load_bundle",
@@ -256,20 +255,3 @@ def _summary_from_dict(d: Mapping[str, Any]) -> VehicleSummary:
     }
     axles = {ax: AxleSummary(**{k: _nan(v) for k, v in d[ax].items()}) for ax in ("front", "rear")}
     return VehicleSummary(front=axles["front"], rear=axles["rear"], **own)
-
-
-def bundle_to_results(bundle: Bundle) -> StudyResults:
-    """Rebuild a ``StudyResults`` from a bundle (null summary values become nan)."""
-    empty = pd.DataFrame()
-    t = bundle.tables
-    return StudyResults(
-        vehicle=bundle.vehicle,
-        front_corner=t.get("front_corner", empty),
-        rear_corner=t.get("rear_corner", empty),
-        rack=t.get("rack", empty),
-        heave=t.get("heave", empty),
-        roll=t.get("roll", empty),
-        pitch=t.get("pitch", empty),
-        summary=_summary_from_dict(bundle.summary),
-        params=dict(bundle.manifest.get("params", {})),
-    )

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from suspkin.geom_math.lines import (
-    intersect_line_plane,
     intersect_lines_2d,
     line_direction_2d,
     line_through_2d,
@@ -71,9 +70,3 @@ def test_line_direction() -> None:
 def test_coincident_points_raises() -> None:
     with pytest.raises(ValueError):
         line_through_2d([1, 1], [1, 1])
-
-
-def test_line_plane() -> None:
-    hit = intersect_line_plane([0, 0, 1], [1, 0, -1], [0, 0, 0], [0, 0, 1])
-    np.testing.assert_allclose(hit, [1, 0, 0])
-    assert intersect_line_plane([0, 0, 1], [1, 0, 0], [0, 0, 0], [0, 0, 1]) is None
