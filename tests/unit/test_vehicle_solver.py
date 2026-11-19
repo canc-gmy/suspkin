@@ -138,3 +138,26 @@ def test_contact_matches_brute_force(pose: dict[str, float]) -> None:
         r = CORNERS[k].axle_cfg.wheel.tyre_radius
         ref = _brute_lowest(s.corners[k], s.ground_normal, r)
         np.testing.assert_allclose(s.contact_points[k], ref, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("prev", "pose"),
+    [
+        ({"heave": 0.010}, {"heave": 0.012}),
+        ({"roll": 0.010}, {"roll": 0.012}),
+        ({"rack": 0.004}, {"rack": 0.006}),
+        ({"heave": 0.010}, {"heave": 0.010}),  # guess at the same pose
+    ],
+)
+def test_warm_start_matches_cold_solve(prev: dict[str, float], pose: dict[str, float]) -> None:
+    """Continuation (guess + secant slope warm start) lands on the cold solution."""
+    guess = solve_vehicle(VEHICLE, CORNERS, **prev)  # type: ignore[arg-type]
+    assert set(guess._slopes) == set(IDS)
+    warm = solve_vehicle(VEHICLE, CORNERS, guess=guess, **pose)  # type: ignore[arg-type]
+    cold = solve_vehicle(VEHICLE, CORNERS, **pose)  # type: ignore[arg-type]
+    for k in IDS:
+        assert warm.corners[k].travel == pytest.approx(cold.corners[k].travel, abs=1e-10)
+        for name, p in cold.corners[k].points.items():
+            np.testing.assert_allclose(warm.corners[k].points[name], p, atol=1e-9)
+        np.testing.assert_allclose(warm.contact_points[k], cold.contact_points[k], atol=1e-9)
+    assert warm.max_residual < 1e-9

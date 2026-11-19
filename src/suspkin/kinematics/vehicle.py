@@ -24,8 +24,8 @@ slightly off z = 0). Wheel travel is found per corner by a 1-D secant iteration.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -34,8 +34,20 @@ from suspkin.geom_math.rotations import axis_angle_matrix
 from suspkin.geom_math.vectors import wheel_spin_axis
 from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.models import Vehicle
+from suspkin.kinematics import _fast
 from suspkin.kinematics.arb import ArbState, solve_arb
-from suspkin.kinematics.corner import CornerState, _Ctx, solve_corner
+from suspkin.kinematics.corner import (
+    _NEWTON_F_TOL,
+    CornerState,
+    _Ctx,
+    _finish,
+    _Pose,
+    _pose,
+    _solve_light,
+    _state,
+    _tie_inner,
+    _tup,
+)
 from suspkin.kinematics.rocker import KinematicsError
 
 Vec = NDArray[np.float64]
@@ -60,13 +72,23 @@ class VehicleState:
     arb: dict[str, ArbState | None]
     max_residual: float
     pivot: Vec
+    # Converged ground-contact secant slopes per corner (warm start of the next pose).
+    _slopes: dict[CornerId, float] = field(default_factory=dict, repr=False, compare=False)
 
 
 def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: float) -> Vec:
     """Tyre point lowest along ``-ground_normal`` (body frame)."""
-    n = np.asarray(ground_normal, dtype=np.float64)
-    s = np.asarray(state.spin_axis, dtype=np.float64)
-    wc = np.asarray(state.points["wheel_center"], dtype=np.float64)
+    return _contact(
+        np.asarray(state.points["wheel_center"], dtype=np.float64),
+        np.asarray(state.spin_axis, dtype=np.float64),
+        np.asarray(ground_normal, dtype=np.float64),
+        tyre_radius,
+    )
+
+
+def _contact(
+    wc: Sequence[float] | Vec, s: Sequence[float] | Vec, n: Vec, tyre_radius: float
+) -> Vec:
     n0, n1, n2 = float(n[0]), float(n[1]), float(n[2])
     s0, s1, s2 = float(s[0]), float(s[1]), float(s[2])
     k = n0 * s0 + n1 * s1 + n2 * s2
@@ -114,14 +136,39 @@ def _solve_corner_ground(
     rack: float,
     guess: CornerState | None,
     ctx: _Ctx | None = None,
-) -> tuple[CornerState, Vec, float]:
-    """Secant iteration on travel so that the contact height equals ``z_static``."""
+    slope0: float | None = None,
+) -> tuple[CornerState, Vec, float, float]:
+    """Secant iteration on travel so that the contact height equals ``z_static``.
+
+    The iterates are solved without their point tables (``_solve_light``); only the
+    converged one is turned into a ``CornerState``. ``slope0`` is the converged secant
+    slope of the neighbouring pose, used for the first step (default ``n_z``). Returns
+    the state, its contact point, the height residual and the last secant slope.
+    """
     radius = corner.axle_cfg.wheel.tyre_radius
     nz = float(n[2])
+    c = _Ctx(corner) if ctx is None else ctx
 
-    def height(st: CornerState) -> tuple[Vec, float]:
-        cp = contact_point(st, n, radius)
+    def height(st: CornerState | _Pose) -> tuple[Vec, float]:
+        if isinstance(st, CornerState):
+            cp = contact_point(st, n, radius)
+        else:
+            cp = _contact(st.wheel_center, st.spin_axis, n, radius)
         return cp, float(n @ cp) + offset - z_static
+
+    if guess is not None and _fast.available() and (c.rack_axis is not None or rack == 0.0):
+        tie_inner = _tie_inner(c, rack)
+        res = _fast.ground(c, n, offset, z_static, _tup(tie_inner), guess, slope0)
+        if res is not None:
+            t_k, x_k, f_k, phi0, slope_k = res
+            try:
+                pose = _pose(c, x_k, f_k, t_k, rack, tie_inner, phi0)
+            except KinematicsError:
+                pose = None
+            if pose is not None:
+                cp, g = height(pose)
+                return _finish(c, pose), cp, g, slope_k
+        # Any failure: run the pure-Python path below from the same inputs.
 
     if guess is not None:
         t = guess.travel
@@ -134,19 +181,27 @@ def _solve_corner_ground(
         t = -g0 / nz
     if abs(t) > _MAX_TRAVEL:
         raise KinematicsError(f"{corner.id}: wheel cannot reach the ground (travel {t:.3f} m)")
-    st = solve_corner(corner, t, rack, guess=guess, _ctx=ctx)
+    st: CornerState | _Pose
+    if guess is not None and guess.rack == rack and guess.max_residual < _NEWTON_F_TOL:
+        # Re-solving the guess at its own travel and rack returns the guess.
+        st = guess
+    else:
+        st = _solve_light(c, t, rack, guess)
     cp, g = height(st)
+    slope = nz
+    if slope0 is not None and 0.5 < slope0 / nz < 2.0:
+        slope = slope0
     t_prev, g_prev = t, g
-    t = t - g / nz
+    t = t - g / slope
     for _ in range(_MAX_ITER):
         if abs(g) < _G_TOL:
-            return st, cp, g
+            return _state(c, st), cp, g, slope
         if abs(t) > _MAX_TRAVEL:
             raise KinematicsError(f"{corner.id}: wheel cannot reach the ground (travel {t:.3f} m)")
-        st = solve_corner(corner, t, rack, guess=st, _ctx=ctx)
+        st = _solve_light(c, t, rack, st)
         cp, g = height(st)
         if abs(g) < _G_TOL:
-            return st, cp, g
+            return _state(c, st), cp, g, slope
         dg = g - g_prev
         slope = dg / (t - t_prev) if abs(t - t_prev) > 1e-15 and abs(dg) > 1e-18 else nz
         t_prev, g_prev = t, g
@@ -194,12 +249,13 @@ def solve_vehicle(
     offset = float(pv[2]) - float(n @ pv) + heave
     states: dict[CornerId, CornerState] = {}
     cps: dict[CornerId, Vec] = {}
+    slopes: dict[CornerId, float] = {}
     worst = 0.0
     for cid in _ORDER:
         c = corners[cid]
         ctx = _Ctx(c) if _ctxs is None else _ctxs[cid]
         z_static = float(_static_contact(c, ctx.spin0)[2])
-        st, cp, g = _solve_corner_ground(
+        st, cp, g, slopes[cid] = _solve_corner_ground(
             c,
             n,
             offset,
@@ -207,6 +263,7 @@ def solve_vehicle(
             rack if c.axle == "front" else 0.0,
             None if guess is None else guess.corners[cid],
             ctx,
+            None if guess is None else guess._slopes.get(cid),
         )
         cp = cp.copy()
         cp.setflags(write=False)
@@ -235,4 +292,5 @@ def solve_vehicle(
         arb=arbs,
         max_residual=worst,
         pivot=np.array(pv, dtype=np.float64),
+        _slopes=slopes,
     )

@@ -75,6 +75,9 @@ def _cross(a: _V3, b: _V3) -> _V3:
     )
 
 
+RockerTuple = tuple[float, _V3, _V3, _V3 | None, float]
+
+
 class RockerCtx:
     """Static rocker data of a corner as plain floats (scalar fast path of the solver)."""
 
@@ -117,6 +120,17 @@ class RockerCtx:
 
     def solve(self, po: _V3, guess: float = 0.0) -> RockerResult:
         """See :func:`solve_rocker`; ``po`` is the pushrod outer point."""
+        angle, p_in, p_spring, p_arb, toggle = self.solve_tuple(po, guess)
+        return RockerResult(
+            angle,
+            np.array(p_in),
+            np.array(p_spring),
+            None if p_arb is None else np.array(p_arb),
+            toggle,
+        )
+
+    def solve_tuple(self, po: _V3, guess: float = 0.0) -> RockerTuple:
+        """``solve`` returning plain tuples (angle, inner, spring, arb, toggle margin)."""
         sign = self.sign
         pivot, axis, v_par = self.pivot, self.axis, self.v_par
         r = _sub(_sub(po, pivot), v_par)
@@ -149,13 +163,7 @@ class RockerCtx:
         nl, npu = math.sqrt(_dot(lever, lever)), math.sqrt(_dot(push, push))
         cosang = _dot(lever, push) / (nl * npu) if nl * npu > 1e-12 else 1.0
         a = math.acos(max(-1.0, min(1.0, cosang)))
-        return RockerResult(
-            angle,
-            np.array(p_in),
-            np.array(p_spring),
-            None if p_arb is None else np.array(p_arb),
-            min(a, math.pi - a),
-        )
+        return angle, p_in, p_spring, p_arb, min(a, math.pi - a)
 
 
 def solve_rocker(corner: Corner, pushrod_outer: ArrayLike, guess: float = 0.0) -> RockerResult:

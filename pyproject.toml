@@ -23,6 +23,7 @@ dependencies = [
 viz = ["plotly>=5.22"]
 opt = ["pymoo>=0.6.1"]
 app = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+fast = ["numba>=0.60"]
 surrogate = ["torch>=2.5,<2.7", "optuna>=4.0"]
 
 [dependency-groups]
@@ -81,8 +82,12 @@ files = ["src"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*", "optuna.*"]
+module = ["scipy.*", "matplotlib.*", "plotly.*", "pymoo.*", "optuna.*", "numba", "numba.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["suspkin.kinematics._nb_kernels"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
