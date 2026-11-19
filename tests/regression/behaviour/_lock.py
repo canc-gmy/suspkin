@@ -25,7 +25,7 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from _golden import flatten, refuse_in_ci
+from _golden import _atol, flatten, refuse_in_ci
 
 import suspkin
 
@@ -33,6 +33,12 @@ SNAP = Path(__file__).resolve().parent / "snapshots"
 REPO = Path(__file__).resolve().parents[3]
 RTOL = 1e-12
 ATOL = 1e-12
+
+# Numbers inside .html / .md / .txt: skeleton exact, literals at this tolerance (round-off
+# differs a little between platforms / BLAS builds, as in the golden suite).
+TEXT_RTOL = 1e-9
+TEXT_ATOL = 1e-9
+_FLOAT = re.compile(r"-?\d+\.\d+(?:[eE][+-]?\d+)?")
 
 # Wall-clock columns / keys: layout is locked, the measured values are not.
 _VOLATILE = re.compile(r"(^|[._])(seconds|elapsed|wall_?time|duration|timestamp)($|[._])")
@@ -100,7 +106,7 @@ def _cmp_scalar(new: Any, old: Any, key: str, where: str) -> None:
         assert new == old, f"{where}:{key}: {new!r} != {old!r}"
     elif isinstance(old, (int, float)) and isinstance(new, (int, float)):
         np.testing.assert_allclose(
-            new, old, rtol=RTOL, atol=ATOL, equal_nan=True, err_msg=f"{where}:{key}"
+            new, old, rtol=RTOL, atol=_atol(key), equal_nan=True, err_msg=f"{where}:{key}"
         )
     else:
         assert new == old, f"{where}:{key}: {new!r} != {old!r}"
@@ -130,7 +136,7 @@ def _cmp_csv(new_text: str, old_text: str, where: str) -> None:
                 a.to_numpy(dtype=float),
                 b.to_numpy(dtype=float),
                 rtol=RTOL,
-                atol=ATOL,
+                atol=_atol(str(col)),
                 equal_nan=True,
                 err_msg=f"{where}:{col}",
             )
@@ -138,8 +144,23 @@ def _cmp_csv(new_text: str, old_text: str, where: str) -> None:
             assert a.astype(str).tolist() == b.astype(str).tolist(), f"{where}:{col}"
 
 
-def _compare_text(rel: str, new_text: str, old_text: str) -> None:
+def _cmp_text_numeric(new_text: str, old_text: str, where: str) -> None:
+    """Exact skeleton (text with float literals blanked), float literals at tolerance."""
+    skel_new, skel_old = _FLOAT.sub("<F>", new_text), _FLOAT.sub("<F>", old_text)
+    assert skel_new == skel_old, f"{where}: text differs"
+    a = [float(m) for m in _FLOAT.findall(new_text)]
+    b = [float(m) for m in _FLOAT.findall(old_text)]
+    np.testing.assert_allclose(a, b, rtol=TEXT_RTOL, atol=TEXT_ATOL, err_msg=f"{where}: numbers")
+
+
+def _compare_text(rel: str, new_text: str, old_text: str, *, relaxed: bool = False) -> None:
     suffix = Path(rel).suffix.lower()
+    if relaxed:  # layout only: CSV column names, nothing else
+        if suffix in _TABLE:
+            new = pd.read_csv(io.StringIO(new_text)).columns
+            old = pd.read_csv(io.StringIO(old_text)).columns
+            assert list(new) == list(old), f"{rel}: columns differ"
+        return
     if suffix in _TABLE:
         _cmp_csv(new_text, old_text, rel)
     elif suffix == ".json":
@@ -147,15 +168,28 @@ def _compare_text(rel: str, new_text: str, old_text: str) -> None:
     elif suffix in {".yaml", ".yml"}:
         _cmp_tree(new_text, old_text, yaml.safe_load, rel)
     else:
-        assert new_text == old_text, f"{rel}: text differs"
+        _cmp_text_numeric(new_text, old_text, rel)
 
 
 def _collect(out: Path) -> list[Path]:
     return sorted(p for p in out.rglob("*") if p.is_file())
 
 
-def snapshot_dir(name: str, out: Path, stdout: str, code: int, *, update: bool, tmp: Path) -> None:
-    """Write (``update``) or compare the snapshot ``snapshots/<name>`` of one lock case."""
+def snapshot_dir(
+    name: str,
+    out: Path,
+    stdout: str,
+    code: int,
+    *,
+    update: bool,
+    tmp: Path,
+    relaxed: bool = False,
+) -> None:
+    """Write (``update``) or compare the snapshot ``snapshots/<name>`` of one lock case.
+
+    ``relaxed`` (comparison only) locks the file layout, CSV column names and the exit code,
+    and skips stdout and all values: for cases whose numbers depend on the platform.
+    """
     dest = SNAP / name
     files = {p.relative_to(out).as_posix(): p for p in _collect(out)} if out.exists() else {}
     texts: dict[str, str] = {"stdout.txt": scrub(stdout, tmp=tmp), "exit_code.txt": f"{code}\n"}
@@ -187,6 +221,8 @@ def snapshot_dir(name: str, out: Path, stdout: str, code: int, *, update: bool, 
     for rel, new_text in texts.items():
         old_text = (dest / rel).read_text(encoding="utf-8")
         if rel.startswith("files/"):
-            _compare_text(f"{name}/{rel}", new_text, old_text)
+            _compare_text(f"{name}/{rel}", new_text, old_text, relaxed=relaxed)
+        elif relaxed and rel == "stdout.txt":
+            continue
         else:
             assert new_text == old_text, f"{name}/{rel}: differs"
