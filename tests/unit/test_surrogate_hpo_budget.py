@@ -15,7 +15,8 @@ pytest.importorskip("torch")
 from suspkin.surrogate import hpo
 from suspkin.surrogate.data import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
 from suspkin.surrogate.dataset import DatasetError
-from suspkin.surrogate.hpo import search, subsample_train, trial_budget, write_hpo_report
+from suspkin.surrogate.hpo import search, subsample_train, trial_budget
+from suspkin.surrogate.report import write_hpo_report
 from suspkin.surrogate.train import TrainConfig
 from tests.unit.test_surrogate_model import make_ds
 

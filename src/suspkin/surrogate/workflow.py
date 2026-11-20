@@ -25,7 +25,8 @@ from suspkin.optimize.spec.surrogate import SurrogateSpec
 from suspkin.plotting.surrogate import write_surrogate_figures
 from suspkin.surrogate.data import SPLIT_TEST, Axle, AxleDataset
 from suspkin.surrogate.dataset import DatasetError, check_dataset_matches, load_dataset
-from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles, write_hpo_report
+from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles
+from suspkin.surrogate.report import write_hpo_report
 from suspkin.surrogate.train import (
     EvalReport,
     TrainConfig,

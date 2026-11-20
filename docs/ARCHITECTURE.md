@@ -2058,9 +2058,11 @@ The surrogate predicts the **left corner** of each axle on a fixed grid (front: 
 | [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry (name, source column, encoding `value` or `line_angle`, SI tolerance, axle membership; `wrap_line_angle`; 29 front and 28 rear channels) and the corner extractor: one design's left-corner sweep gives the channel tensor `Y` and the validity mask. |
 | [data.py](../src/suspkin/surrogate/data.py) | `AxleDataset` (the in-memory contract between sampling and training), the sub design space of one axle (`AxleSpace`) with the Latin hypercube (`lhs`), and the fixed output grid per axle (`AxleGrid`: travel and, on the front, rack; both contain 0). |
 | [dataset.py](../src/suspkin/surrogate/dataset.py) | Sharded `.npz` dataset: sampling with resume, append, load, split assignment, meta hashes. |
-| [model.py](../src/suspkin/surrogate/model.py) | `MLPConfig` and `SurrogateMLP` (body, regression head and validity head), per-channel standardisation (`ChannelScaler`) and POD basis (`PodBasis`). |
+| [normalise.py](../src/suspkin/surrogate/normalise.py) | Per-channel standardisation (`ChannelScaler`) and POD basis (`PodBasis`); numpy only. |
+| [model.py](../src/suspkin/surrogate/model.py) | `MLPConfig` and `SurrogateMLP`: body, regression head and validity head. |
 | [train.py](../src/suspkin/surrogate/train.py) | `TrainConfig`, `resolve_device`, masked loss, training and fine-tuning, `evaluate`, `TrainedModel` save and load, `SurrogatePredictor` (batched inference from a saved axle model). |
-| [hpo.py](../src/suspkin/surrogate/hpo.py) | Optuna architecture search per axle (TPE, Hyperband pruner, SQLite storage) and its Markdown report (`write_hpo_report`). |
+| [hpo.py](../src/suspkin/surrogate/hpo.py) | Optuna architecture search per axle (TPE, Hyperband pruner, SQLite storage). |
+| [report.py](../src/suspkin/surrogate/report.py) | Markdown report of the search (`write_hpo_report`); reads `optuna.db` read-only, stdlib only, no torch. |
 | [workflow.py](../src/suspkin/surrogate/workflow.py) | `train_surrogate` and `validate_surrogate` from a study and a surrogate root; validation tables and figures. |
 | [vehicle_layer.py](../src/suspkin/surrogate/vehicle_layer.py) | Analytic vehicle layer (numpy): heave, roll and pitch travel, roll centre, anti-features, roll stiffness, TLLTD, steering, summary; `layer_error`. |
 | [evaluate.py](../src/suspkin/surrogate/evaluate.py) | `SurrogateEvaluator`: networks, then exact corner states, then the v0.8 constraint evaluator. |

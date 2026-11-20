@@ -33,7 +33,8 @@ from torch.nn import functional as F  # noqa: N812  # noqa: E402
 
 from suspkin.surrogate.channels import CHANNELS
 from suspkin.surrogate.data import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
-from suspkin.surrogate.model import ChannelScaler, MLPConfig, PodBasis, SurrogateMLP
+from suspkin.surrogate.model import MLPConfig, SurrogateMLP
+from suspkin.surrogate.normalise import ChannelScaler, PodBasis
 
 _MAX_RESIDENT_FRACTION = 0.35
 _LOG = logging.getLogger(__name__)
