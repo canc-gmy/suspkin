@@ -16,67 +16,38 @@ from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
 from suspkin.geometry.model import Axle
-from suspkin.geometry.vectors import wheel_spin_axis
-from suspkin.metrics.arrays import _ic_arrays, _swing, roll_line_arrays
-from suspkin.metrics.table import GRADIENTS
+from suspkin.geometry.vectors import (
+    cross_rows,
+    dot_rows,
+    norm_rows,
+    rodrigues_rows,
+    unit_rows,
+    wheel_spin_axis,
+    wrap_angle,
+)
+from suspkin.kinematics.ic_arrays import ic_arrays, roll_line_arrays, swing_angle
 
 Arr = NDArray[np.float64]
 _NAN = float("nan")
 
-__all__ = ["CStatic", "Rebuilt", "corner_columns", "make_static", "rebuild"]
+# metric column -> gradient column, per sweep variable
+GRADIENTS: dict[str, dict[str, str]] = {
+    "travel": {
+        "camber": "camber_gain",
+        "toe": "bump_steer",
+        "caster": "caster_change",
+        "half_track_change": "track_change_rate",
+        "rc_height": "rc_migration_rate",
+    },
+    "rack": {"steer_angle": "steer_gain"},
+}
 
-
-# --------------------------------------------------------------------------------------
-# small vector helpers (last axis = xyz)
-# --------------------------------------------------------------------------------------
-
-
-def _cross(a: Arr, b: Arr) -> Arr:
-    out: Arr = np.stack(
-        [
-            a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1],
-            a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2],
-            a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0],
-        ],
-        axis=-1,
-    )
-    return out
-
-
-def _dot(a: Arr, b: Arr) -> Arr:
-    out: Arr = np.sum(a * b, axis=-1, keepdims=True)
-    return out
-
-
-def _unit(a: Arr) -> Arr:
-    out: Arr = a / np.linalg.norm(a, axis=-1, keepdims=True)
-    return out
-
-
-def _rod(k: Arr, cs: Arr, sn: Arr, v: Arr) -> Arr:
-    """Rotate ``v`` about the unit axis ``k`` (``cs`` / ``sn`` = cos / sin of the angle)."""
-    out: Arr = v * cs + _cross(k, v) * sn + k * _dot(k, v) * (1.0 - cs)
-    return out
-
-
-def _wrap(a: Arr) -> Arr:
-    out: Arr = (a + np.pi) % (2.0 * np.pi) - np.pi
-    return out
-
-
-def _norm(a: Arr) -> Arr:
-    out: Arr = np.sqrt(np.einsum("ij,ij->i", a, a))
-    return out
+__all__ = ["GRADIENTS", "CStatic", "Rebuilt", "corner_columns", "make_static", "rebuild"]
 
 
 def _grad(y: Arr, x: Arr) -> Arr:
     """``np.gradient`` along axis 1 (typed as an array)."""
     out: Arr = np.gradient(y, x, axis=1)
-    return out
-
-
-def _rowdot(a: Arr, b: Arr) -> Arr:
-    out: Arr = np.einsum("ij,ij->i", a, b)
     return out
 
 
@@ -111,7 +82,7 @@ def make_static(corners: Sequence[Corner]) -> CStatic:
     cfg = c0.axle_cfg
     spin0 = wheel_spin_axis(c0.side, cfg.wheel.static_camber, cfg.wheel.static_toe)
     fz = spin0[2]
-    up = _unit(np.array([-fz * spin0[0], -fz * spin0[1], 1.0 - fz * spin0[2]]))
+    up = unit_rows(np.array([-fz * spin0[0], -fz * spin0[1], 1.0 - fz * spin0[2]]))
     scp = p["wheel_center"] - cfg.wheel.tyre_radius * up
     len0 = np.linalg.norm(p["rocker_spring"] - p["spring_chassis"], axis=-1)
     return CStatic(
@@ -166,23 +137,23 @@ def rebuild(st: CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> Rebuilt:
     p = st.p
     with np.errstate(all="ignore"):
         uf, lf = b3(p["uca_front"]), b3(p["lca_front"])
-        uca_hat = _unit(b3(p["uca_rear"] - p["uca_front"]))
-        lca_hat = _unit(b3(p["lca_rear"] - p["lca_front"]))
+        uca_hat = unit_rows(b3(p["uca_rear"] - p["uca_front"]))
+        lca_hat = unit_rows(b3(p["lca_rear"] - p["lca_front"]))
         cu, su = np.cos(s * th_u)[..., None], np.sin(s * th_u)[..., None]
         cl, sl = np.cos(s * th_l)[..., None], np.sin(s * th_l)[..., None]
-        ubj = uf + _rod(uca_hat, cu, su, b3(p["uca_outer"] - p["uca_front"]))
-        lbj = lf + _rod(lca_hat, cl, sl, b3(p["lca_outer"] - p["lca_front"]))
+        ubj = uf + rodrigues_rows(uca_hat, cu, su, b3(p["uca_outer"] - p["uca_front"]))
+        lbj = lf + rodrigues_rows(lca_hat, cl, sl, b3(p["lca_outer"] - p["lca_front"]))
         d = ubj - lbj
-        n = _unit(d)
-        u0 = _unit(b3(p["uca_outer"] - p["lca_outer"]))
-        cc = _dot(u0, n)
+        n = unit_rows(d)
+        u0 = unit_rows(b3(p["uca_outer"] - p["lca_outer"]))
+        cc = dot_rows(u0, n, keepdims=True)
         ik = np.where(cc < -1.0 + 1e-12, _NAN, 1.0 / (1.0 + cc))
-        w = _cross(u0, n)
+        w = cross_rows(u0, n)
         cph, sph = np.cos(s * psi)[..., None], np.sin(s * psi)[..., None]
 
         def rot(v: Arr) -> Arr:
-            wr = _cross(w, v)
-            return _rod(n, cph, sph, v + wr + _cross(w, wr) * ik)
+            wr = cross_rows(w, v)
+            return rodrigues_rows(n, cph, sph, v + wr + cross_rows(w, wr) * ik)
 
         tie_outer = lbj + rot(b3(p["tie_outer"] - p["lca_outer"]))
         wc = lbj + rot(b3(p["wheel_center"] - p["lca_outer"]))
@@ -190,49 +161,50 @@ def rebuild(st: CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> Rebuilt:
         if mount == "upright":
             po = lbj + rot(b3(p["pushrod_outer"] - p["lca_outer"]))
         elif mount == "lca":
-            po = lf + _rod(lca_hat, cl, sl, b3(p["pushrod_outer"] - p["lca_front"]))
+            po = lf + rodrigues_rows(lca_hat, cl, sl, b3(p["pushrod_outer"] - p["lca_front"]))
         else:
-            po = uf + _rod(uca_hat, cu, su, b3(p["pushrod_outer"] - p["uca_front"]))
+            po = uf + rodrigues_rows(uca_hat, cu, su, b3(p["pushrod_outer"] - p["uca_front"]))
 
         # rocker: closed form (RockerCtx.solve), branch nearest to the predicted angle
         pivot = b3(p["rocker_pivot"])
         axis = b3(st.axis)
-        k = _unit(axis)
+        k = unit_rows(axis)
         r_in = b3(p["pushrod_inner"]) - pivot
-        w_r = r_in - _dot(r_in, axis) * axis
-        ww = _dot(w_r, w_r)
-        axw = _cross(axis, w_r)
+        w_r = r_in - dot_rows(r_in, axis, keepdims=True) * axis
+        ww = dot_rows(w_r, w_r, keepdims=True)
+        axw = cross_rows(axis, w_r)
         length2 = np.sum((p["pushrod_inner"] - p["pushrod_outer"]) ** 2, axis=-1)[:, None, None]
-        r = (po - pivot) - _dot(r_in, axis) * axis
-        ca, cb = _dot(r, w_r)[..., 0], _dot(r, axw)[..., 0]
-        c2 = 0.5 * (_dot(r, r) + ww - length2)[..., 0]
+        r = (po - pivot) - dot_rows(r_in, axis, keepdims=True) * axis
+        ca, cb = dot_rows(r, w_r, keepdims=True)[..., 0], dot_rows(r, axw, keepdims=True)[..., 0]
+        c2 = 0.5 * (dot_rows(r, r, keepdims=True) + ww - length2)[..., 0]
         amp = np.hypot(ca, cb)
         bad = (amp < 1e-12) | (np.abs(c2) > amp * (1.0 + 1e-12))
         half = np.arccos(np.clip(c2 / amp, -1.0, 1.0))
         base = np.arctan2(cb, ca)
         g = s * guess
         c_a, c_b = base + half, base - half
-        best = np.where(np.abs(_wrap(c_a - g)) <= np.abs(_wrap(c_b - g)), c_a, c_b)
-        phys = np.where(bad, _NAN, g + _wrap(best - g))
+        best = np.where(np.abs(wrap_angle(c_a - g)) <= np.abs(wrap_angle(c_b - g)), c_a, c_b)
+        phys = np.where(bad, _NAN, g + wrap_angle(best - g))
         cph_r, sph_r = np.cos(phys)[..., None], np.sin(phys)[..., None]
 
         def rocker_rot(v: Arr) -> Arr:
-            return pivot + _rod(k, cph_r, sph_r, v)
+            return pivot + rodrigues_rows(k, cph_r, sph_r, v)
 
         p_in = rocker_rot(r_in)
         p_spring = rocker_rot(b3(p["rocker_spring"]) - pivot)
         lever = p_in - pivot
-        lever = lever - _dot(lever, axis) * axis
+        lever = lever - dot_rows(lever, axis, keepdims=True) * axis
         push = po - p_in
-        push = push - _dot(push, axis) * axis
+        push = push - dot_rows(push, axis, keepdims=True) * axis
         nl, npu = np.linalg.norm(lever, axis=-1), np.linalg.norm(push, axis=-1)
-        cosang = np.where(nl * npu > 1e-12, _dot(lever, push)[..., 0] / (nl * npu), 1.0)
+        lp = dot_rows(lever, push, keepdims=True)[..., 0]
+        cosang = np.where(nl * npu > 1e-12, lp / (nl * npu), 1.0)
         a = np.arccos(np.clip(cosang, -1.0, 1.0))
         toggle = np.minimum(a, np.pi - a)
 
-        spin = _unit(rot(st.spin0[None, None, :]))
+        spin = unit_rows(rot(st.spin0[None, None, :]))
         fz = spin[..., 2:3]
-        up = _unit(
+        up = unit_rows(
             np.concatenate(
                 [-fz * spin[..., 0:1], -fz * spin[..., 1:2], 1.0 - fz * spin[..., 2:3]], -1
             )
@@ -295,9 +267,9 @@ def corner_columns(rb: Rebuilt, travel: Arr) -> dict[str, Arr]:
             return gr
 
         g_cp, g_wc = ground(cp[:, 2]), ground(wc[:, 2])
-        un = u / _norm(u)[:, None]
+        un = u / norm_rows(u)[:, None]
         r = wc - lbj
-        perp = r - _rowdot(r, un)[:, None] * un
+        perp = r - dot_rows(r, un)[:, None] * un
         dx = cp[:, 0] - scp[:, 0]
         ht = np.abs(cp[:, 1])
         out["camber"] = -np.arcsin(np.clip(spin[:, 2], -1.0, 1.0))
@@ -308,7 +280,7 @@ def corner_columns(rb: Rebuilt, travel: Arr) -> dict[str, Arr]:
         out["scrub_radius"] = o * (cp[:, 1] - g_cp[:, 1])
         out["mechanical_trail"] = g_cp[:, 0] - cp[:, 0]
         out["kingpin_offset_wc"] = o * (wc[:, 1] - g_wc[:, 1])
-        out["spindle_length"] = _norm(perp)
+        out["spindle_length"] = norm_rows(perp)
         out["half_track"] = ht
         out["half_track_change"] = ht - np.abs(scp[:, 1])
         out["contact_patch_dx"] = dx
@@ -316,19 +288,19 @@ def corner_columns(rb: Rebuilt, travel: Arr) -> dict[str, Arr]:
         out["wheel_center_recession"] = wc[:, 0] - swc[:, 0]
         out["wheelbase_change_contribution"] = dx if st.axle == "front" else -dx
 
-        fv = _ic_arrays(pts, 0, cp[:, 0])
-        sv = _ic_arrays(pts, 1, cp[:, 1])
+        fv = ic_arrays(pts, 0, cp[:, 0])
+        sv = ic_arrays(pts, 1, cp[:, 1])
         inboard = -1.0 if st.side == "left" else 1.0
         anti = -1.0 if st.axle == "front" else 1.0
         out["fvic_y"] = fv.h
         out["fvic_z"] = fv.z
         out["fvsa"] = np.where(fv.finite, np.abs(fv.h - cp[:, 1]), np.inf)
-        out["fv_swing_angle"] = _swing(fv, cp[:, 1], cp[:, 2], inboard)
+        out["fv_swing_angle"] = swing_angle(fv, cp[:, 1], cp[:, 2], inboard)
         out["svic_x"] = sv.h
         out["svic_z"] = sv.z
         out["svsa"] = np.where(sv.finite, np.abs(sv.h - cp[:, 0]), np.inf)
-        out["sv_swing_angle"] = _swing(sv, cp[:, 0], cp[:, 2], anti)
-        out["sv_wc_angle"] = _swing(sv, wc[:, 0], wc[:, 2], anti)
+        out["sv_swing_angle"] = swing_angle(sv, cp[:, 0], cp[:, 2], anti)
+        out["sv_wc_angle"] = swing_angle(sv, wc[:, 0], wc[:, 2], anti)
         rd0, rd1 = roll_line_arrays(cp[:, 1], cp[:, 2], fv)
         out["rc_height"] = np.where(
             np.abs(rd0) < 1e-12, _NAN, cp[:, 2] + rd1 / rd0 * (0.0 - cp[:, 1])

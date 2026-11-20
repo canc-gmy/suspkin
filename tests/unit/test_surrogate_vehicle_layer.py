@@ -26,7 +26,7 @@ from suspkin.surrogate import (
     vehicle_layer,
     vehicle_statics,
 )
-from suspkin.surrogate.vehicle_layer import _Hermite
+from suspkin.surrogate.vehicle_layer import Hermite
 from suspkin.sweeps import sweep_vehicle, vehicle_frame
 
 REF = "configs/vehicles/fs_reference.yaml"
@@ -107,9 +107,9 @@ def test_hermite_reproduces_quadratics_and_flags_range() -> None:
     x = np.linspace(-1.0, 1.0, 9)
     y = (0.3 + 2.0 * x - 1.5 * x**2)[None, None, :]
     q = np.array([-0.55, 0.0, 0.123, 0.5, 0.7])  # interior: central-difference slopes
-    out = _Hermite(y, x)(q)[0, 0]
+    out = Hermite(y, x)(q)[0, 0]
     np.testing.assert_allclose(out, 0.3 + 2.0 * q - 1.5 * q**2, atol=1e-12)
-    far = _Hermite(y, x)(np.array([-1.01, 1.2, np.nan]))
+    far = Hermite(y, x)(np.array([-1.01, 1.2, np.nan]))
     assert np.isnan(far).all()
 
 

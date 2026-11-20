@@ -13,9 +13,9 @@ from suspkin.optimize.spec.surrogate import FinetuneSpec
 from suspkin.surrogate.active import AL_COLUMNS
 from suspkin.surrogate.active_steps import (
     FinetuneState,
-    _replay_finetune_state,
     advance_finetune,
     finetune_decision,
+    replay_finetune_state,
 )
 from tests.unit.test_surrogate_active import _n_rows, pristine, tiny_text, work
 
@@ -52,7 +52,7 @@ def test_replay_ignores_cpu_skips() -> None:
     rows: list[dict[str, object]] = [
         {"val_front": math.nan, "skipped_front": True, "skip_reason_front": "cpu"},
     ] * 3
-    assert _replay_finetune_state(rows, "front", FT) == FinetuneState()
+    assert replay_finetune_state(rows, "front", FT) == FinetuneState()
 
 
 def test_cpu_default_skips_finetuning_and_records_reason(work: tuple[Path, Path, Path]) -> None:
@@ -105,9 +105,9 @@ def test_replay_finetune_state_matches_live_updates() -> None:
     for kept, skipped in ((True, False), (True, False), (False, True)):
         live = advance_finetune(live, skipped=skipped, kept=kept, ft=FT)
     assert live == FinetuneState(0, 1)
-    assert _replay_finetune_state(rows[:3], "front", FT) == live
-    assert _replay_finetune_state(rows, "front", FT) == live
-    assert _replay_finetune_state([], "rear", FT) == FinetuneState()
+    assert replay_finetune_state(rows[:3], "front", FT) == live
+    assert replay_finetune_state(rows, "front", FT) == live
+    assert replay_finetune_state([], "rear", FT) == FinetuneState()
 
 
 def test_skipped_finetune_logs_keeps_dataset_and_resumes(work: tuple[Path, Path, Path]) -> None:

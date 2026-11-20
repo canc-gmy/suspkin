@@ -49,31 +49,31 @@ from suspkin.optimize.drivers import (
 from suspkin.optimize.evaluate import evaluate
 from suspkin.optimize.history import cache_key, read_history
 from suspkin.optimize.outputs import (
+    _ok_feasible,
+    best_row,
     copy_inputs,
+    pareto_rows,
     read_meta,
     study_hash,
 )
 from suspkin.optimize.pool import resolve_workers
 from suspkin.optimize.problem import BudgetExhausted, Problem
-from suspkin.optimize.spec import Optimizer, StudyConfigError, load_study
+from suspkin.optimize.spec import Optimizer, Study, StudyConfigError, load_study
+from suspkin.optimize.spec.surrogate import FinetuneSpec
 from suspkin.plotting.optimization import knee_index
 from suspkin.plotting.surrogate import write_surrogate_figures
 from suspkin.surrogate.active_steps import (
     BoxProblem,
     StopState,
-    _dominated,
-    _finetune,
-    _front,
-    _improved,
-    _replay_finetune_state,
-    _shard_rows,
-    _summary,
     advance_finetune,
     advance_stop,
     box_bounds,
     curve_residual,
+    dominated,
     finetune_decision,
     hits_boundary,
+    is_improved,
+    replay_finetune_state,
     select_infill,
     stop_reason,
     trust_ratio,
@@ -81,7 +81,10 @@ from suspkin.surrogate.active_steps import (
 )
 from suspkin.surrogate.channels import CornerSample, channels_for, extract_corner
 from suspkin.surrogate.data import (
+    SPLIT_TRAIN,
+    SPLIT_VAL,
     Axle,
+    AxleDataset,
     AxleGrid,
     AxleSpace,
     axle_grids,
@@ -156,6 +159,108 @@ def _sha256(path: Path) -> str | None:
     if not path.is_file():
         return None
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _summary(df: pd.DataFrame) -> dict[str, Any]:
+    """Best row of a history: ``x``, ``f_total``, ``feasible`` (status ok) and ``max_g``."""
+    i = best_row(df)
+    xcols = [c for c in df.columns if c.startswith("x_")]
+    return {
+        "x": df[xcols].to_numpy(dtype=np.float64)[i],
+        "f": float(df["f_total"].iloc[i]),
+        "feasible": bool(_ok_feasible(df)[i]),
+        "max_g": float(df["max_g"].iloc[i]),
+    }
+
+
+def _front(df: pd.DataFrame, study: Study) -> tuple[F64, F64]:
+    """Objective values and design vectors of the feasible non-dominated rows of a history."""
+    idx = pareto_rows(df, study)
+    ocols = [f"f_{o.name}" for o in study.objectives]
+    xcols = [c for c in df.columns if c.startswith("x_")]
+    return (
+        df[ocols].to_numpy(dtype=np.float64)[idx],
+        df[xcols].to_numpy(dtype=np.float64)[idx],
+    )
+
+
+def _shard_rows(path: Path, template: AxleDataset) -> AxleDataset:
+    """The rows of one appended shard as a dataset shaped like ``template``."""
+    with np.load(path) as z:
+        return AxleDataset(
+            axle=template.axle,
+            X=z["X"].astype(np.float64),
+            Y=z["Y"].astype(np.float32),
+            mask=z["mask"].astype(bool),
+            feasible=z["feasible"].astype(bool),
+            split=z["split"].astype(np.uint8),
+            source=z["source"],
+            weight=z["weight"].astype(np.float64),
+            channels=template.channels,
+            param_names=template.param_names,
+            travel=template.travel,
+            rack=template.rack,
+            meta=dict(template.meta),
+        )
+
+
+def _finetune(
+    root: Path,
+    axle: Axle,
+    *,
+    ft: FinetuneSpec,
+    lr_factor: float,
+    device: str,
+    seed: int,
+    k: int,
+    caches: dict[str, Any],
+) -> tuple[float, bool]:
+    """Fine-tune the current model of ``axle``; returns ``(score, kept_init_weights)``.
+
+    Trains on all active-learning rows plus ``ft.replay`` earlier train rows (drawn once from
+    ``seed``, normalised and moved to the device on the first call, then reused through
+    ``caches``); the validation split is unchanged. The early-stopping score is the mean of
+    the validation score and the score on all active-learning rows; training stops after
+    ``ft.patience`` epochs without a new best.
+    """
+    from dataclasses import replace
+
+    from suspkin.surrogate.train import FinetuneCache, TrainedModel, train
+
+    mdir = root / "models" / axle / "model"
+    pre = root / "models" / axle / "pre_al"
+    if not pre.exists():
+        shutil.copytree(mdir, pre)
+    model = TrainedModel.load(mdir, device=device)
+    cache: FinetuneCache | None = caches.get(axle)
+    if cache is None:
+        full = load_dataset(root, axle)
+        is_al = np.char.startswith(full.source.astype(str), "al_")
+        pool = np.flatnonzero((full.split == SPLIT_TRAIN) & ~is_al)
+        rng = np.random.default_rng([seed, 4096])
+        pick = (
+            rng.choice(pool, size=min(ft.replay, pool.size), replace=False) if pool.size else pool
+        )
+        keep = full.split == SPLIT_VAL
+        keep[pick] = True
+        cache = FinetuneCache(model, full.subset(keep), device)
+        if is_al.any():
+            cache.add_rows(full.subset(is_al))
+        caches[axle] = cache
+        del full
+    tcfg = replace(
+        model.tcfg,
+        max_epochs=ft.epochs,
+        patience=ft.patience,
+        device=cast(Any, device),
+        finetune_lr_factor=lr_factor,
+        seed=seed + k,
+    )
+    new = train(cache.template, model.mcfg, tcfg, init=model, cache=cache)
+    new.meta["al_iteration"] = k
+    new.save(root / "models" / axle / f"al_{k}")
+    new.save(mdir)
+    return float(new.val_score), bool(new.meta.get("kept_init_weights", False))
 
 
 def _run_inner(box: BoxProblem, opt: Optimizer) -> None:
@@ -355,7 +460,7 @@ def run_active_learning(
             at_min=bool(rw["at_min"]),
         )
     k0 = int(rows[-1]["k"]) + 1 if rows else 0
-    ft_state = {a: _replay_finetune_state(rows, a, al.finetune) for a in _AXLES}
+    ft_state = {a: replay_finetune_state(rows, a, al.finetune) for a in _AXLES}
     ft_caches: dict[str, Any] = {}
     # On a hardpoint grid the trust region cannot be smaller than one grid step per variable.
     step_z = full_space.grid_step_z()
@@ -584,11 +689,9 @@ def run_active_learning(
                 best1 = _summary(df2)
                 if front_obj is not None:
                     # Pareto mode: rho 1 if the new x* extends the verified front, else 0
-                    rho = (
-                        1.0 if is_new[0] and feas_fom and not _dominated(fo[0], front_obj) else 0.0
-                    )
+                    rho = 1.0 if is_new[0] and feas_fom and not dominated(fo[0], front_obj) else 0.0
                     improved = any(
-                        is_new[i] and bool(fe[i]) and not _dominated(fo[i], front_obj)
+                        is_new[i] and bool(fe[i]) and not dominated(fo[i], front_obj)
                         for i in range(len(X))
                     )
                 else:
@@ -601,7 +704,7 @@ def run_active_learning(
                         max_g_fom=mg_fom,
                         max_g_best=best0["max_g"],
                     )
-                    improved = _improved(best0, best1, 0.1 * al.stop.eps_f * f_scale)
+                    improved = is_improved(best0, best1, 0.1 * al.stop.eps_f * f_scale)
                 hit = hits_boundary(x_star, x_b, r, slack=0.5 * step_z)
                 r_next = update_radius(r, rho, hit, tr)
                 agree = (

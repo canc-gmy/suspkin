@@ -27,9 +27,9 @@ from suspkin.surrogate.evaluate import (
     OraclePredictor,
     SurrogateEvaluator,
     _joint_angles,
-    hermite,
 )
 from suspkin.surrogate.problem import SurrogateProblem
+from suspkin.surrogate.vehicle_layer import Hermite
 from suspkin.sweeps import states_to_frame
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -67,6 +67,12 @@ def random_designs(space: DesignSpace, n: int, seed: int = 3) -> np.ndarray:
 
 
 # ------------------------------------------------------------------------------ interpolation
+
+
+def hermite(y: np.ndarray, x: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """``y (C, L)`` interpolated at ``q`` through the batched :class:`Hermite`, ``(C, N)``."""
+    out: np.ndarray = Hermite(y[None], x)(q)[0]
+    return out
 
 
 def test_hermite_nodes_smooth_and_outside() -> None:

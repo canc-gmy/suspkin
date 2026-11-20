@@ -26,11 +26,11 @@ from suspkin.optimize.registry import (
 from suspkin.units import Dim, normalize_dim, parse_quantity
 
 
-class _Frozen(BaseModel):
+class Frozen(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
-def _scalar(v: Any, dim: Dim, factor: float = 1.0) -> float:
+def parse_scalar(v: Any, dim: Dim, factor: float = 1.0) -> float:
     """Number or unit string -> SI; ``factor`` scales bare numbers (``units: mm``)."""
     if isinstance(v, str):
         return parse_quantity(v, dim)
@@ -53,7 +53,7 @@ JOINT_NAMES: tuple[str, ...] = (
     "spring_chassis",
     "rocker_spring",
 )
-_VEHICLE_INPUT_DIM: dict[str, Dim] = {
+VEHICLE_INPUT_DIM: dict[str, Dim] = {
     "heave": "length",
     "roll": "angle",
     "pitch": "angle",
@@ -62,8 +62,8 @@ _VEHICLE_INPUT_DIM: dict[str, Dim] = {
 _AXES = ("x", "y", "z")
 #: Default resolution of the hardpoint grid (m): designs are producible to 0.5 mm.
 DEFAULT_RESOLUTION = 5e-4
-_RANGE_TOL = 1e-12
-_COORD_RE = re.compile(r"^(front|rear)\.([a-z_]+)\.([xyz])$")
+RANGE_TOL = 1e-12
+COORD_RE = re.compile(r"^(front|rear)\.([a-z_]+)\.([xyz])$")
 
 
 _DEG = math.pi / 180.0
@@ -106,14 +106,14 @@ def parse_point_ref(ref: str) -> tuple[Literal["front", "rear"], str]:
 
 def parse_coord_ref(ref: str) -> tuple[Literal["front", "rear"], str, int]:
     """Split ``"<axle>.<hardpoint>.<x|y|z>"`` into axle, hardpoint, axis index."""
-    m = _COORD_RE.match(ref)
+    m = COORD_RE.match(ref)
     if m is None:
         raise ValueError(f"coordinate {ref!r} must look like '<front|rear>.<hardpoint>.<x|y|z>'")
     axle, name = parse_point_ref(f"{m.group(1)}.{m.group(2)}")
     return axle, name, _AXES.index(m.group(3))
 
 
-def _check_point_ref(ref: str) -> str:
+def check_point_ref(ref: str) -> str:
     parse_point_ref(ref)
     return ref
 
@@ -129,12 +129,12 @@ def _seq(v: Any, n: int, what: str) -> list[Any]:
     return list(v)
 
 
-def _pair(v: Any, dim: Dim, factor: float = 1.0) -> list[float]:
-    return [_scalar(x, dim, factor) for x in _seq(v, 2, "range")]
+def parse_pair(v: Any, dim: Dim, factor: float = 1.0) -> list[float]:
+    return [parse_scalar(x, dim, factor) for x in _seq(v, 2, "range")]
 
 
 def _vec(v: Any, dim: Dim, factor: float = 1.0) -> list[float]:
-    return [_scalar(x, dim, factor) for x in _seq(v, 3, "vector")]
+    return [parse_scalar(x, dim, factor) for x in _seq(v, 3, "vector")]
 
 
 def _unit_factor(units: Any) -> float:
@@ -150,7 +150,7 @@ def _unit_factor(units: Any) -> float:
 # --------------------------------------------------------------------------------------
 
 
-class BoxRegion(_Frozen):
+class BoxRegion(Frozen):
     """Axis-aligned box in the vehicle frame."""
 
     kind: Literal["box"] = "box"
@@ -164,7 +164,7 @@ class BoxRegion(_Frozen):
         return self
 
 
-class HexahedronRegion(_Frozen):
+class HexahedronRegion(Frozen):
     """Hexahedron by 8 vertices (order: see module docstring)."""
 
     kind: Literal["hexahedron"] = "hexahedron"
@@ -176,7 +176,7 @@ class HexahedronRegion(_Frozen):
         return self
 
 
-class OffsetRegion(_Frozen):
+class OffsetRegion(Frozen):
     """Box relative to the baseline point: ``x/y/z`` -> ``(lo, hi)`` offsets (variable only)."""
 
     kind: Literal["offset"] = "offset"
@@ -199,7 +199,7 @@ class OffsetRegion(_Frozen):
         return self
 
 
-class SphereRegion(_Frozen):
+class SphereRegion(Frozen):
     """Sphere (keep-in or keep-out)."""
 
     kind: Literal["sphere"] = "sphere"
@@ -207,7 +207,7 @@ class SphereRegion(_Frozen):
     radius: float = Field(gt=0)
 
 
-class CylinderRegion(_Frozen):
+class CylinderRegion(Frozen):
     """Finite capped cylinder between the axis endpoints ``p0`` and ``p1``."""
 
     kind: Literal["cylinder"] = "cylinder"
@@ -254,20 +254,20 @@ def _region_raw(raw: Any, allowed: tuple[str, ...]) -> Any:
         out = {
             "kind": kind,
             "center": _vec(body.pop("center", None), "length", f),
-            "radius": _scalar(body.pop("radius", None), "length", f),
+            "radius": parse_scalar(body.pop("radius", None), "length", f),
         }
     elif kind == "cylinder":
         out = {
             "kind": kind,
             "p0": _vec(body.pop("p0", None), "length", f),
             "p1": _vec(body.pop("p1", None), "length", f),
-            "radius": _scalar(body.pop("radius", None), "length", f),
+            "radius": parse_scalar(body.pop("radius", None), "length", f),
         }
     else:  # offset
         out = {"kind": kind}
         for a in _AXES:
             if a in body:
-                out[a] = _pair(body.pop(a), "length", f)
+                out[a] = parse_pair(body.pop(a), "length", f)
     if body:
         raise ValueError(f"unknown keys {sorted(body)} in {kind} region")
     return out
@@ -298,21 +298,21 @@ Region = Annotated[
 # --------------------------------------------------------------------------------------
 
 
-def _parse_resolution(v: Any) -> Any:
+def parse_resolution(v: Any) -> Any:
     """``0.5 mm`` / number (SI) / ``None`` -> metres or ``None``; must be positive."""
     if v is None:
         return None
-    out = _scalar(v, "length")
+    out = parse_scalar(v, "length")
     if not out > 0.0:
         raise ValueError(f"resolution must be a positive length, got {v!r}")
     return out
 
 
-class Variable(_Frozen):
+class Variable(Frozen):
     """A hardpoint that moves inside ``domain`` (left point; the right side mirrors it)."""
 
     point: Annotated[
-        str, BeforeValidator(lambda v: _check_point_ref(v) if isinstance(v, str) else v)
+        str, BeforeValidator(lambda v: check_point_ref(v) if isinstance(v, str) else v)
     ]
     domain: Domain
     asymmetric: bool = False
@@ -323,7 +323,7 @@ class Variable(_Frozen):
     @field_validator("resolution", mode="before")
     @classmethod
     def _resolution(cls, v: Any) -> Any:
-        return _parse_resolution(v)
+        return parse_resolution(v)
 
     @property
     def effective_side(self) -> Literal["left", "right"]:
@@ -354,7 +354,7 @@ class Variable(_Frozen):
 # --------------------------------------------------------------------------------------
 
 
-class CornerSweep(_Frozen):
+class CornerSweep(Frozen):
     """Sweep of one corner over wheel travel (bump positive)."""
 
     kind: Literal["corner"]
@@ -365,7 +365,7 @@ class CornerSweep(_Frozen):
     @field_validator("travel", mode="before")
     @classmethod
     def _travel(cls, v: Any) -> Any:
-        return _pair(v, "length")
+        return parse_pair(v, "length")
 
     @model_validator(mode="after")
     def _check(self) -> CornerSweep:
@@ -374,7 +374,7 @@ class CornerSweep(_Frozen):
         return self
 
 
-class VehicleSweep(_Frozen):
+class VehicleSweep(Frozen):
     """Sweep of one body input (heave, roll, pitch or rack) with the others at ``base``."""
 
     kind: Literal["vehicle"]
@@ -386,18 +386,18 @@ class VehicleSweep(_Frozen):
     @model_validator(mode="before")
     @classmethod
     def _units(cls, raw: Any) -> Any:
-        if not isinstance(raw, Mapping) or raw.get("input") not in _VEHICLE_INPUT_DIM:
+        if not isinstance(raw, Mapping) or raw.get("input") not in VEHICLE_INPUT_DIM:
             return raw
         out = dict(raw)
-        dim = _VEHICLE_INPUT_DIM[raw["input"]]
+        dim = VEHICLE_INPUT_DIM[raw["input"]]
         if "range" in out and out["range"] != "full":
-            out["range"] = _pair(out["range"], dim)
+            out["range"] = parse_pair(out["range"], dim)
         if isinstance(out.get("base"), Mapping):
             base = {}
             for k, v in out["base"].items():
-                if k not in _VEHICLE_INPUT_DIM:
-                    raise ValueError(f"unknown base key {k!r}; expected {list(_VEHICLE_INPUT_DIM)}")
-                base[k] = _scalar(v, _VEHICLE_INPUT_DIM[k])
+                if k not in VEHICLE_INPUT_DIM:
+                    raise ValueError(f"unknown base key {k!r}; expected {list(VEHICLE_INPUT_DIM)}")
+                base[k] = parse_scalar(v, VEHICLE_INPUT_DIM[k])
             out["base"] = base
         return out
 
@@ -417,7 +417,7 @@ Sweep = Annotated[CornerSweep | VehicleSweep, Field(discriminator="kind")]
 
 def sweep_input_dim(sweep: CornerSweep | VehicleSweep) -> Dim:
     """Dimension of the sweep input (corner travel is a length)."""
-    return "length" if isinstance(sweep, CornerSweep) else _VEHICLE_INPUT_DIM[sweep.input]
+    return "length" if isinstance(sweep, CornerSweep) else VEHICLE_INPUT_DIM[sweep.input]
 
 
 def sweep_range(sweep: CornerSweep | VehicleSweep, vehicle: Vehicle | None = None) -> Pair | None:

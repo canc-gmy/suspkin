@@ -67,8 +67,8 @@ from suspkin.optimize.registry import (
     vehicle_metric_dim,
 )
 from suspkin.plotting import figures as _f
+from suspkin.plotting import units as display_units
 from suspkin.plotting.style import PALETTE, SIDE_LINESTYLES
-from suspkin.plotting.units import SUMMARY_ROWS as _SUMMARY_ROWS
 from suspkin.units import Dim, display_factor, display_unit
 
 __all__ = [
@@ -314,7 +314,7 @@ def _build() -> tuple[FigureSpec, ...]:
 
 def _summary_rows() -> tuple[SummaryRow, ...]:
     rows = []
-    for label, path, factor, unit, fmt in _SUMMARY_ROWS:
+    for label, path, factor, unit, fmt in display_units.SUMMARY_ROWS:
         rows.append(SummaryRow(label, path, summary_metric_dim(".".join(path)), factor, unit, fmt))
     for r in rows:
         _ = r.decimals  # validate the format strings at import time

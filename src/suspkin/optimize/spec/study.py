@@ -21,45 +21,43 @@ from suspkin.optimize.regions import has_grid_node, node_range
 from suspkin.optimize.registry import (
     summary_metric_dim,
 )
-from suspkin.optimize.spec.constraints import (
+from suspkin.optimize.spec.criteria import (
     BandConstraint,
     Constraint,
+    CurveObjective,
     DistanceConstraint,
     InsideConstraint,
     JointAngleConstraint,
+    Objective,
+    Optimizer,
     OutsideConstraint,
     RelationConstraint,
     SlopeConstraint,
     SummaryConstraint,
     ValueConstraint,
-    _prep_constraint,
-)
-from suspkin.optimize.spec.objectives import (
-    CurveObjective,
-    Objective,
-    Optimizer,
-    _prep_objective,
-    _prep_optimizer,
     objective_dim,
     objective_scale,
+    prep_constraint,
+    prep_objective,
+    prep_optimizer,
 )
 from suspkin.optimize.spec.surrogate import SurrogateSpec
 from suspkin.optimize.spec.variables import (
-    _RANGE_TOL,
     DEFAULT_RESOLUTION,
+    RANGE_TOL,
     BoxRegion,
     CornerSweep,
     CylinderRegion,
+    Frozen,
     HexahedronRegion,
     SphereRegion,
     StudyConfigError,
     Sweep,
     Variable,
     VehicleSweep,
-    _Frozen,
-    _parse_resolution,
     default_scale,
     parse_point_ref,
+    parse_resolution,
     sweep_input_dim,
     sweep_metric_dim,
     sweep_range,
@@ -71,7 +69,7 @@ from suspkin.units import slope_dim
 # --------------------------------------------------------------------------------------
 
 
-class Study(_Frozen):
+class Study(Frozen):
     """Optimisation study: variables, sweeps and constraints for one vehicle file."""
 
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
@@ -98,7 +96,7 @@ class Study(_Frozen):
     @field_validator("resolution", mode="before")
     @classmethod
     def _resolution(cls, v: Any) -> Any:
-        return _parse_resolution(v)
+        return parse_resolution(v)
 
     @model_validator(mode="before")
     @classmethod
@@ -109,12 +107,12 @@ class Study(_Frozen):
         sweeps = raw.get("sweeps") or {}
         cons = raw.get("constraints")
         if isinstance(sweeps, Mapping) and isinstance(cons, list | tuple):
-            out["constraints"] = [_prep_constraint(c, sweeps) for c in cons]
+            out["constraints"] = [prep_constraint(c, sweeps) for c in cons]
         objs = raw.get("objectives")
         if isinstance(sweeps, Mapping) and isinstance(objs, list | tuple):
-            out["objectives"] = [_prep_objective(o, sweeps) for o in objs]
+            out["objectives"] = [prep_objective(o, sweeps) for o in objs]
         if "optimizer" in raw:
-            out["optimizer"] = _prep_optimizer(raw["optimizer"])
+            out["optimizer"] = prep_optimizer(raw["optimizer"])
         return out
 
     @model_validator(mode="after")
@@ -286,7 +284,7 @@ def _check_ranges(study: Study, vehicle: Vehicle | None) -> None:
         label: str, c: str, v: float, sw: CornerSweep | VehicleSweep, what: str = "constraint"
     ) -> None:
         rng = sweep_range(sw, vehicle)
-        if rng is not None and not rng[0] - _RANGE_TOL <= v <= rng[1] + _RANGE_TOL:
+        if rng is not None and not rng[0] - RANGE_TOL <= v <= rng[1] + RANGE_TOL:
             raise ValueError(
                 f"{what} {c!r}: {label} = {v:g} lies outside the sweep range "
                 f"[{rng[0]:g}, {rng[1]:g}] (SI)"

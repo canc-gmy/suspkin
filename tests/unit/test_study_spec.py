@@ -14,7 +14,7 @@ from suspkin.metrics import add_gradients, vehicle_summary
 from suspkin.metrics.table import metrics_frame
 from suspkin.optimize import registry as reg
 from suspkin.optimize.spec import Study, StudyConfigError, load_study
-from suspkin.optimize.spec.constraints import BandConstraint
+from suspkin.optimize.spec.criteria import BandConstraint
 from suspkin.optimize.spec.variables import sweep_range
 from suspkin.sweeps import states_to_frame, sweep_vehicle, vehicle_frame
 from tests.unit.helpers import fixture_vehicle

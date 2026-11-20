@@ -45,7 +45,7 @@ import pandas as pd
 from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.model import Axle, BeamARB, Vehicle
-from suspkin.geometry.vectors import wheel_spin_axis
+from suspkin.geometry.vectors import rodrigues_rows, wheel_spin_axis, wrap_angle
 from suspkin.kinematics.arb import arb_stiffness
 from suspkin.kinematics.vehicle import cg_pivot
 from suspkin.metrics import vehicle as vm
@@ -265,7 +265,7 @@ def vehicle_statics(vehicles: Sequence[Vehicle]) -> VehicleStatics:
 
 
 # ----------------------------------------------------------------------------- interpolation
-class _Hermite:
+class Hermite:
     """Local cubic Hermite interpolation of ``y (B, K, L)`` along the last axis.
 
     Slopes by ``np.gradient``. Queries ``q`` are ``(N,)`` (shared) or ``(B, N)``; the result
@@ -276,10 +276,10 @@ class _Hermite:
         self.y, self.x = y, x
         self.m = m if m is not None else (np.gradient(y, x, axis=-1) if x.size > 1 else 0.0 * y)
 
-    def take(self, ix: Sequence[int]) -> _Hermite:
+    def take(self, ix: Sequence[int]) -> Hermite:
         """Same interpolant restricted to the channels ``ix``."""
         sel = list(ix)
-        return _Hermite(self.y[:, sel], self.x, self.m[:, sel])
+        return Hermite(self.y[:, sel], self.x, self.m[:, sel])
 
     def __call__(self, q: Arr) -> Arr:
         y, x, m = self.y, self.x, self.m
@@ -316,7 +316,7 @@ def _masked(batch: AxleBatch, names: Sequence[str]) -> Arr:
     return y
 
 
-def _travel_curves(batch: AxleBatch, names: Sequence[str], rack: float = 0.0) -> _Hermite:
+def travel_curves(batch: AxleBatch, names: Sequence[str], rack: float = 0.0) -> Hermite:
     """Curves versus travel at a fixed rack (interpolated along the rack axis if needed)."""
     y = _masked(batch, names)  # (B, K, R, T)
     nodes = batch.grid.rack
@@ -328,16 +328,16 @@ def _travel_curves(batch: AxleBatch, names: Sequence[str], rack: float = 0.0) ->
         red = np.full((b, k, t), np.nan)
     else:
         flat = y.transpose(0, 1, 3, 2).reshape(b, k * t, r)
-        red = _Hermite(flat, nodes)(np.array([rack])).reshape(b, k, t)
-    return _Hermite(red, batch.grid.travel)
+        red = Hermite(flat, nodes)(np.array([rack])).reshape(b, k, t)
+    return Hermite(red, batch.grid.travel)
 
 
-def _rack_curves(batch: AxleBatch, name: str, travel: float = 0.0) -> _Hermite:
+def _rack_curves(batch: AxleBatch, name: str, travel: float = 0.0) -> Hermite:
     """Curve of one channel versus rack at a fixed travel."""
     y = _masked(batch, [name])  # (B, 1, R, T)
     b, _, r, t = y.shape
-    at = _Hermite(y.reshape(b, r, t), batch.grid.travel)(np.array([travel]))  # (B, R, 1)
-    return _Hermite(at.reshape(b, 1, r), batch.grid.rack)
+    at = Hermite(y.reshape(b, r, t), batch.grid.travel)(np.array([travel]))  # (B, R, 1)
+    return Hermite(at.reshape(b, 1, r), batch.grid.rack)
 
 
 def _zero_node(x: Arr, what: str) -> int:
@@ -421,7 +421,7 @@ def _solve_pose(
     pitch: Arr,
 ) -> _Pose:
     """Wheel travels for prescribed body poses (rack 0) and the resulting wheel geometry."""
-    full = _travel_curves(batch, _POSE_FULL)
+    full = travel_curves(batch, _POSE_FULL)
     core = full.take(range(len(_POSE_CORE)))
     ix_core = {n: i for i, n in enumerate(_POSE_CORE)}
     ix_full = {n: i for i, n in enumerate(_POSE_FULL)}
@@ -516,24 +516,18 @@ def _roll_centre(pose: _Pose, pivot: Arr, heave: Arr, roll: Arr, pitch: Arr) -> 
 
 
 # ----------------------------------------------------------------------------- ARB
-def _rodrigues(v: Arr, k: Arr, ang: Arr) -> Arr:
-    c = np.cos(ang)[:, None]
-    s = np.sin(ang)[:, None]
-    out: Arr = v * c + np.cross(k, v) * s + k * np.sum(k * v, axis=-1, keepdims=True) * (1.0 - c)
-    return out
-
-
-def _wrap(a: Arr) -> Arr:
-    out: Arr = (a + math.pi) % (2.0 * math.pi) - math.pi
-    return out
-
-
 def _arb_wheel_rate_roll(st: AxleStatics, rocker_plus: Arr, rocker_minus: Arr) -> Arr:
     """Roll-mode ARB wheel rate ``k MR^2 / 2`` at travel 0 (zero without ARB), ``(B,)``."""
     if st.arb_type is None:
         return np.zeros(st.arb_k.shape)
     ends = [
-        st.rocker_pivot + _rodrigues(st.rocker_arb - st.rocker_pivot, st.rocker_axis, ang)
+        st.rocker_pivot
+        + rodrigues_rows(
+            st.rocker_axis,
+            np.cos(ang)[:, None],
+            np.sin(ang)[:, None],
+            st.rocker_arb - st.rocker_pivot,
+        )
         for ang in (rocker_plus, rocker_minus)
     ]
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -560,7 +554,7 @@ def _arb_wheel_rate_roll(st: AxleStatics, rocker_plus: Arr, rocker_minus: Arr) -
                 bad = (amp < 1e-12) | (np.abs(cc) > amp * (1.0 + 1e-12))
                 half = np.arccos(np.clip(cc / amp, -1.0, 1.0))
                 base = np.arctan2(cb, ca)
-                a1, a2 = _wrap(base + half), _wrap(base - half)
+                a1, a2 = wrap_angle(base + half), wrap_angle(base - half)
                 betas.append(np.where(bad, _NAN, np.where(np.abs(a1) <= np.abs(a2), a1, a2)))
             mr = (betas[0] - betas[1]) / _ARB_DELTA
     out: Arr = 0.5 * st.arb_k * mr**2
@@ -669,7 +663,7 @@ def _axle_static(batch: AxleBatch, st: AxleStatics) -> _AxleStatic:
         "sv_swing_angle",
         "sv_wc_angle",
     )
-    curves = _travel_curves(batch, names)
+    curves = travel_curves(batch, names)
     length = curves.y[:, 0]  # (B, T)
     x = batch.grid.travel
     mr = -np.gradient(length, x, axis=-1)
@@ -880,8 +874,8 @@ def _rack_sweep(batches: Mapping[str, AxleBatch], st: VehicleStatics, rack: Arr)
     names = ("camber", "toe")
     ix = {n: i for i, n in enumerate(names)}
     y = _masked(front, names)
-    at = _Hermite(y.reshape(b, 2 * front.grid.rack.size, -1), front.grid.travel)(np.array([0.0]))
-    curves = _Hermite(at.reshape(b, 2, front.grid.rack.size), front.grid.rack)
+    at = Hermite(y.reshape(b, 2 * front.grid.rack.size, -1), front.grid.travel)(np.array([0.0]))
+    curves = Hermite(at.reshape(b, 2, front.grid.rack.size), front.grid.rack)
     zeros = np.zeros((b, rack.size))
     cols: dict[str, Arr] = {
         "heave": zeros.copy(),

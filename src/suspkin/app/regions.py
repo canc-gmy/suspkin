@@ -14,7 +14,7 @@ import numpy as np
 from suspkin.app.models import RegionOut
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.spec import load_study
-from suspkin.optimize.spec.constraints import InsideConstraint, OutsideConstraint
+from suspkin.optimize.spec.criteria import InsideConstraint, OutsideConstraint
 from suspkin.optimize.spec.study import region_centroid
 from suspkin.optimize.spec.variables import BoxRegion, HexahedronRegion, OffsetRegion, SphereRegion
 from suspkin.plotting.regions import (

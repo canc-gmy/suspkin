@@ -156,7 +156,7 @@ def plot_study_3d(
     -------
     matplotlib.figure.Figure
     """
-    from suspkin.optimize.spec.constraints import InsideConstraint, OutsideConstraint
+    from suspkin.optimize.spec.criteria import InsideConstraint, OutsideConstraint
     from suspkin.optimize.spec.variables import parse_point_ref
 
     variables = space.study.variables

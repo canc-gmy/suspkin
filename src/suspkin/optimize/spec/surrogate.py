@@ -11,10 +11,10 @@ from pydantic import (
     model_validator,
 )
 
-from suspkin.optimize.spec.variables import _Frozen, _scalar
+from suspkin.optimize.spec.variables import Frozen, parse_scalar
 
 
-class AxisGrid(_Frozen):
+class AxisGrid(Frozen):
     """Uniform 1-D grid ``[min, max]`` with ``points`` nodes (SI), containing 0 (static pose)."""
 
     min: float
@@ -29,7 +29,7 @@ class AxisGrid(_Frozen):
         out = dict(raw)
         for k in ("min", "max"):
             if k in out:
-                out[k] = _scalar(out[k], "length")
+                out[k] = parse_scalar(out[k], "length")
         return out
 
     @model_validator(mode="after")
@@ -41,14 +41,14 @@ class AxisGrid(_Frozen):
         return self
 
 
-class GridSpec(_Frozen):
+class GridSpec(Frozen):
     """Output grid of the surrogate: wheel travel and (front axle only) rack."""
 
     travel: AxisGrid
     rack: AxisGrid | None = None
 
 
-class DatasetSpec(_Frozen):
+class DatasetSpec(Frozen):
     """Initial Latin-hypercube dataset: samples per axle, seed and rows per shard file."""
 
     n_initial: int = Field(default=20000, ge=1)
@@ -57,7 +57,7 @@ class DatasetSpec(_Frozen):
     lhs_optimization: Literal["auto", "random-cd", "none"] = "auto"
 
 
-class TrainingSpec(_Frozen):
+class TrainingSpec(Frozen):
     """Network training settings (the ``surrogate.training`` block)."""
 
     device: Literal["auto", "cpu", "cuda"] = "auto"
@@ -67,7 +67,7 @@ class TrainingSpec(_Frozen):
     finetune_lr_factor: float = Field(default=0.1, gt=0.0)
 
 
-class HpoSpec(_Frozen):
+class HpoSpec(Frozen):
     """Architecture search budget (the ``surrogate.hpo`` block); ``timeout`` in seconds (SI).
 
     ``max_epochs`` caps each search trial (``None``: ``training.max_epochs``; the effective cap
@@ -87,21 +87,21 @@ class HpoSpec(_Frozen):
         if isinstance(raw, Mapping) and raw.get("timeout") is not None:
             out = dict(raw)
             try:
-                out["timeout"] = _scalar(out["timeout"], "time")
+                out["timeout"] = parse_scalar(out["timeout"], "time")
             except ValueError as exc:
                 raise ValueError(f"hpo timeout: {exc}") from exc
             return out
         return raw
 
 
-class InfillSpec(_Frozen):
+class InfillSpec(Frozen):
     """Infill points per active-learning iteration: extra candidates and perturbations."""
 
     top: int = Field(default=0, ge=0)
     perturb: int = Field(default=4, ge=0)
 
 
-class FinetuneSpec(_Frozen):
+class FinetuneSpec(Frozen):
     """Fine-tuning of the axle networks between active-learning iterations.
 
     ``epochs`` caps one fine-tune, ``patience`` stops it after that many epochs without a
@@ -126,7 +126,7 @@ class FinetuneSpec(_Frozen):
     on_cpu: Literal["skip", "run"] = "skip"
 
 
-class TrustRegionSpec(_Frozen):
+class TrustRegionSpec(Frozen):
     """Trust-region radius in the unit cube: initial, minimum and maximum."""
 
     initial: float = Field(default=0.2, gt=0.0, le=1.0)
@@ -140,14 +140,14 @@ class TrustRegionSpec(_Frozen):
         return self
 
 
-class StopSpec(_Frozen):
+class StopSpec(Frozen):
     """Active-learning stopping: relative agreement ``eps_f`` and ``patience`` iterations."""
 
     eps_f: float = Field(default=0.01, gt=0.0)
     patience: int = Field(default=5, ge=1)
 
 
-class ActiveLearningSpec(_Frozen):
+class ActiveLearningSpec(Frozen):
     """Active-learning optimizer (``surrogate.active_learning``); ``time`` in seconds (SI)."""
 
     max_iterations: int = Field(default=50, ge=1)
@@ -166,14 +166,14 @@ class ActiveLearningSpec(_Frozen):
         if isinstance(raw, Mapping) and raw.get("time") is not None:
             out = dict(raw)
             try:
-                out["time"] = _scalar(out["time"], "time")
+                out["time"] = parse_scalar(out["time"], "time")
             except ValueError as exc:
                 raise ValueError(f"active_learning time: {exc}") from exc
             return out
         return raw
 
 
-class SurrogateSpec(_Frozen):
+class SurrogateSpec(Frozen):
     """Surrogate block of a study: grid, dataset, training, search and active learning."""
 
     grid: GridSpec

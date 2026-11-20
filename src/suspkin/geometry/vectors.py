@@ -231,3 +231,49 @@ def _cross3(a: _V3, b: _V3) -> _V3:
 
 def _dot3(a: _V3, b: _V3) -> float:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+# ---------------------------------------------------------------- array helpers (last axis = xyz)
+def dot_rows(a: Vec, b: Vec, *, keepdims: bool = False) -> Vec:
+    """Row-wise dot product over the last axis; ``keepdims`` keeps a trailing length-1 axis."""
+    if keepdims:
+        kept: Vec = np.sum(a * b, axis=-1, keepdims=True)
+        return kept
+    out: Vec = np.einsum("...i,...i->...", a, b)
+    return out
+
+
+def norm_rows(a: Vec) -> Vec:
+    """Row-wise Euclidean norm over the last axis."""
+    return np.sqrt(dot_rows(a, a))
+
+
+def cross_rows(a: Vec, b: Vec) -> Vec:
+    """Cross product over the last axis (broadcasting)."""
+    out: Vec = np.stack(
+        [
+            a[..., 1] * b[..., 2] - a[..., 2] * b[..., 1],
+            a[..., 2] * b[..., 0] - a[..., 0] * b[..., 2],
+            a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0],
+        ],
+        axis=-1,
+    )
+    return out
+
+
+def unit_rows(a: Vec) -> Vec:
+    """Normalise over the last axis (no zero-length check)."""
+    out: Vec = a / np.linalg.norm(a, axis=-1, keepdims=True)
+    return out
+
+
+def rodrigues_rows(k: Vec, cs: Vec, sn: Vec, v: Vec) -> Vec:
+    """Rotate ``v`` about the unit axis ``k``; ``cs`` / ``sn`` = cos / sin of the angle."""
+    out: Vec = v * cs + cross_rows(k, v) * sn + k * dot_rows(k, v, keepdims=True) * (1.0 - cs)
+    return out
+
+
+def wrap_angle(a: Vec) -> Vec:
+    """Wrap angles [rad] to ``[-pi, pi)``."""
+    out: Vec = (a + np.pi) % (2.0 * np.pi) - np.pi
+    return out

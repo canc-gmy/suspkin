@@ -9,21 +9,10 @@ import pandas as pd
 from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
+from suspkin.kinematics.batch import GRADIENTS
 from suspkin.kinematics.corner import CornerState
 from suspkin.metrics.arrays import corner_metric_arrays
 from suspkin.metrics.corner import ride_rate, wheel_load_spring, wheel_rate, wheel_rate_linear
-
-# metric column -> gradient column, per sweep variable
-GRADIENTS: dict[str, dict[str, str]] = {
-    "travel": {
-        "camber": "camber_gain",
-        "toe": "bump_steer",
-        "caster": "caster_change",
-        "half_track_change": "track_change_rate",
-        "rc_height": "rc_migration_rate",
-    },
-    "rack": {"steer_angle": "steer_gain"},
-}
 
 
 def metrics_frame(states: Sequence[CornerState], corner: Corner) -> pd.DataFrame:

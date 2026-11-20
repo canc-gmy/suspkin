@@ -713,13 +713,13 @@ def test_pareto_mode_oracle(tmp_path: Path) -> None:
 
 
 def test_dominated_helper() -> None:
-    from suspkin.surrogate.active_steps import _dominated
+    from suspkin.surrogate.active_steps import dominated
 
     front = np.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]])
-    assert _dominated([2.5, 2.5], front)
-    assert not _dominated([2.0, 2.0], front)  # equal is not dominated
-    assert not _dominated([0.5, 5.0], front)
-    assert not _dominated([1.0, 1.0], front[:0])
+    assert dominated([2.5, 2.5], front)
+    assert not dominated([2.0, 2.0], front)  # equal is not dominated
+    assert not dominated([0.5, 5.0], front)
+    assert not dominated([1.0, 1.0], front[:0])
 
 
 # --------------------------------------------------------------------------- dataset consistency

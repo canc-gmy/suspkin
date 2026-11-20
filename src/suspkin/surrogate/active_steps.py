@@ -2,16 +2,14 @@
 
 Experimental (see ``docs/guides/stability.md``). The numerical rules (box, radius update,
 stopping, infill selection, fine-tune schedule) are small pure functions; ``BoxProblem``
-restricts a surrogate problem to the trust-region box and ``_finetune`` fine-tunes one
-axle network (torch is imported only there). The driver is
-:func:`suspkin.surrogate.active.run_active_learning`.
+restricts a surrogate problem to the trust-region box. The driver, history helpers and the
+network fine-tuning are in :mod:`suspkin.surrogate.active`.
 """
 
 # ruff: noqa: N803, N806  (X, F, G follow the Problem interface)
 from __future__ import annotations
 
 import math
-import shutil
 from collections.abc import Callable, Container
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,8 +22,6 @@ from numpy.typing import ArrayLike, NDArray
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.history import CacheEntry, cache_key, cache_keys, read_history
 from suspkin.optimize.outputs import (
-    _ok_feasible,
-    best_row,
     pareto_rows,
     ranked_rows,
 )
@@ -35,13 +31,7 @@ from suspkin.optimize.spec.surrogate import ActiveLearningSpec, FinetuneSpec, Tr
 from suspkin.plotting.optimization import knee_index
 from suspkin.surrogate.channels import CHANNELS
 from suspkin.surrogate.data import (
-    SPLIT_TRAIN,
-    SPLIT_VAL,
     Axle,
-    AxleDataset,
-)
-from suspkin.surrogate.dataset import (
-    load_dataset,
 )
 
 F64 = NDArray[np.float64]
@@ -437,19 +427,7 @@ class BoxProblem:
 # --------------------------------------------------------------------------------------
 
 
-def _summary(df: pd.DataFrame) -> dict[str, Any]:
-    """Best row of a history: ``x``, ``f_total``, ``feasible`` (status ok) and ``max_g``."""
-    i = best_row(df)
-    xcols = [c for c in df.columns if c.startswith("x_")]
-    return {
-        "x": df[xcols].to_numpy(dtype=np.float64)[i],
-        "f": float(df["f_total"].iloc[i]),
-        "feasible": bool(_ok_feasible(df)[i]),
-        "max_g": float(df["max_g"].iloc[i]),
-    }
-
-
-def _improved(old: dict[str, Any], new: dict[str, Any], min_gain: float) -> bool:
+def is_improved(old: dict[str, Any], new: dict[str, Any], min_gain: float) -> bool:
     if new["feasible"] and not old["feasible"]:
         return True
     if new["feasible"] and old["feasible"]:
@@ -459,18 +437,7 @@ def _improved(old: dict[str, Any], new: dict[str, Any], min_gain: float) -> bool
     return False
 
 
-def _front(df: pd.DataFrame, study: Study) -> tuple[F64, F64]:
-    """Objective values and design vectors of the feasible non-dominated rows of a history."""
-    idx = pareto_rows(df, study)
-    ocols = [f"f_{o.name}" for o in study.objectives]
-    xcols = [c for c in df.columns if c.startswith("x_")]
-    return (
-        df[ocols].to_numpy(dtype=np.float64)[idx],
-        df[xcols].to_numpy(dtype=np.float64)[idx],
-    )
-
-
-def _dominated(obj: ArrayLike, front: F64) -> bool:
+def dominated(obj: ArrayLike, front: F64) -> bool:
     """True if some row of ``front`` is <= ``obj`` everywhere and < somewhere."""
     o = np.asarray(obj, dtype=np.float64)
     if len(front) == 0:
@@ -528,7 +495,7 @@ def advance_finetune(
     return FinetuneState(run, 0)
 
 
-def _replay_finetune_state(
+def replay_finetune_state(
     rows: list[dict[str, Any]], axle: Axle, ft: FinetuneSpec
 ) -> FinetuneState:
     """Rebuild the fine-tuning state of ``axle`` from the rows of an earlier al.csv."""
@@ -544,82 +511,3 @@ def _replay_finetune_state(
                 st, skipped=skipped, kept=bool(rw.get(f"kept_init_{axle}", False)), ft=ft
             )
     return st
-
-
-def _shard_rows(path: Path, template: AxleDataset) -> AxleDataset:
-    """The rows of one appended shard as a dataset shaped like ``template``."""
-    with np.load(path) as z:
-        return AxleDataset(
-            axle=template.axle,
-            X=z["X"].astype(np.float64),
-            Y=z["Y"].astype(np.float32),
-            mask=z["mask"].astype(bool),
-            feasible=z["feasible"].astype(bool),
-            split=z["split"].astype(np.uint8),
-            source=z["source"],
-            weight=z["weight"].astype(np.float64),
-            channels=template.channels,
-            param_names=template.param_names,
-            travel=template.travel,
-            rack=template.rack,
-            meta=dict(template.meta),
-        )
-
-
-def _finetune(
-    root: Path,
-    axle: Axle,
-    *,
-    ft: FinetuneSpec,
-    lr_factor: float,
-    device: str,
-    seed: int,
-    k: int,
-    caches: dict[str, Any],
-) -> tuple[float, bool]:
-    """Fine-tune the current model of ``axle``; returns ``(score, kept_init_weights)``.
-
-    Trains on all active-learning rows plus ``ft.replay`` earlier train rows (drawn once from
-    ``seed``, normalised and moved to the device on the first call, then reused through
-    ``caches``); the validation split is unchanged. The early-stopping score is the mean of
-    the validation score and the score on all active-learning rows; training stops after
-    ``ft.patience`` epochs without a new best.
-    """
-    from dataclasses import replace
-
-    from suspkin.surrogate.train import FinetuneCache, TrainedModel, train
-
-    mdir = root / "models" / axle / "model"
-    pre = root / "models" / axle / "pre_al"
-    if not pre.exists():
-        shutil.copytree(mdir, pre)
-    model = TrainedModel.load(mdir, device=device)
-    cache: FinetuneCache | None = caches.get(axle)
-    if cache is None:
-        full = load_dataset(root, axle)
-        is_al = np.char.startswith(full.source.astype(str), "al_")
-        pool = np.flatnonzero((full.split == SPLIT_TRAIN) & ~is_al)
-        rng = np.random.default_rng([seed, 4096])
-        pick = (
-            rng.choice(pool, size=min(ft.replay, pool.size), replace=False) if pool.size else pool
-        )
-        keep = full.split == SPLIT_VAL
-        keep[pick] = True
-        cache = FinetuneCache(model, full.subset(keep), device)
-        if is_al.any():
-            cache.add_rows(full.subset(is_al))
-        caches[axle] = cache
-        del full
-    tcfg = replace(
-        model.tcfg,
-        max_epochs=ft.epochs,
-        patience=ft.patience,
-        device=cast(Any, device),
-        finetune_lr_factor=lr_factor,
-        seed=seed + k,
-    )
-    new = train(cache.template, model.mcfg, tcfg, init=model, cache=cache)
-    new.meta["al_iteration"] = k
-    new.save(root / "models" / axle / f"al_{k}")
-    new.save(mdir)
-    return float(new.val_score), bool(new.meta.get("kept_init_weights", False))

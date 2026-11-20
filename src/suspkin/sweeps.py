@@ -16,9 +16,10 @@ from suspkin.geometry.corners import Corner, CornerId, build_corners
 from suspkin.geometry.model import Vehicle
 from suspkin.geometry.vectors import body_rotation_batch
 from suspkin.kinematics.corner import CornerState, _Ctx
+from suspkin.kinematics.ic_arrays import roll_line_arrays
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.kinematics.vehicle import VehicleState, solve_vehicle
-from suspkin.metrics.arrays import corner_arrays, roll_line_arrays
+from suspkin.metrics.arrays import corner_arrays
 from suspkin.metrics.table import metrics_frame
 
 _SCALARS = (

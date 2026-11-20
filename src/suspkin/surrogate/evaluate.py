@@ -41,16 +41,9 @@ from numpy.typing import ArrayLike, NDArray
 
 from suspkin.geometry.corners import Corner, _build
 from suspkin.geometry.model import Vehicle
-from suspkin.kinematics.batch import (
-    Rebuilt,
-    _cross,
-    _dot,
-    _unit,
-    corner_columns,
-    make_static,
-    rebuild,
-)
-from suspkin.metrics.corner import _BODY_POINTS, _LINKS, _housing
+from suspkin.geometry.vectors import cross_rows, dot_rows, unit_rows
+from suspkin.kinematics.batch import Rebuilt, corner_columns, make_static, rebuild
+from suspkin.metrics.corner import _BODY_POINTS, _LINKS, _housing, angle_between
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.evaluate import (
     Evaluation,
@@ -61,7 +54,7 @@ from suspkin.optimize.evaluate import (
     failed_evaluation,
 )
 from suspkin.optimize.spec import StudyConfigError
-from suspkin.optimize.spec.constraints import (
+from suspkin.optimize.spec.criteria import (
     JointAngleConstraint,
     ReachConstraint,
     SummaryConstraint,
@@ -71,10 +64,10 @@ from suspkin.surrogate.channels import channels_for, extract_corner
 from suspkin.surrogate.data import AxleGrid, AxleSpace
 from suspkin.surrogate.vehicle_layer import (
     AxleBatch,
+    Hermite,
     LayerResult,
     VehicleStatics,
-    _Hermite,
-    _travel_curves,
+    travel_curves,
     vehicle_layer,
     vehicle_statics,
 )
@@ -208,36 +201,8 @@ def _tile(obj: _T, n: int) -> _T:
 
 
 # --------------------------------------------------------------------------------------
-# curve interpolation
-# --------------------------------------------------------------------------------------
-
-
-def hermite(y: Arr, x: Arr, q: Arr) -> Arr:
-    """Local cubic Hermite interpolation of ``y (..., L)`` along the last axis at ``q (N,)``.
-
-    Thin shape adapter over the vehicle layer's :class:`_Hermite` (slopes by ``np.gradient``).
-    The result is ``(..., N)``; NaN outside ``[x[0], x[-1]]`` (``1e-9`` tolerance) and wherever
-    a node that the interval or its slopes touch is NaN.
-    """
-    x = np.asarray(x, dtype=np.float64)
-    q = np.asarray(q, dtype=np.float64)
-    out = _Hermite(y.reshape(1, -1, y.shape[-1]), x)(q)
-    return np.asarray(out.reshape(*y.shape[:-1], q.size))
-
-
-def _rack0_curves(batch: AxleBatch, names: Sequence[str]) -> Arr:
-    """Channels ``names`` versus travel at rack 0, ``(B, len(names), T)``; NaN at masked nodes."""
-    return _travel_curves(batch, names).y
-
-
-# --------------------------------------------------------------------------------------
 # joint angles (vectorised ``metrics.arrays.joint_angle_arrays`` with per-design statics)
 # --------------------------------------------------------------------------------------
-
-
-def _angle(u: Arr, v: Arr) -> Arr:
-    out: Arr = np.arctan2(np.linalg.norm(_cross(u, v), axis=-1), np.sum(u * v, axis=-1))
-    return out
 
 
 def _frames(p: Arr) -> Arr:
@@ -245,12 +210,12 @@ def _frames(p: Arr) -> Arr:
 
     NaN for coincident or collinear points.
     """
-    e1 = _unit(p[..., 1, :] - p[..., 0, :])
+    e1 = unit_rows(p[..., 1, :] - p[..., 0, :])
     v = p[..., 2, :] - p[..., 0, :]
-    w = v - _dot(v, e1) * e1
+    w = v - dot_rows(v, e1, keepdims=True) * e1
     nw = np.linalg.norm(w, axis=-1, keepdims=True)
     e2 = np.where(nw > 1e-9 * np.linalg.norm(v, axis=-1, keepdims=True), w / nw, _NAN)
-    out: Arr = np.stack([e1, e2, _cross(e1, e2)], axis=-1)
+    out: Arr = np.stack([e1, e2, cross_rows(e1, e2)], axis=-1)
     return out
 
 
@@ -286,27 +251,28 @@ def _joint_angles(rb: Rebuilt, joint: str, axis: ArrayLike | None) -> Arr:
     with np.errstate(all="ignore"):
         if joint in ("uca_outer", "lca_outer"):
             a0 = (
-                _unit(p["uca_outer"] - p["lca_outer"])
+                unit_rows(p["uca_outer"] - p["lca_outer"])
                 if axis is None
-                else np.broadcast_to(_unit(np.asarray(axis, dtype=np.float64)), (b, 3))
+                else np.broadcast_to(unit_rows(np.asarray(axis, dtype=np.float64)), (b, 3))
             )
-            return _angle(
+            return angle_between(
                 np.einsum("bkij,bj->bki", rots["upright"], a0), np.einsum("bkij,bj->bki", rh, a0)
             )
         a_name, b_name = _LINKS[joint]
-        d0 = _unit(p[b_name] - p[a_name])
-        d1 = _unit(rb.pt(b_name) - rb.pt(a_name))
+        d0 = unit_rows(p[b_name] - p[a_name])
+        d1 = unit_rows(rb.pt(b_name) - rb.pt(a_name))
         if axis is None:
-            return _angle(d1, np.einsum("bkij,bj->bki", rh, d0))
-        a0 = np.broadcast_to(_unit(np.asarray(axis, dtype=np.float64)), (b, 3))
+            return angle_between(d1, np.einsum("bkij,bj->bki", rh, d0))
+        a0 = np.broadcast_to(unit_rows(np.asarray(axis, dtype=np.float64)), (b, 3))
         d0k = d0[:, None, :]
-        wv = _cross(d0k, d1)
+        wv = cross_rows(d0k, d1)
         carried = (
             a0[:, None, :]
-            + _cross(wv, a0[:, None, :])
-            + _cross(wv, _cross(wv, a0[:, None, :])) / (1.0 + _dot(d0k, d1))
+            + cross_rows(wv, a0[:, None, :])
+            + cross_rows(wv, cross_rows(wv, a0[:, None, :]))
+            / (1.0 + dot_rows(d0k, d1, keepdims=True))
         )
-        return _angle(carried, np.einsum("bkij,bj->bki", rh, a0))
+        return angle_between(carried, np.einsum("bkij,bj->bki", rh, a0))
 
 
 # --------------------------------------------------------------------------------------
@@ -478,7 +444,7 @@ class _Batch:
         self.timers = timers
         self._corners: dict[tuple[int, str], Corner] = {}
         self._runs: dict[tuple[str, tuple[float, float], int], _Run] = {}
-        self._curves: dict[str, Arr] = {}
+        self._curves: dict[str, Hermite] = {}
 
     def corner(self, i: int, cid: str) -> Corner:
         key = (i, cid)
@@ -496,9 +462,9 @@ class _Batch:
         axle = "front" if cid[0] == "F" else "rear"
         ab = self.axle_batches[axle]
         if axle not in self._curves:
-            self._curves[axle] = _rack0_curves(ab, _STATE_CHANNELS)
+            self._curves[axle] = travel_curves(ab, _STATE_CHANNELS)
         q = np.linspace(travel[0], travel[1], steps)
-        v = hermite(self._curves[axle], ab.grid.travel, q)  # (B, 4, K)
+        v = self._curves[axle](q)  # (B, 4, K)
         st = make_static([self.corner(i, cid) for i in range(len(self.vehicles))])
         rb = rebuild(st, v[:, 0], v[:, 1], v[:, 2], v[:, 3])
         cols = corner_columns(rb, q)
