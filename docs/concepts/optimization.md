@@ -178,7 +178,7 @@ All models derive from `suspkin.optimize.spec.variables.Frozen` (pydantic, `froz
 | `band` | sweep, metric, `where`, min/max | metric stays inside the limits over the window |
 | `slope` | sweep, metric, `where`, min/max | least-squares slope $d(\text{metric})/d(\text{input})$ |
 | `value` | sweep, metric, `at`, min/max | metric at one input value |
-| `reach` | corner, travel, `min_toggle_margin`, `stroke`, `toggle_scale`, `stroke_scale` | the corner solves over the travel, rocker toggle margin and coilover stroke are OK |
+| `reach` | corner, travel, `min_toggle_margin`, `stroke` (default `true`), `toggle_scale`, `stroke_scale` | the corner solves over the travel, rocker toggle margin and coilover stroke are OK |
 | `summary` | metric, min/max | scalar of the vehicle summary (`roll_gradient`, `front.rc_height`, ...) |
 | `inside` / `outside` | point, region, `over` | point stays inside / outside a region |
 | `distance` | a, b, `over`, min/max | distance between two points |
@@ -222,7 +222,8 @@ rejects
 - duplicate constraint or objective names, or an objective named like a constraint;
 - `pareto` mode with fewer than 2 objectives, `weighted` with none (when an optimizer block exists);
 - duplicate variable points (a symmetric variable and an asymmetric one on the same point
-  also clash; the left and right variable of one point are allowed);
+  also clash; in fact `_cross_check` raises `duplicate variable point(s)` for any two variables on the
+  same `point`, including a left plus a right asymmetric variable, which is probably unintended);
 - unknown sweep references, a `joint_angle` whose sweep is not a corner sweep of the same
   corner, an `over` that is not a corner sweep, a point on another axle than the `over`
   sweep, an `inside`/`outside` region whose centroid is on the wrong side for the sweep's
@@ -486,7 +487,7 @@ frozen dataclasses). With one worker no pool is created. The pool is created laz
 | constraints | `g_<constraint>` (enabled ones), `max_g` |
 | status | `feasible`, `status` (`ok | unsolved | infeasible`), `seconds`, `source` |
 
-`source` tells which method generated the row (`de`, `nsga2`, `slsqp`, `fd`, ...). `status` is
+`source` tells which method generated the row (`de`, `nsga2`, `slsqp`, `trust-constr`; finite-difference rows carry the name of the method that requested them, `fd` is only the default argument). `status` is
 `infeasible` if any result is, else `unsolved` if any is, else `ok` (`evaluation_status`).
 
 `HistoryWriter(path, space, study, resume=False)` writes the header on create and appends (no
@@ -528,7 +529,7 @@ ones by violation. Duplicates are eliminated. `source = "nsga2"`.
 **`de`** (scipy `differential_evolution`, `polish=False`, `vectorized=True`,
 `updating="deferred"`, so each generation is one `evaluate_batch`). The constraints are passed as
 `NonlinearConstraint(g, -inf, 0)`, which scipy handles with Lampinen's feasibility rules (a
-feasible trial beats an infeasible one; two infeasible ones are compared by violation). The
+feasible trial beats an infeasible one; an infeasible trial replaces an infeasible target only if its violation is not larger in every constraint). The
 objective is $f_{total}$ (`weighted` only). Population: `popsize` option, else
 $\operatorname{clip}(\lceil \text{evals}/8/n\rceil,\,2,\,15)$ with `evals` the evaluation budget
 (15 if none); the actual population is $\max(8,\,\text{popsize}\cdot n)$ (the LHS above is passed as
@@ -571,10 +572,17 @@ outputs.
 (`study_hash`, 4.9). On resume it reads `valid_from_eval_id` and `study_hash` from the old
 `meta.json`; if the hash differs, `valid_from` becomes `problem.next_id`, a warning is echoed
 ("constraints/objectives changed ... cached results are dropped"), and the cache is rebuilt from
-history rows with `eval_id >= valid_from`. Older rows stay in `history.csv` but are ignored for
+history rows with `eval_id >= valid_from`. This path only triggers when the history **columns stay
+identical** (limits, scales, weights, targets, windows changed). `Problem.__init__` already builds
+`EvalCache.from_history` over the full history before `_prepare`, so adding, removing, renaming or
+disabling a constraint, or adding or renaming an objective, raises `HistoryError` ("history does not
+match the study ...") and the CLI exits with code 2. Older rows stay in `history.csv` but are ignored for
 caching and for selecting the best design (`_history`); the old designs are simply re-evaluated if
-requested again. Because `_prepare` makes no random draws, a resumed run with the same seed
-draws the same LHS as the first run.
+requested again. `_prepare` makes no random draws and the LHS uses the same seed, but on resume
+only the first `size - len(history rows)` LHS rows are used after the history rows, so the
+population differs from the first run's. `copy_inputs` also overwrites the run folder's `study.yaml`
+and `vehicle.yaml` with the current inputs, and `meta.json` is rewritten with the resumed start/end,
+which worsens the provenance of the stale-cache gap below.
 
 ### 4.9 Outputs (`suspkin.optimize.outputs`)
 
@@ -590,10 +598,10 @@ Run folder (default `results/opt/<study stem>_<YYYYmmdd-HHMMSS>`):
 | `study.yaml`, `vehicle.yaml` | copies of the inputs; the study points at `vehicle.yaml` |
 | `history.csv` | every new evaluation (4.7) |
 | `best.yaml` | the best (or knee) vehicle, via `save_vehicle` |
-| `result.json` | `mode`, `best_eval_id`, `knee_eval_id`, `n_pareto`, and `baseline` / `best` blocks with `x` (name -> value), `feasible`, `f_total`, `f`, `g`, `constraints` (rows of `Evaluation.frame()`, SI) and `objectives` (rows of `objectives_frame()`); non-finite numbers are `null` |
+| `result.json` | `mode`, `best_eval_id`, `knee_eval_id`, `n_pareto`, and `baseline` / `best` blocks with `x` (name -> value; `null` for `baseline`), `feasible`, `f_total`, `f`, `g`, `constraints` (rows of `Evaluation.frame()`, SI) and `objectives` (rows of `objectives_frame()`); non-finite numbers are `null` |
 | `meta.json` | `suspkin_version`, `git_hash`, `seed`, `method`, `mode`, `start`, `end`, `n_evals`, `n_evals_total`, `workers`, `resumed`, `study_hash`, `valid_from_eval_id` |
 | `pareto.csv`, `pareto/pareto_<k>.yaml` | `pareto` mode: one row and one vehicle per Pareto design; `knee` column marks the knee |
-| `figures/` | PNG: `convergence`, `parallel`, `constraint_margins`; `pareto` if there is a Pareto set |
+| `figures/` | PNG: `convergence`, `parallel`, `constraint_margins`; `pareto` whenever mode is `pareto` with at least 2 objectives (even if the set is empty); `convergence` and `parallel` only when the history is non-empty |
 | `report/` | with the report on: baseline and optimised vehicle through the standard studies (`build_report`, 2D), see [sweeps and reports](sweeps-and-reports.md) |
 
 `study_hash(study)` is the SHA-256 of the canonical JSON of the **constraint and objective
@@ -615,8 +623,9 @@ definitions only** (variables, sweeps, resolution, vehicle and optimizer are not
 - **Budget overshoot**: the budget is checked at the start of a batch; a DE generation, an NSGA-II
   generation or a Jacobian batch always completes.
 - **Cache aliasing**: two different raw vectors that snap to the same design are evaluated once.
-- **Resume with a changed variable set**: `HistoryError` (columns differ). Changed constraints or
-  objectives: cache dropped with a warning. Changed sweeps, domains or vehicle: **not detected**
+- **Resume with changed columns** (variables, or constraints/objectives added, removed, renamed or
+  disabled): `HistoryError`, exit code 2. Changed limits, scales, weights or targets with the same
+  columns: cache dropped with a warning. Changed sweeps, domains or vehicle: **not detected**
   (see the note below).
 
 !!! note "Stale-cache gap on resume"
@@ -669,7 +678,7 @@ uca_above_lca      relation     325.000  225.000       -  mm      -100.000  PASS
   and $g=sd/1\text{ mm}=-40$;
 - `travel_f`: the smallest remaining bump stroke is 10.224 mm, so $g=-10.224\text{ mm}/1\text{ mm}$.
 
-Exit code 0; `--strict` would exit 1 on any non-pass.
+Exit code 0; `--strict` exits 1 only if the baseline is not feasible (disabled constraints are not failures) or lies outside a variable domain.
 
 ### 6.2 The design space
 
@@ -685,7 +694,7 @@ x0 = sp.from_vehicle()   # baseline: [0.5, 0.4167, 0.5, 0.5556, 0.4444, 0.5, 0.5
 
 The baseline of `front.uca_front` sits at $(u,v,w)=(0.5,0.4167,0.5)$ of its skewed
 hexahedron, not at the cube centre (which maps to $(130,303,325)$ mm): the baseline $y=300$
-mm is found by `hex_inverse`. Perturbing $u$ of `front.uca_front` by $0.0123$ and the $z$ parameter of
+mm is found by `hex_inverse`. Perturbing $u$ of `front.uca_front` by $0.0123$ and the $x$ parameter of
 `rear.pushrod_outer` by $0.0321$:
 
 | Point | continuous (mm) | snapped to 0.5 mm (mm) |
@@ -732,7 +741,7 @@ evaluations. $n=11$ gives `popsize` $=\operatorname{clip}(\lceil32/8/11\rceil,2,
 population $\max(8,22)=22$ and `maxiter` $=\max(1,\lfloor32/22\rfloor-1)=1$. DE evaluates the
 initial population (22, baseline included), is still under 32, evaluates one generation (22 more),
 and the batch crossing the limit completes: 44. The budget is then used up, so the SLSQP
-polish stops at its first evaluation. A realistic budget is hundreds to thousands of evaluations.
+polish's start point is cached, so it stops at the first Jacobian batch (`BudgetExhausted`). A realistic budget is hundreds to thousands of evaluations.
 
 The run folder (`--no-report`: no `report/`):
 
@@ -741,7 +750,7 @@ best.yaml  history.csv  meta.json  result.json  study.yaml  vehicle.yaml  figure
 figures/: constraint_margins.png  convergence.png  parallel.png
 ```
 
-`history.csv` row 0 is the baseline LHS row (`source = de`):
+`history.csv` row 0 is the baseline LHS row after snapping (`source = de`); the baseline `rear.pushrod_outer` z is 337.4 mm, off the 0.5 mm grid, so it snaps to 337.5 mm and `x_rear.pushrod_outer.z` is 0.50625, not 0.5:
 `eval_id=0`, `x_front.uca_front.u=0.5`, `p_front.uca_front_x=0.13`, ..., `f_total=11.350...`,
 `max_g=-0.3389`, `feasible=True`, `status=ok`. `result.json` has the keys `mode`, `best_eval_id`
 (20 here), `knee_eval_id` (`null`), `n_pareto` (0), `baseline`, `best`. `meta.json` (abridged):
