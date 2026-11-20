@@ -137,12 +137,12 @@ raises `ValueError` if 0 is outside the sweep range.
 - Index: always a fresh `RangeIndex`; the x axis of a study is a column (`travel`,
   `roll`, `heave`, `pitch`, `rack`), not the index.
 - Units: SI. Angles in radians even though figures show degrees.
-- **NaN means "undefined", never "failed".** A solver failure raises
+- **NaN or inf means "undefined", never "failed".** A solver failure raises
   `KinematicsError` for the whole sweep. NaN appears where a quantity does not exist:
   an instant centre at infinity (parallel links) or a roll centre of two parallel roll
   lines, and ARB columns without ARB. Plots drop non-finite points as gaps and, on
-  panels with `ic=True`, annotate the count as "IC at infinity (n pts dropped)".
-- In the CSV exports a NaN is an empty field. The reference vehicle has 31 NaN in each
+  panels with `ic=True`, annotate the count as "IC at infinity (n pts dropped)" (the count is every non-finite point of every series and dataset in that panel, not only IC points). Instant-centre coordinates (`svic_*`, `fvic_*`) are NaN there, but the swing-arm lengths `fvsa`/`svsa` are `inf`.
+- In the CSV exports a NaN is an empty field, while `inf` is written as the text `inf` (in the worked example `svsa` is `inf` in all 31 rows). `summary.json` nulls come from `json_safe`. The reference vehicle has 31 NaN in each
   of `svic_x`, `svic_z` (the side-view instant centre is at infinity at every point of this design), none in
   `fvic_y`.
 
@@ -158,12 +158,11 @@ There are two "static" notions:
    `anti_dive_front`, `ackermann_5deg`, `turning_radius`). Its flow: a small roll sweep
    ($\pm 0.035$ rad, `n | 1` points so the static pose is included) through
    `sweep_vehicle` and `vehicle_frame`; the roll-slope quantities (`roll_camber`,
-   `roll_steer`, `rc_migration`, `rc_height_curvature`) are finite-difference slopes at
-   roll 0 of that table; axle stiffnesses, load transfer and anti-features follow from
+   `roll_steer`, `rc_migration`, `rc_height_curvature`) are not finite differences: `metrics.vehicle._slope0` / `_curv0` fit a cubic to the roll table with `np.polyfit(roll, y, 3)` and take the linear coefficient (slope at roll 0) or twice the quadratic coefficient (curvature); axle stiffnesses, load transfer and anti-features follow from
    statics and a static solve. Each field and its formula is in [metrics](metrics.md).
 
 `VehicleSummary.to_dict()` gives the nested SI dictionary used by `summary.json`, the
-bundle and the CLI. Optional or undefined values are `None` (JSON `null`).
+bundle and the CLI. It is a plain `asdict`: NaN stays NaN and only `anti_lift_front_accel` can be `None`. NaN becomes JSON `null` in `json_safe` (`summary.json`, bundle).
 
 ## 5. Standard studies: `suspkin.report.studies`
 
@@ -195,7 +194,7 @@ design) and returns the path of `report.html`.
 
 Behaviour:
 
-- At least one design is required (`ValueError` otherwise). Labels are slugified for
+- At least one design is required (`ValueError` otherwise). Labels are slugified (empty result becomes `design`, leading/trailing `_` stripped) for
   file names (`[^A-Za-z0-9._-]+` becomes `_`); two labels with the same slug raise
   `ValueError`.
 - `data/<design>_<study>.csv`: each non-empty table, pandas default float formatting
@@ -222,7 +221,7 @@ row if all are missing, shows `-` for missing/non-finite and otherwise
 
 CLI: `suspkin report VEHICLE_YAML --out DIR [--compare YAML ...] [--no-3d]
 [--formats png,svg] [--steps 31]`. Designs are labelled by YAML file stem (a numeric
-suffix is added on clashes). Failures print `error: ...` and exit non-zero.
+suffix is added on clashes). `KinematicsError`, `ValueError` and `RuntimeError` print `error: ...`; `VehicleConfigError` prints its message without prefix; all exit non-zero. If `formats` lacks `png`, the HTML images are re-rendered at 150 dpi.
 
 ## 7. Result bundles: `suspkin.report.bundle`
 
@@ -303,7 +302,7 @@ partial tables (for example a rear corner without ARB columns, or a rack table w
 **Steering** is derived in `_steering_frame` from the rack table: steer angle relative to
 the static pose (`d_left`, `d_right`), mean steer, the inner/outer angles
 (`metrics.vehicle.inner_outer`), `outer` (signed, NaN below 1e-4 rad), Ackermann percent
-(`ackermann_percent`, needs wheelbase and track; `wheelbase` and `steer_c_factor` are read
+(`ackermann_percent`, needs wheelbase and track, where track is the contact-patch spacing `FL_cp_y - FR_cp_y` at the static row, not the summary `track`; `wheelbase` and `steer_c_factor` are read
 per dataset from the constant columns so designs of different wheelbase overlay
 correctly), and the mean steer gain $g=\mathrm{d}\delta/\mathrm{d}\,\text{rack}$. The last
 panel is the steering ratio $\frac{2\pi/c}{g}$ ($c$ the `steer_c_factor` in m/rev) when a
@@ -349,6 +348,8 @@ datasets (`suspkin.app.datasets`) and serves the spec through `suspkin.app.route
 renderer then overlays N bundles on each panel. The renderer rules (palette per dataset,
 line style per series, legends, panel selection by columns present, gaps for
 non-finite values) are listed in the `suspkin.plotting.spec` module docstring.
+
+A panel may override the figure's x axis (`Panel.x`): the Ackermann panel plots against `outer`, not `rack`.
 
 Two points to be aware of: the steering figure's last panel is encoded in the spec as two
 panels (`steering_ratio` with `requires=("ratio",)` and `steer_gain` with
