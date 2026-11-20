@@ -6,6 +6,9 @@ columns of :func:`suspkin.metrics.corner.joint_angles_frame`. The scalar per-sta
 implementations live in ``tests/unit/_scalar_oracles.py``; every value here follows the same
 formula (differences are round-off) and degenerate cases give the same nan / inf values
 (instant centre at infinity, ...).
+
+Conventions: columns are SI (m, rad, N, N/m), signs per ``docs/concepts/conventions.md``
+section 5; column-by-column definitions in ``docs/concepts/metrics.md``.
 """
 
 from __future__ import annotations
@@ -34,7 +37,18 @@ _NAN = float("nan")
 
 
 def stack_points(states: Sequence[CornerState], name: str) -> Arr:
-    """Stack one hardpoint over the states into an ``(N, 3)`` array."""
+    """Stack one hardpoint over the states into an ``(N, 3)`` array.
+
+    Args:
+        states: ``N`` solved corner states.
+        name: Hardpoint name present in every state's ``points`` (e.g. ``"wheel_center"``).
+
+    Returns:
+        Array of shape ``(N, 3)`` in m.
+
+    Raises:
+        KeyError: If a state has no point ``name``.
+    """
     return np.array([s.points[name] for s in states], dtype=np.float64).reshape(-1, 3)
 
 
@@ -45,7 +59,21 @@ def corner_arrays(
     *,
     contact_patch: Arr | None = None,
 ) -> tuple[dict[str, Arr], Ic]:
-    """Implementation of :func:`corner_metric_arrays`; also returns the front-view IC."""
+    """Implementation of :func:`corner_metric_arrays`; also returns the front-view IC.
+
+    Args:
+        states: ``N`` solved corner states of ``corner``.
+        corner: Side-resolved corner (provides side, axle and coilover/tyre data).
+        static: Reference pose for the "change from static" columns (default
+            ``solve_corner(corner, 0.0)``).
+        contact_patch: Optional ``(N, 3)`` contact patches in m replacing the states'
+            ``contact_patch`` point (used when the ground is tilted).
+
+    Returns:
+        ``(columns, fv)``: column name -> ``(N,)`` array in SI units, and the front-view
+        :class:`~suspkin.kinematics.ic_arrays.Ic`. Degenerate cases give NaN / inf, never
+        an exception.
+    """
     if static is None:
         static = solve_corner(corner, 0.0)
     cache: dict[str, Arr] = {}
@@ -141,12 +169,22 @@ def corner_metric_arrays(
     """Per-state metrics as arrays; same columns, order and values as ``metrics_frame``.
 
     ``static`` is the reference pose (default ``solve_corner(corner, 0.0)``).
+
+    Args:
+        states: ``N`` solved corner states of ``corner``.
+        corner: Side-resolved corner.
+        static: Reference pose for the "change from static" columns.
+
+    Returns:
+        Column name -> ``(N,)`` float array in SI units (m, rad, N, N/m; ``inf`` for swing
+        arms at infinity, NaN where undefined).
     """
     return corner_arrays(states, corner, static)[0]
 
 
 # --------------------------------------------------------------------------- joint angles
 def _unit_checked(v: Arr) -> Arr:
+    """Row-wise normalise ``(N, 3)``; ``ValueError`` if any row is near zero."""
     nrm = norm_rows(v)
     if np.any(nrm < 1e-12):
         raise ValueError("cannot normalize a near-zero vector")
@@ -161,6 +199,18 @@ def joint_angle_arrays(
 
     ``static`` defaults like in ``joint_angles_frame``: the state with ``travel ~ 0`` and
     ``rack ~ 0`` if present, else ``solve_corner(corner, 0.0)``.
+
+    Args:
+        states: ``N`` solved corner states of ``corner``.
+        corner: Side-resolved corner (provides the pushrod mount).
+        static: Static-pose reference state.
+
+    Returns:
+        ``joint_<name>`` -> ``(N,)`` unsigned angles in rad, for every name in
+        :data:`suspkin.metrics.corner.JOINTS`.
+
+    Raises:
+        ValueError: If a body point set or link is degenerate.
     """
     if static is None:
         static = next((s for s in states if abs(s.travel) < 1e-12 and abs(s.rack) < 1e-12), None)

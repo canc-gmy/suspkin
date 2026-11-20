@@ -1,10 +1,13 @@
 """Unit conversions and quantities with units (study YAML).
 
-Internals use SI; mm and deg are for display. :func:`parse_quantity` reads strings such as
-``"30 mm"`` into SI floats and checks the dimension.
+Internals use SI (m, rad, N, N/m); mm and deg are for display only (see
+``docs/concepts/conventions.md``, section "Units"). :func:`parse_quantity` reads strings such
+as ``"30 mm"`` into SI floats and checks the dimension. :func:`display_unit` and
+:func:`display_factor` give the display unit of any dimension and the SI-to-display factor.
 
 A dimension is a product of base atoms with integer exponents. Its canonical name is built
-by ``_dim_name`` (``"length"``, ``"angle/length"``, ``"1/length"``, ``"force*length/angle"``);
+by ``_dim_name`` with the atoms in the fixed order of ``_ATOMS`` (``"length"``,
+``"angle/length"``, ``"1/length"``, ``"length*force/angle"``);
 ``"ratio"`` is the dimensionless one (``deg/deg`` and ``mm/mm`` are both ``ratio``).
 ``"percent"`` is a separate atom whose SI value is the percent number itself (50 % -> 50.0),
 as for the percent metrics of the package. ``"gload"`` is acceleration in multiples of g
@@ -24,12 +27,26 @@ Dim = str  # canonical dimension name, see the module docstring
 
 
 def m_to_mm(x: ArrayLike) -> ArrayLike:
-    """Convert metres to millimetres."""
+    """Convert metres to millimetres.
+
+    Args:
+        x: Length in m (scalar or array of any shape).
+
+    Returns:
+        The length in mm, same shape as ``x``.
+    """
     return np.multiply(x, 1000.0)
 
 
 def rad_to_deg(x: ArrayLike) -> ArrayLike:
-    """Convert radians to degrees."""
+    """Convert radians to degrees.
+
+    Args:
+        x: Angle in rad (scalar or array of any shape).
+
+    Returns:
+        The angle in degrees, same shape as ``x``.
+    """
     return np.degrees(x)
 
 
@@ -75,7 +92,9 @@ _DISPLAY: dict[str, tuple[str, float]] = {
     "time": ("s", 1.0),
 }
 _ALIASES: dict[str, str] = {"stiffness": "force/length", "dimensionless": "ratio"}
-# composite dimensions whose display unit is not the product of the atom displays
+# composite dimensions whose display unit is not the product of the atom displays.
+# NOTE: dead entry. The key is not the canonical name produced by ``_dim_name``
+# (``"length*force/angle"``), so it never matches; see docs/concepts/conventions.md.
 _DISPLAY_OVERRIDE: dict[str, tuple[str, float]] = {
     "force*length/angle": ("N*m/deg", _DEG),
 }
@@ -112,6 +131,7 @@ def _factors(expr: str, table: dict[str, tuple[float, str]]) -> tuple[float, _Ex
 
 
 def _dim_name(exps: _Exps) -> Dim:
+    """Canonical dimension name of an exponent vector (``"ratio"`` if all zero)."""
     if not any(exps):
         return "ratio"
 
@@ -126,6 +146,7 @@ def _dim_name(exps: _Exps) -> Dim:
 
 
 def _dim_exps(dim: Dim) -> _Exps:
+    """Exponent vector of a dimension name or alias; ``ValueError`` if unknown."""
     try:
         return _factors(_ALIASES.get(dim, dim), {})[1]
     except ValueError as exc:
@@ -133,21 +154,41 @@ def _dim_exps(dim: Dim) -> _Exps:
 
 
 def normalize_dim(dim: Dim) -> Dim:
-    """Canonical name of a dimension (accepts aliases such as ``"stiffness"``)."""
+    """Canonical name of a dimension (accepts aliases such as ``"stiffness"``).
+
+    Args:
+        dim: Dimension name, alias (``"stiffness"``, ``"dimensionless"``) or product of
+            atoms such as ``"force/length"``.
+
+    Returns:
+        The canonical name with atoms in the fixed order of ``_ATOMS`` (for example
+        ``"force/length"`` for ``"stiffness"``, ``"ratio"`` for dimensionless).
+
+    Raises:
+        ValueError: If ``dim`` contains an unknown atom.
+    """
     return _dim_name(_dim_exps(dim))
 
 
 def parse_quantity(v: str | float | int, dim: Dim) -> float:
     """Parse a value with optional unit into an SI float of dimension ``dim``.
 
-    A plain number is already SI. Strings look like ``"30 mm"``, ``"-1.5 deg"``,
-    ``"0.5 deg/deg"``, ``"1.2 deg/g"``, ``"34 N/mm"``, ``"50 %"``.
+    A plain number, or a string without unit, is taken as already SI. Strings look like
+    ``"30 mm"``, ``"-1.5 deg"``, ``"0.5 deg/deg"``, ``"1.2 deg/g"``, ``"34 N/mm"``,
+    ``"50 %"``. Percent is a separate atom: ``"50 %"`` parses to ``50.0``.
 
-    Raises
-    ------
-    ValueError
-        On unparsable text, unknown units, or a unit of the wrong dimension (the
-        message names the expected dimension and the unit given).
+    Args:
+        v: Number (SI) or string ``"<number> <unit>"``.
+        dim: Expected dimension (name, alias or atom product, e.g. ``"length"``,
+            ``"stiffness"``, ``"angle/length"``).
+
+    Returns:
+        The value in SI units (m, rad, N, N/m, s, kg; rad per g for ``"angle/gload"``).
+
+    Raises:
+        ValueError: On unparsable text, unknown units, a bool or other non-numeric type,
+            or a unit of the wrong dimension (the message names the expected dimension
+            and the unit given).
     """
     if isinstance(v, bool):
         raise ValueError(f"expected a number or a string with unit, got {v!r}")
@@ -176,6 +217,7 @@ def parse_quantity(v: str | float | int, dim: Dim) -> float:
 
 
 def _display(dim: Dim) -> tuple[str, float]:
+    """Display unit and SI-to-display factor: product of atom displays unless overridden."""
     name = normalize_dim(dim)
     if name in _DISPLAY_OVERRIDE:
         return _DISPLAY_OVERRIDE[name]
@@ -195,16 +237,49 @@ def _display(dim: Dim) -> tuple[str, float]:
 
 
 def display_unit(dim: Dim) -> str:
-    """Display unit of a dimension (``mm``, ``deg``, ``N/mm``, ``%``; ``""`` for a ratio)."""
+    """Display unit of a dimension (``mm``, ``deg``, ``N/mm``, ``%``; ``""`` for a ratio).
+
+    Args:
+        dim: Dimension name, alias or atom product.
+
+    Returns:
+        The display unit string. Atoms keep the fixed ``_ATOMS`` order, so roll stiffness
+        gives ``"mm*N/deg"`` (the ``_DISPLAY_OVERRIDE`` entry never matches).
+
+    Raises:
+        ValueError: If ``dim`` is unknown.
+    """
     return _display(dim)[0]
 
 
 def display_factor(dim: Dim) -> float:
-    """Factor converting an SI value of ``dim`` to its display unit."""
+    """Factor converting an SI value of ``dim`` to its display unit.
+
+    Args:
+        dim: Dimension name, alias or atom product.
+
+    Returns:
+        Factor ``f`` with ``display_value = f * si_value`` (1000 for ``"length"``,
+        180/pi for ``"angle"``, 0.001 for ``"stiffness"``).
+
+    Raises:
+        ValueError: If ``dim`` is unknown.
+    """
     return _display(dim)[1]
 
 
 def slope_dim(metric_dim: Dim, input_dim: Dim) -> Dim:
-    """Dimension of ``d(metric)/d(input)``, e.g. ``angle/length`` or ``ratio``."""
+    """Dimension of ``d(metric)/d(input)``, e.g. ``angle/length`` or ``ratio``.
+
+    Args:
+        metric_dim: Dimension of the differentiated quantity.
+        input_dim: Dimension of the independent variable.
+
+    Returns:
+        Canonical name of the quotient dimension (exponent difference).
+
+    Raises:
+        ValueError: If either dimension is unknown.
+    """
     a, b = _dim_exps(metric_dim), _dim_exps(input_dim)
     return _dim_name(tuple(x - y for x, y in zip(a, b, strict=True)))

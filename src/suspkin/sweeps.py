@@ -2,6 +2,10 @@
 
 * corner level: :func:`states_to_frame` (one row per :class:`CornerState`),
 * vehicle level: :func:`sweep_vehicle` (heave, roll, pitch or rack) and :func:`vehicle_frame`.
+
+The tables are always SI (m, rad, N, N/m); the plotting and CLI layers convert to mm / deg
+when they draw or print (``docs/concepts/conventions.md`` section 3). Column meanings:
+``docs/concepts/sweeps-and-reports.md`` and ``docs/concepts/metrics.md``.
 """
 
 from __future__ import annotations
@@ -44,6 +48,15 @@ def states_to_frame(
     every point (incl. ``contact_patch``) and the health flag ``coilover_in_range``.
     With ``metrics=True`` and a ``corner``, the alignment and centre metric columns of
     :func:`suspkin.metrics.metrics_frame` are appended (existing columns are kept).
+
+    Args:
+        states: Solved corner states (e.g. from ``sweep_corner``); may be empty.
+        corner: Side-resolved corner, needed only for ``metrics=True``.
+        metrics: Append the metric columns (``travel`` and ``rack`` are not duplicated).
+
+    Returns:
+        DataFrame with one row per state (empty DataFrame for no states). Angles in rad,
+        lengths in m, per-side signed solver angles (``theta_uca`` ...).
     """
     cols: dict[str, object] = {"corner": [s.corner_id for s in states]}
     for name in _SCALARS:
@@ -120,8 +133,28 @@ def sweep_vehicle(
 ) -> list[VehicleState]:
     """Sweep exactly one body input; ``base`` sets the others (default 0).
 
-    Continuation runs outward from the sweep value nearest to 0. Returns one state per
-    sweep value, in input order. ``pivot`` is the body rotation centre (default: the CG).
+    Continuation runs outward from the sweep value nearest to 0; a failing step is halved
+    (up to 6 times) in input space. Returns one state per sweep value, in input order.
+    ``pivot`` is the body rotation centre (default: the CG).
+
+    Args:
+        vehicle: Vehicle description.
+        heave: Body heave values in m, shape ``(N,)`` (positive = body up).
+        roll: Body roll values in rad, shape ``(N,)`` (positive lifts the left side).
+        pitch: Body pitch values in rad, shape ``(N,)`` (positive = nose down).
+        rack: Rack displacements in m, shape ``(N,)`` (positive steers left).
+        base: Constant values of the non-swept inputs, keys among
+            ``heave``/``roll``/``pitch``/``rack`` (SI units, default 0).
+        pivot: Centre of the body rotations, shape ``(3,)``, m (default: the vehicle CG).
+
+    Returns:
+        One :class:`~suspkin.kinematics.vehicle.VehicleState` per sweep value (empty list
+        for an empty sweep).
+
+    Raises:
+        ValueError: If not exactly one of the four inputs is given, or ``base`` has an
+            unknown key.
+        KinematicsError: If a pose cannot be solved even after step halving.
     """
     given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
     swept = [k for k, v in given.items() if v is not None]
@@ -170,12 +203,20 @@ def vehicle_frame(states: Sequence[VehicleState], vehicle: Vehicle) -> pd.DataFr
     corner ``rack`` column replaced by the shared ``rack``), ``<id>_cp_x/_y/_z`` (contact
     point, body frame); ``<id>_camber_ground`` (camber to the ground normal, negative = top
     toward the centreline) and ``<id>_steer_ground`` (wheel heading in the ground plane,
-    ISO yaw sign); ``rc_front_y/_z`` and ``rc_rear_y/_z`` (roll centre: y in the body frame, i.e.
-    relative to the car centreline; z = height above ground; NaN if undefined); and
+    ISO yaw sign); ``rc_front_y/_z`` and ``rc_rear_y/_z`` (roll centre: y in the body frame,
+    i.e. relative to the car centreline; z = height above ground; NaN if undefined); and
     ``arb_front_elastic`` / ``arb_rear_elastic`` (NaN without ARB). The ground frame is the
-    world frame with the
-    body rotated about the state's ``pivot``. Per-corner metrics use the ground contact
-    point of the state (tilted ground), not the body-vertical lowest point.
+    world frame with the body rotated about the state's ``pivot``. Per-corner metrics use
+    the ground contact point of the state (tilted ground), not the body-vertical lowest
+    point.
+
+    Args:
+        states: Solved vehicle states (e.g. from :func:`sweep_vehicle`); may be empty.
+        vehicle: The vehicle the states belong to (provides the side-resolved corners).
+
+    Returns:
+        DataFrame with one row per state, SI units (m, rad, N, N/m); ``arb_*_elastic`` is
+        in rad (twist) or m (beam deflection).
     """
     corners = build_corners(vehicle)
     cols: dict[str, Arr] = {

@@ -1,6 +1,13 @@
 """Pydantic models of the vehicle geometry (ISO 8855, SI units, angles in rad).
 
-Hardpoints are given for the LEFT side (y > 0); the right side is mirrored.
+Hardpoints are given for the LEFT side (y > 0); the right side is mirrored (see
+``docs/concepts/conventions.md`` section 2). The hardpoints describe the static ride-height
+pose. Field-by-field description: ``docs/concepts/vehicle-model.md``.
+
+All classes are frozen pydantic models (``extra="forbid"``): construction validates and the
+instances are immutable. Validation failures raise ``pydantic.ValidationError`` (a
+``ValueError`` subclass); :func:`suspkin.geometry.io.load_vehicle` wraps it in
+``VehicleConfigError``.
 """
 
 from __future__ import annotations
@@ -45,10 +52,12 @@ _OUTER_POINTS = ("uca_outer", "lca_outer", "tie_outer", "pushrod_outer", "wheel_
 
 
 def _norm(v: Vec3) -> float:
+    """Euclidean norm of a 3-tuple."""
     return math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
 
 
 def _normalized(v: Vec3, what: str) -> Vec3:
+    """Unit-length copy of ``v``; ``ValueError`` (naming ``what``) if the norm is below 1e-9."""
     n = _norm(v)
     if n < 1e-9:
         raise ValueError(f"{what} must be non-zero")
@@ -56,6 +65,7 @@ def _normalized(v: Vec3, what: str) -> Vec3:
 
 
 def _normalize_axis(v: Vec3, info: ValidationInfo) -> Vec3:
+    """Pydantic after-validator for :data:`Axis` fields."""
     return _normalized(v, str(info.field_name))
 
 
@@ -64,6 +74,7 @@ Axis = Annotated[Vec3, AfterValidator(_normalize_axis)]
 
 
 def _dist(a: Vec3, b: Vec3) -> float:
+    """Distance between two 3-tuples."""
     return _norm((a[0] - b[0], a[1] - b[1], a[2] - b[2]))
 
 
@@ -72,7 +83,32 @@ class _Frozen(BaseModel):
 
 
 class CornerHardpoints(_Frozen):
-    """Hardpoints of one corner (left side convention)."""
+    """Hardpoints of one corner (left side convention).
+
+    All points are ``(x, y, z)`` in m in the vehicle frame (origin on the ground at mid front
+    axle, x forward, y left, z up) at the static pose. Outboard points need ``y > 0``;
+    ``tie_inner``, ``rocker_pivot``, ``rocker_spring``, ``spring_chassis``, ``pushrod_inner``
+    and ``rocker_arb`` may sit on the centreline (``y >= 0``).
+
+    Attributes:
+        uca_front: Upper wishbone front chassis pivot.
+        uca_rear: Upper wishbone rear chassis pivot.
+        uca_outer: Upper ball joint on the upright.
+        lca_front: Lower wishbone front chassis pivot.
+        lca_rear: Lower wishbone rear chassis pivot.
+        lca_outer: Lower ball joint on the upright.
+        tie_inner: Tie-rod inner end on the rack (moves with the rack displacement).
+        tie_outer: Tie-rod outer end on the upright.
+        pushrod_outer: Pushrod outer end (on the member chosen by ``Axle.pushrod_mount``).
+        pushrod_inner: Pushrod end on the rocker.
+        rocker_pivot: A point on the rocker rotation axis.
+        rocker_spring: Spring/damper attachment on the rocker.
+        spring_chassis: Spring/damper attachment on the chassis.
+        wheel_center: Wheel centre; ``z`` is the loaded tyre radius.
+        rocker_arb: Optional ARB drop-link attachment on the rocker (needed iff the axle
+            has an ARB).
+        rocker_axis: Rocker rotation axis direction; normalised to unit length on validation.
+    """
 
     uca_front: Vec3
     uca_rear: Vec3
@@ -143,7 +179,16 @@ class CornerHardpoints(_Frozen):
 
 
 class Wheel(_Frozen):
-    """Wheel and tyre data."""
+    """Wheel and tyre data.
+
+    Attributes:
+        tyre_radius: Unloaded tyre radius in m (``wheel_center`` z must be within 20 mm).
+        rim_width: Rim width in m (informational; not used by the solvers or metrics).
+        static_camber: Static camber in rad, within (-0.2, 0.2); negative = top toward the
+            car centre.
+        static_toe: Static toe in rad, within (-0.1, 0.1); positive = toe-in.
+        tyre_vertical_stiffness: Tyre vertical rate in N/m.
+    """
 
     tyre_radius: float = Field(gt=0)
     rim_width: float = Field(gt=0)
@@ -153,7 +198,18 @@ class Wheel(_Frozen):
 
 
 class Coilover(_Frozen):
-    """Spring/damper unit."""
+    """Spring/damper unit.
+
+    The spring force is ``preload + spring_rate * (free_length - length)``, positive in
+    compression.
+
+    Attributes:
+        spring_rate: Spring rate in N/m.
+        free_length: Spring free (unloaded) length in m.
+        preload: Constant force in N (>= 0) added to the linear spring term.
+        length_min: Minimum coilover length in m (bump stop).
+        length_max: Maximum coilover length in m (droop stop); must exceed ``length_min``.
+    """
 
     spring_rate: float = Field(gt=0)
     free_length: float = Field(gt=0)
@@ -176,7 +232,17 @@ def _arm_length(arm_end: Vec3, pivot: Vec3, axis: Vec3) -> float:
 
 
 class _TubeARB(_Frozen):
-    """Common fields of the bar types that twist a torsion tube (left-side points)."""
+    """Common fields of the bar types that twist a torsion tube (left-side points).
+
+    Attributes:
+        arm_end: Drop-link end of the bar arm in m (vehicle frame, left side).
+        bar_pivot: Point on the bar axis at the left bar bearing, in m.
+        bar_axis: Bar axis direction (unit on validation), default ``(0, 1, 0)``.
+        bar_length: Torsion-tube length between the mirrored pivots in m.
+        outer_diameter: Tube outer diameter in m.
+        inner_diameter: Tube inner diameter in m (0 = solid); must be smaller than the outer.
+        shear_modulus: Tube shear modulus in Pa.
+    """
 
     arm_end: Vec3
     bar_pivot: Vec3
@@ -200,6 +266,11 @@ class TorsionalARB(_TubeARB):
 
     ``arm_diameter`` is the diameter of the (round, solid) arms; ``None`` means
     rigid arms. Otherwise the arms bend as cantilevers (``arm_youngs_modulus``).
+
+    Attributes:
+        type: Discriminator, always ``"torsional"``.
+        arm_diameter: Arm diameter in m, or ``None`` for rigid arms.
+        arm_youngs_modulus: Arm Young's modulus in Pa (default 200 GPa).
     """
 
     type: Literal["torsional"]
@@ -212,6 +283,13 @@ class BladeARB(_TubeARB):
 
     ``blade_angle`` [rad] orients the blade section: 0 = flat (bends about the
     thin direction, soft), pi/2 = edge-on (stiff).
+
+    Attributes:
+        type: Discriminator, always ``"blade"``.
+        blade_width: Blade section width in m.
+        blade_thickness: Blade section thickness in m.
+        blade_youngs_modulus: Blade Young's modulus in Pa.
+        blade_angle: Blade section orientation in rad (0 = flat/soft, pi/2 = edge-on/stiff).
     """
 
     type: Literal["blade"]
@@ -228,6 +306,16 @@ class BeamARB(_Frozen):
     rotation; roll bends each half as a cantilever of length ``a`` = projection
     of ``arm_end - beam_center`` on ``beam_axis``. ``beam_angle`` as for
     ``BladeARB``.
+
+    Attributes:
+        type: Discriminator, always ``"beam"``.
+        beam_center: Slider (central support) point in m; must lie on the centreline.
+        beam_axis: Beam direction (unit on validation), default ``(0, 1, 0)``.
+        arm_end: Drop-link end of the left beam end in m.
+        beam_width: Beam section width in m.
+        beam_thickness: Beam section thickness in m.
+        beam_youngs_modulus: Beam Young's modulus in Pa.
+        beam_angle: Section orientation in rad (as ``BladeARB.blade_angle``).
     """
 
     type: Literal["beam"]
@@ -264,8 +352,14 @@ class Steering(_Frozen):
 
     Positive rack travel moves both ``tie_inner`` points along ``+rack_axis``
     (toward +y, left). For front-steer (tie rods ahead of the axle) that steers
-    left, i.e. positive steer (plan section 2). The right corner uses the same
-    global ``rack_axis`` (not mirrored), since the rack is one rigid part.
+    left, i.e. positive steer (``docs/concepts/conventions.md`` section 5.1). The right
+    corner uses the same global ``rack_axis`` (not mirrored), since the rack is one rigid
+    part.
+
+    Attributes:
+        c_factor: Rack travel per pinion revolution in m/rev (> 0).
+        rack_travel: ``(min, max)`` rack displacement limits in m with ``min < 0 < max``.
+        rack_axis: Rack direction (unit on validation), default ``(0, 1, 0)``.
     """
 
     c_factor: float = Field(gt=0)
@@ -285,6 +379,20 @@ class Axle(_Frozen):
     ``pushrod_mount`` selects the member that carries ``pushrod_outer``: the
     ``"upright"`` (default), the lower wishbone ``"lca"`` or the upper wishbone
     ``"uca"``.
+
+    Attributes:
+        brakes: ``"outboard"`` (default) or ``"inboard"``; selects the side-view angle used
+            for anti-dive/anti-lift.
+        pushrod_mount: Member carrying ``pushrod_outer``: ``"upright"``, ``"lca"`` or ``"uca"``.
+        unsprung_mass: Unsprung mass per corner in kg.
+        hardpoints: Left-side hardpoints (m).
+        wheel: Wheel and tyre data.
+        coilover: Spring/damper data.
+        arb: Optional anti-roll bar (``torsional``, ``blade`` or ``beam``); requires
+            ``hardpoints.rocker_arb``.
+        steering: Rack-and-pinion data (front axle only).
+        right_overrides: Hardpoint name -> ``(x, y, z)`` in m in right-side coordinates
+            (``y < 0``) replacing the mirrored point, for explicit asymmetric designs.
     """
 
     brakes: Literal["inboard", "outboard"] = "outboard"
@@ -331,7 +439,20 @@ class Axle(_Frozen):
 
 
 class VehicleParams(_Frozen):
-    """Vehicle-level parameters."""
+    """Vehicle-level parameters.
+
+    Attributes:
+        name: Vehicle name.
+        mass: Total mass in kg including the driver.
+        cg_height: Total CG height above the ground in m.
+        front_mass_ratio: Static front weight fraction, in (0, 1).
+        drive: ``"rwd"``, ``"fwd"`` or ``"awd"``.
+        brake_bias_front: Front share of brake force, in [0, 1].
+        drive_split_front: Front share of drive torque in [0, 1], or ``None`` to derive it
+            from ``drive``.
+        unsprung_cg_height: CG height of the unsprung masses in m; ``None`` means the tyre
+            radius of each axle.
+    """
 
     name: str
     mass: float = Field(gt=0)
@@ -356,6 +477,12 @@ class Vehicle(_Frozen):
     Hardpoints define the static ride-height pose. ``wheel_center`` z is the
     loaded radius, which may be a little below the unloaded ``tyre_radius``
     (checked within 0.02 m).
+
+    Attributes:
+        schema_version: Vehicle file schema (YAML key ``schema``); only 1 is supported.
+        vehicle: Vehicle-level parameters.
+        front: Front axle (must have steering).
+        rear: Rear axle (must not have steering).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
@@ -397,15 +524,15 @@ class Vehicle(_Frozen):
 
     @property
     def wheelbase(self) -> float:
-        """Wheelbase in metres."""
+        """Wheelbase in m: front minus rear ``wheel_center`` x."""
         return self.front.hardpoints.wheel_center[0] - self.rear.hardpoints.wheel_center[0]
 
     @property
     def front_track(self) -> float:
-        """Front track width in metres."""
+        """Front track width in m: twice the front ``wheel_center`` y."""
         return 2.0 * self.front.hardpoints.wheel_center[1]
 
     @property
     def rear_track(self) -> float:
-        """Rear track width in metres."""
+        """Rear track width in m: twice the rear ``wheel_center`` y."""
         return 2.0 * self.rear.hardpoints.wheel_center[1]

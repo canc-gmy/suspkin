@@ -1,7 +1,8 @@
 """Single-corner kinematic solver (rigid bodies, ideal joints).
 
 Body frame = ISO 8855 vehicle frame; the ground moves relative to the body.
-YAML hardpoints are the static pose (travel 0, rack 0).
+YAML hardpoints are the static pose (travel 0, rack 0). Theory, equations and code paths:
+``docs/concepts/corner-kinematics.md``.
 
 Formulation (3 unknowns): the UCA rotates by ``theta_uca`` and the LCA by
 ``theta_lca`` about their chassis axes, which fixes both ball joints. The upright
@@ -14,7 +15,8 @@ height. Rocker, spring and toggle margin follow in closed form.
 Sign convention: positive ``theta_uca``/``theta_lca``/``psi``/``rocker_angle`` are
 right-hand rotations about the left corner's axes. Right corners are reflections
 of left corners, so every angle is reported with a per-side sign (left/right equal
-for mirrored motion); the physical rotation is ``side_sign * angle``.
+for mirrored motion); the physical rotation is ``side_sign * angle``
+(``docs/concepts/conventions.md`` section 2).
 """
 
 from __future__ import annotations
@@ -61,6 +63,24 @@ class CornerState:
 
     ``coilover_in_range`` flags whether ``coilover_length`` lies within the
     coilover's ``[length_min, length_max]``.
+
+    Attributes:
+        corner_id: ``"FL"``, ``"FR"``, ``"RL"`` or ``"RR"``.
+        travel: Prescribed wheel-centre vertical travel in m (bump positive).
+        rack: Rack displacement in m (positive steers left).
+        theta_uca: Upper wishbone angle in rad, per-side signed.
+        theta_lca: Lower wishbone angle in rad, per-side signed.
+        psi: Upright spin about the ``LBJ -> UBJ`` axis in rad, per-side signed.
+        rocker_angle: Rocker angle in rad, per-side signed.
+        points: Name -> read-only ``(3,)`` array in m (vehicle frame): all hardpoints at the
+            solved pose (static ones shared with the corner), plus ``contact_patch`` (wheel
+            centre minus the tyre radius along the wheel's up direction).
+        spin_axis: Unit wheel spin axis, shape ``(3,)``, pointing outboard.
+        coilover_length: Distance ``rocker_spring`` to ``spring_chassis`` in m.
+        toggle_margin: Rocker distance from dead centre in rad, in ``[0, pi/2]``.
+        max_residual: Largest closing residual in m (ball-joint distance, tie-rod length,
+            wheel-centre height, pushrod length).
+        coilover_in_range: Whether ``coilover_length`` is within the coilover limits.
     """
 
     corner_id: CornerId
@@ -105,7 +125,10 @@ def _min_rot(w: _V3, ik: float, r: _V3) -> _V3:
 
 
 class _Ctx:
-    """Precomputed static data of a corner (plain floats/tuples for the scalar fast path)."""
+    """Precomputed static data of a corner (plain floats/tuples for the scalar fast path).
+
+    Built once per corner (and shared across a sweep); also read by ``kinematics._numba``.
+    """
 
     def __init__(self, corner: Corner) -> None:
         p = corner.points
@@ -257,11 +280,13 @@ def _upright_map(
 
 
 def _residuals(c: _Ctx, x: Vec, travel: float, tie_inner: Vec) -> Vec:
+    """Closing residuals ``F`` (m) as an array, for scipy."""
     f, _ = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _as3(tie_inner), False)
     return np.array(f)
 
 
 def _jacobian(c: _Ctx, x: Vec, travel: float, tie_inner: Vec) -> Vec:
+    """Analytic ``3 x 3`` Jacobian of the closing residuals, for scipy."""
     _, jm = _eval(c, float(x[0]), float(x[1]), float(x[2]), travel, _as3(tie_inner), True)
     assert jm is not None
     return np.array(jm)
@@ -350,31 +375,35 @@ def solve_corner(
 ) -> CornerState:
     """Solve one corner for a wheel travel [m] (bump positive) and rack offset [m].
 
-    Parameters
-    ----------
-    corner : Corner
-        Side-resolved corner from ``build_corners``.
-    travel, rack : float
-        Wheel-centre vertical travel and rack displacement along ``rack_axis``.
-    guess : CornerState, optional
-        Neighbouring solution used as the starting point (continuation). Without a
-        guess, large ``travel``/``rack`` (> 5 mm) are reached by internal continuation
-        from the static pose, so a cold solve lands on the same branch as a sweep. A far
-        guess (direct solve fails or jumps branch) is reached by staged continuation
-        from the guess.
+    Finds the wishbone and upright angles that keep every link at its static length while the
+    wheel centre is at the prescribed height (damped Newton, scipy ``hybr`` fallback), then
+    the rocker, spring and toggle margin in closed form.
 
-    Raises
-    ------
-    ValueError
-        If ``rack != 0`` on an axle without steering.
-    KinematicsError
-        If the mechanism cannot be assembled or the solver does not converge.
+    Args:
+        corner: Side-resolved corner from :func:`suspkin.geometry.corners.build_corners`.
+        travel: Wheel-centre vertical travel in m relative to the static pose (bump positive).
+        rack: Rack displacement in m along ``rack_axis`` (positive steers left); must be 0 on
+            an axle without steering.
+        guess: Neighbouring solution used as the starting point (continuation). Without a
+            guess, large ``travel``/``rack`` (> 5 mm) are reached by internal continuation
+            from the static pose, so a cold solve lands on the same branch as a sweep. A far
+            guess (direct solve fails or jumps branch) is reached by staged continuation
+            from the guess.
+
+    Returns:
+        The solved :class:`CornerState` (lengths in m, angles in rad, per-side signed).
+
+    Raises:
+        ValueError: If ``rack != 0`` on an axle without steering.
+        KinematicsError: If the mechanism cannot be assembled or the solver does not
+            converge (residual above 1e-9 m, or a branch jump from the guess).
     """
     c = _Ctx(corner) if _ctx is None else _ctx
     return _state(c, _solve_light(c, travel, rack, guess))
 
 
 def _state(c: _Ctx, s: CornerState | _Pose) -> CornerState:
+    """Promote a ``_Pose`` to a full ``CornerState`` (identity for a ``CornerState``)."""
     return s if isinstance(s, CornerState) else _finish(c, s)
 
 
@@ -442,6 +471,7 @@ class _Pose:
 
 
 def _tie_inner(c: _Ctx, rack: float) -> Vec:
+    """Tie-rod inner point after rack travel: ``tie_inner + rack * rack_axis`` (not mirrored)."""
     if c.rack_axis is None:
         if rack != 0.0:
             raise ValueError("rack must be 0 on an axle without steering")
@@ -457,6 +487,7 @@ def _solve_raw(
     guess: _Guess | None,
     x_pred: _V3 | None = None,
 ) -> CornerState:
+    """``_solve_pose`` followed by ``_finish`` (always returns a full ``CornerState``)."""
     return _finish(c, _solve_pose(c, travel, rack, guess, x_pred))
 
 
@@ -631,6 +662,7 @@ class _Advance:
     def solve(
         self, value: float, guess: CornerState | None, prior: CornerState | None = None
     ) -> CornerState:
+        """Solve at ``value`` of the swept variable, seeded by ``guess`` (+ linear predictor)."""
         pred = None if guess is None or prior is None else self._predict(value, guess, prior)
         if self.over == "travel":
             return _solve_raw(self.ctx, value, self.rack, guess, pred)
@@ -651,6 +683,7 @@ class _Advance:
         )
 
     def value(self, state: CornerState) -> float:
+        """The swept variable (travel or rack) of a state."""
         return state.travel if self.over == "travel" else state.rack
 
 
@@ -691,6 +724,7 @@ def _staged(c: _Ctx, travel: float, rack: float) -> CornerState:
 
 
 def _cold(adv: _Advance, value: float) -> CornerState:
+    """Solve without a guess (staged continuation from the static pose when far)."""
     if adv.over == "travel":
         return solve_corner(adv.ctx.corner, value, adv.rack)
     return solve_corner(adv.ctx.corner, adv.travel, value)
@@ -699,6 +733,7 @@ def _cold(adv: _Advance, value: float) -> CornerState:
 def _continuation(
     adv: _Advance, values: ArrayLike, first_guess: CornerState | None = None
 ) -> list[CornerState]:
+    """Sweep ``values`` outward from the entry nearest 0; results in input order."""
     vals = np.atleast_1d(np.asarray(values, dtype=np.float64))
     if vals.size == 0:
         return []
@@ -730,8 +765,21 @@ def _continuation(
 def sweep_corner(corner: Corner, travels: ArrayLike, rack: float = 0.0) -> list[CornerState]:
     """Solve a travel sweep by continuation outward from the point nearest to 0.
 
-    Returns one state per requested travel, in input order. On non-convergence the
-    step is halved (up to 6 times) before ``KinematicsError`` is raised.
+    Each solution seeds the next one (with a linear predictor), so the sweep stays on one
+    kinematic branch. On non-convergence the step is halved (up to 6 times) before
+    ``KinematicsError`` is raised.
+
+    Args:
+        corner: Side-resolved corner.
+        travels: Wheel travels in m, shape ``(N,)`` (any order; bump positive).
+        rack: Constant rack displacement in m (0 on a non-steered axle).
+
+    Returns:
+        One :class:`CornerState` per requested travel, in input order.
+
+    Raises:
+        KinematicsError: If a step cannot be solved even after halving.
+        ValueError: If ``rack != 0`` on an axle without steering.
     """
     return _continuation(_Advance(_Ctx(corner), rack, 0.0, "travel"), travels)
 
@@ -740,6 +788,18 @@ def sweep_rack(corner: Corner, racks: ArrayLike, travel: float = 0.0) -> list[Co
     """Solve a rack sweep at fixed travel by continuation (see ``sweep_corner``).
 
     A non-zero ``travel`` is first reached at rack 0 from the static pose.
+
+    Args:
+        corner: Side-resolved corner (must have steering unless ``racks`` is all zero).
+        racks: Rack displacements in m, shape ``(N,)`` (positive steers left).
+        travel: Constant wheel travel in m (bump positive).
+
+    Returns:
+        One :class:`CornerState` per requested rack value, in input order.
+
+    Raises:
+        KinematicsError: If a step cannot be solved even after halving.
+        ValueError: If a non-zero rack is requested on an axle without steering.
     """
     c = _Ctx(corner)
     adv = _Advance(c, 0.0, travel, "rack")

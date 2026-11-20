@@ -3,7 +3,9 @@
 Everything here works on one :class:`~suspkin.kinematics.corner.CornerState` (or a list of
 them for the joint-angle frame) and returns SI floats (m, rad, N, N/m). The per-pose metric
 columns are produced by the vectorised :mod:`suspkin.metrics.arrays`; scalar reference
-versions of them live in the test suite (``tests/unit/_scalar_oracles.py``).
+versions of them live in the test suite (``tests/unit/_scalar_oracles.py``). Sign conventions:
+``docs/concepts/conventions.md`` sections 5.2 to 5.7; column definitions:
+``docs/concepts/metrics.md``.
 """
 
 from __future__ import annotations
@@ -44,35 +46,81 @@ def _out(corner: Corner) -> float:
 
 
 def steer_angle(state: CornerState, corner: Corner) -> float:
-    """Road-wheel heading [rad], ISO yaw sign (positive = wheel points left)."""
+    """Road-wheel heading [rad], ISO yaw sign (positive = wheel points left).
+
+    ``steer = atan2(-o n_x, o n_y)`` with ``n`` the outboard wheel spin axis and ``o`` = +1
+    (left) or -1 (right); so ``steer = -toe`` on left and ``+toe`` on right corners.
+
+    Args:
+        state: Solved corner (provides ``spin_axis``).
+        corner: Its side-resolved corner (provides the side).
+
+    Returns:
+        Steer angle in rad.
+    """
     n = state.spin_axis
     o = _out(corner)
     return math.atan2(-o * float(n[0]), o * float(n[1]))
 
 
 # --------------------------------------------------------------------------- actuation
-# Wheel and ride rates (DESIGN_PLAN section 5.5). Virtual work links wheel and spring: with
+# Wheel and ride rates (docs/concepts/conventions.md section 5.7).
+# Virtual work links wheel and spring: with
 # spring motion ratio ``MR = -dL/dz`` the wheel load of the spring is ``F_w = F_s * MR`` and
 # the wheel rate is ``dF_w/dz = k * MR**2 + F_s * dMR/dz``.
 
 
 def wheel_load_spring(force: float, mr_spring: float) -> float:
-    """Vertical wheel load [N] of the spring, ``F_s * MR`` (virtual work)."""
+    """Vertical wheel load [N] of the spring, ``F_s * MR`` (virtual work).
+
+    Args:
+        force: Spring force in N (compressive positive).
+        mr_spring: Spring motion ratio ``MR = -dL/dz`` (dimensionless, m/m).
+
+    Returns:
+        Wheel load in N.
+    """
     return force * mr_spring
 
 
 def wheel_rate_linear(spring_rate: float, mr_spring: float) -> float:
-    """Linearised wheel rate [N/m], ``k * MR**2``."""
+    """Linearised wheel rate [N/m], ``k * MR**2``.
+
+    Args:
+        spring_rate: Spring rate ``k`` in N/m.
+        mr_spring: Spring motion ratio (m/m).
+
+    Returns:
+        Wheel rate in N/m (ignores the motion-ratio progression term).
+    """
     return spring_rate * mr_spring**2
 
 
 def wheel_rate(spring_rate: float, mr_spring: float, force: float, progression: float) -> float:
-    """Wheel rate [N/m] from virtual work, ``k * MR**2 + F_s * dMR/dz``."""
+    """Wheel rate [N/m] from virtual work, ``k * MR**2 + F_s * dMR/dz``.
+
+    Args:
+        spring_rate: Spring rate ``k`` in N/m.
+        mr_spring: Spring motion ratio (m/m).
+        force: Spring force ``F_s`` in N.
+        progression: Motion-ratio progression ``dMR/dz`` in 1/m.
+
+    Returns:
+        Wheel rate in N/m.
+    """
     return spring_rate * mr_spring**2 + force * progression
 
 
 def ride_rate(wheel_rate_value: float, tyre_stiffness: float) -> float:
-    """Ride rate [N/m]: wheel rate in series with the vertical tyre stiffness."""
+    """Ride rate [N/m]: wheel rate in series with the vertical tyre stiffness.
+
+    Args:
+        wheel_rate_value: Wheel rate in N/m.
+        tyre_stiffness: Tyre vertical stiffness in N/m.
+
+    Returns:
+        ``k_w k_t / (k_w + k_t)`` in N/m.
+    """
     return wheel_rate_value * tyre_stiffness / (wheel_rate_value + tyre_stiffness)
 
 
@@ -102,6 +150,12 @@ class InstantCentre:
     ``h`` is the horizontal coordinate (y in front view, x in side view), ``z`` the
     height [m]; both nan if ``is_finite`` is False. ``direction`` is the unit
     direction (h, z) of the section lines (the common one when parallel).
+
+    Attributes:
+        h: Horizontal coordinate in m (``y`` front view, ``x`` side view); NaN at infinity.
+        z: Height in m (vehicle frame); NaN at infinity.
+        is_finite: False for an instant centre at infinity or degenerate input.
+        direction: Unit direction ``(h, z)`` of the section lines, shape ``(2,)``.
     """
 
     h: float
@@ -112,6 +166,7 @@ class InstantCentre:
 
 # kept separate: float ordering (scalar and array plane methods differ in degenerate-case handling)
 def _ic(state: CornerState, axis: int) -> InstantCentre:
+    """Plane-method instant centre of one state (``axis`` 0 = front view, 1 = side view)."""
     p = state.points
     cut = float(p["contact_patch"][axis])
     lines = []
@@ -129,12 +184,30 @@ def _ic(state: CornerState, axis: int) -> InstantCentre:
 
 
 def front_view_ic(state: CornerState, corner: Corner) -> InstantCentre:
-    """Front-view instant centre (h = y, z) of the corner."""
+    """Front-view instant centre (h = y, z) of the corner.
+
+    Args:
+        state: Solved corner.
+        corner: Its side-resolved corner (unused; kept for a uniform signature).
+
+    Returns:
+        :class:`InstantCentre` in the ``(y, z)`` plane, m; ``is_finite=False`` for parallel
+        wishbone planes (never raises).
+    """
     return _ic(state, 0)
 
 
 def side_view_ic(state: CornerState, corner: Corner) -> InstantCentre:
-    """Side-view instant centre (h = x, z) of the corner."""
+    """Side-view instant centre (h = x, z) of the corner.
+
+    Args:
+        state: Solved corner.
+        corner: Its side-resolved corner (unused; kept for a uniform signature).
+
+    Returns:
+        :class:`InstantCentre` in the ``(x, z)`` plane, m; ``is_finite=False`` for parallel
+        wishbone planes (never raises).
+    """
     return _ic(state, 1)
 
 
@@ -156,7 +229,7 @@ def _angle(ic: InstantCentre, ref_h: float, ref_z: float, sign: float) -> float:
 
 
 def _anti_sign(corner: Corner) -> float:
-    """Sign of the x direction of the anti side: rearward (-1) at the front, forward at the rear."""
+    """Sign of the x direction of the anti side: rearward (-1) front, forward (+1) rear."""
     return -1.0 if corner.axle == "front" else 1.0
 
 
@@ -167,13 +240,28 @@ def sv_swing_angle(state: CornerState, corner: Corner) -> float:
     the patch; rear axle, SVIC forward of and above it. Equals
     ``atan2(z_ic - z_cp, s * (x_cp - x_ic))`` with s = +1 front, -1 rear; range
     (-pi, pi]. ``tan`` of it is the swing-arm slope used for anti %.
+
+    Args:
+        state: Solved corner (provides ``contact_patch`` and the wishbone points).
+        corner: Its side-resolved corner (provides the axle).
+
+    Returns:
+        Angle in rad; NaN for degenerate input.
     """
     cp = state.points["contact_patch"]
     return _angle(side_view_ic(state, corner), float(cp[0]), float(cp[2]), _anti_sign(corner))
 
 
 def sv_wc_angle(state: CornerState, corner: Corner) -> float:
-    """Signed angle [rad] of the line wheel centre -> SVIC; same sign rule as above."""
+    """Signed angle [rad] of the line wheel centre -> SVIC; same sign rule as above.
+
+    Args:
+        state: Solved corner (provides ``wheel_center`` and the wishbone points).
+        corner: Its side-resolved corner (provides the axle).
+
+    Returns:
+        Angle in rad (feeds the anti-squat and inboard-brake anti-features).
+    """
     wc = state.points["wheel_center"]
     return _angle(side_view_ic(state, corner), float(wc[0]), float(wc[2]), _anti_sign(corner))
 
@@ -193,8 +281,15 @@ def roll_centre_pair(left: CornerState, right: CornerState) -> tuple[float, floa
     """Front-view roll centre (y, z) of one axle: both contact patch -> FVIC lines intersected.
 
     Coincident lines (e.g. parallel horizontal wishbones) return the point on the line
-    at y = 0, as ``roll_centre_symmetric`` does. Returns ``(nan, nan)`` for parallel
-    distinct lines or degenerate input.
+    at y = 0. Returns ``(nan, nan)`` for parallel distinct lines or degenerate input.
+
+    Args:
+        left: Solved left corner of the axle.
+        right: Solved right corner of the axle.
+
+    Returns:
+        ``(y, z)`` of the roll centre in m, vehicle frame (``y`` positive toward the left).
+        The height is measured in the body frame; the vehicle sweeps rotate it to the ground.
     """
     segs = [_roll_line(st) for st in (left, right)]
     if not all(bool(np.all(np.isfinite(d))) for _, d in segs):
@@ -263,8 +358,16 @@ _DEGENERATE_FIT_MSG = "degenerate point set for rotation fit (collinear or coinc
 def kabsch_batch(p0: Vec, p1: Vec) -> Vec:
     """Batched Kabsch fit: ``p0`` ``(k, 3)`` static points, ``p1`` ``(N, k, 3)``.
 
-    Returns the proper rotations ``(N, 3, 3)`` minimising ``|R (p0 - c0) - (p1 - c1)|``
-    (SVD with a determinant fix). Raises ``ValueError`` for a degenerate point set.
+    Args:
+        p0: Static body points, shape ``(k, 3)``, m.
+        p1: Moved body points for N states, shape ``(N, k, 3)``, m.
+
+    Returns:
+        The proper rotations ``(N, 3, 3)`` minimising ``|R (p0 - c0) - (p1 - c1)|`` (SVD with
+        a determinant fix), with ``c0``/``c1`` the centroids.
+
+    Raises:
+        ValueError: For a degenerate point set (collinear or coincident points).
     """
     a = p0 - p0.mean(axis=0)
     b = p1 - p1.mean(axis=1, keepdims=True)
@@ -283,12 +386,24 @@ def kabsch_batch(p0: Vec, p1: Vec) -> Vec:
 
 
 def kabsch(p0: Vec, p1: Vec) -> Vec:
-    """Proper rotation R minimising ``|R (p0 - c0) - (p1 - c1)|`` for ``(n, 3)`` point sets."""
+    """Proper rotation R minimising ``|R (p0 - c0) - (p1 - c1)|`` for ``(n, 3)`` point sets.
+
+    Args:
+        p0: Static body points, shape ``(n, 3)``, m.
+        p1: Moved body points, shape ``(n, 3)``, m.
+
+    Returns:
+        Rotation matrix, shape ``(3, 3)``.
+
+    Raises:
+        ValueError: For a degenerate point set.
+    """
     out: Vec = kabsch_batch(p0, p1[None])[0]
     return out
 
 
 def _rot(static: CornerState, state: CornerState, names: Sequence[str]) -> Vec:
+    """Kabsch rotation of the named hardpoints from ``static`` to ``state``."""
     p0 = np.array([static.points[n] for n in names], dtype=np.float64)
     p1 = np.array([state.points[n] for n in names], dtype=np.float64)
     return kabsch(p0, p1)
@@ -301,6 +416,17 @@ def body_rotations(state: CornerState, static: CornerState, corner: Corner) -> d
     a Kabsch fit of the body's hardpoints (``rocker_arb`` joins the rocker set if
     present). The pushrod mount body needs no entry of its own: ``pushrod_outer``
     moves with the body named by ``corner.axle_cfg.pushrod_mount``.
+
+    Args:
+        state: Solved corner at the current pose.
+        static: Solved corner at the static pose (reference).
+        corner: Side-resolved corner (unused here; kept for a uniform signature).
+
+    Returns:
+        Body name -> rotation matrix ``(3, 3)``.
+
+    Raises:
+        ValueError: If a body's point set is degenerate.
     """
     names = dict(_BODY_POINTS)
     if "rocker_arb" in state.points:
@@ -311,6 +437,7 @@ def body_rotations(state: CornerState, static: CornerState, corner: Corner) -> d
 
 
 def _housing(corner: Corner, joint: str) -> str:
+    """Name of the body whose bore or socket carries ``joint`` (the chassis for chassis joints)."""
     if joint in ("tie_inner", "spring_chassis"):
         return "chassis"
     if joint == "tie_outer":
@@ -323,7 +450,15 @@ def _housing(corner: Corner, joint: str) -> str:
 
 
 def angle_between(a: ArrayLike, b: ArrayLike) -> Vec:
-    """Angle [rad] ``atan2(|a x b|, a . b)`` over the last axis (``(3,)`` or ``(N, 3)`` inputs)."""
+    """Angle [rad] ``atan2(|a x b|, a . b)`` over the last axis (``(3,)`` or ``(N, 3)`` inputs).
+
+    Args:
+        a: Vector(s), shape ``(3,)`` or ``(N, 3)``.
+        b: Vector(s), broadcastable against ``a``.
+
+    Returns:
+        Unsigned angle(s) in rad in ``[0, pi]``, shape ``()`` or ``(N,)``.
+    """
     u = np.asarray(a, dtype=np.float64)
     v = np.asarray(b, dtype=np.float64)
     c = np.cross(u, v)
@@ -343,11 +478,26 @@ def joint_angle(
 ) -> float:
     """Misalignment angle [rad] of ``joint`` at ``state`` relative to ``static``.
 
-    See the module docstring for the definitions. ``axis`` is an optional static
+    The definitions are in the comment block above (rod ends compare the link direction with
+    the one carried by the housing body; ball joints compare the stud axis carried by the
+    upright with the same axis carried by the wishbone). ``axis`` is an optional static
     vector (normalised internally) replacing the default stud/bore axis. For rod
     ends the override uses a minimal-rotation carrier convention (the carrier turns
     ``d_static`` onto ``d_now`` with no spin about the link), so it is approximate.
     ``_rots`` is an internal cache of ``body_rotations`` for this state.
+
+    Args:
+        state: Solved corner at the current pose.
+        static: Solved corner at the static pose.
+        corner: Side-resolved corner (provides the pushrod mount).
+        joint: One of :data:`JOINTS`.
+        axis: Optional static stud/bore axis, shape ``(3,)``.
+
+    Returns:
+        Unsigned misalignment angle in rad, in ``[0, pi]``.
+
+    Raises:
+        ValueError: If ``joint`` is unknown or a point set is degenerate.
     """
     if joint not in JOINTS:
         raise ValueError(f"unknown joint {joint!r}; expected one of {JOINTS}")
@@ -374,6 +524,13 @@ def joint_angles_frame(states: Sequence[CornerState], corner: Corner) -> pd.Data
 
     The static pose is the state with ``travel ~ 0`` and ``rack ~ 0`` if present,
     else it is solved with ``solve_corner``.
+
+    Args:
+        states: Solved corner states (any order).
+        corner: Side-resolved corner.
+
+    Returns:
+        DataFrame with one row per state (rad); empty with the column names for no states.
     """
     # lazy: suspkin.metrics.arrays imports this module at module level (import cycle otherwise)
     from suspkin.metrics.arrays import joint_angle_arrays

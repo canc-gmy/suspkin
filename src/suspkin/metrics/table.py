@@ -1,4 +1,9 @@
-"""Metric tables: per-state metrics, gradients vs the sweep variable, static summary."""
+"""Metric tables: per-state metrics, gradients vs the sweep variable, static summary.
+
+All tables are SI (m, rad, N, N/m); the display conversion is done by the plotting and CLI
+layers (``docs/concepts/conventions.md`` section 3). Column definitions:
+``docs/concepts/metrics.md``.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +25,13 @@ def metrics_frame(states: Sequence[CornerState], corner: Corner) -> pd.DataFrame
 
     The constant columns ``spring_rate`` and ``tyre_stiffness`` carry the rates that
     :func:`add_gradients` needs for the wheel and ride rate.
+
+    Args:
+        states: Solved corner states of ``corner`` (e.g. from ``sweep_corner``).
+        corner: Side-resolved corner.
+
+    Returns:
+        DataFrame, one row per state (empty DataFrame for no states), SI units.
     """
     if len(states) == 0:
         return pd.DataFrame()
@@ -27,6 +39,7 @@ def metrics_frame(states: Sequence[CornerState], corner: Corner) -> pd.DataFrame
 
 
 def _check_axis(df: pd.DataFrame, x: str) -> NDArray[np.float64]:
+    """Validate the gradient axis column (known name, >= 3 rows, strictly monotonic)."""
     if x not in GRADIENTS:
         raise ValueError(f"x must be one of {sorted(GRADIENTS)}, got {x!r}")
     if len(df) < 3:
@@ -49,6 +62,17 @@ def add_gradients(df: pd.DataFrame, x: str = "travel") -> pd.DataFrame:
     (``d(coilover_compression)/dz``, equal to ``-dL/dz``), ``mr_progression``
     (``d(mr_spring)/dz``), ``wheel_load_spring``, ``wheel_rate_linear``, ``wheel_rate``
     and ``ride_rate`` (N/m), all from the table values.
+
+    Args:
+        df: Table from :func:`metrics_frame` (SI).
+        x: Sweep variable column: ``"travel"`` (m) or ``"rack"`` (m).
+
+    Returns:
+        Copy of ``df`` with the gradient columns added (per metre).
+
+    Raises:
+        ValueError: If ``x`` is not ``"travel"`` or ``"rack"``, there are fewer than 3 rows,
+            or ``x`` is not strictly monotonic.
     """
     xv = _check_axis(df, x)
     out = df.copy()
@@ -72,7 +96,20 @@ def add_gradients(df: pd.DataFrame, x: str = "travel") -> pd.DataFrame:
 
 
 def static_summary(df: pd.DataFrame, x: str = "travel") -> dict[str, float]:
-    """Value of every metric and gradient column at ``x == 0`` (linear interpolation)."""
+    """Value of every metric and gradient column at ``x == 0`` (linear interpolation).
+
+    Args:
+        df: Table from :func:`metrics_frame` / :func:`add_gradients` (SI).
+        x: Sweep variable column (``"travel"`` or ``"rack"``).
+
+    Returns:
+        Column name -> value at ``x = 0`` (float columns only, ``travel`` and ``rack``
+        excluded), in SI units.
+
+    Raises:
+        ValueError: If ``x`` is invalid, the table has fewer than 3 rows, ``x`` is not
+            strictly monotonic, or ``x = 0`` lies outside the sweep range.
+    """
     xv = _check_axis(df, x)
     order = np.argsort(xv)
     cols = [c for c in df.columns if c not in ("travel", "rack") and df[c].dtype.kind == "f"]

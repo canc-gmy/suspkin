@@ -1,4 +1,9 @@
-"""Rocker kinematics: closed-form pushrod-length constraint on a rotating rocker."""
+"""Rocker kinematics: closed-form pushrod-length constraint on a rotating rocker.
+
+Given the moved pushrod outer point, the rocker rotates about its fixed axis until the pushrod
+recovers its static length. The angle is reported with the per-side sign of
+``docs/concepts/conventions.md`` section 2 (see ``docs/concepts/corner-kinematics.md``).
+"""
 
 from __future__ import annotations
 
@@ -13,7 +18,11 @@ from suspkin.geometry.vectors import _V3, _as3, _cross3, _dot3, _sub3
 
 
 class KinematicsError(RuntimeError):
-    """Raised when the mechanism cannot be assembled or a solve does not converge."""
+    """Raised when the mechanism cannot be assembled or a solve does not converge.
+
+    Subclass of ``RuntimeError``. Typical causes: a pushrod that cannot reach the rocker
+    circle, a Newton/hybr failure, or a branch jump during continuation.
+    """
 
 
 @dataclass(frozen=True)
@@ -24,6 +33,13 @@ class RockerResult:
     rotation about the stored ``corner.rocker_axis`` is ``side_sign * angle``.
     ``toggle_margin`` is min(a, pi - a) [rad] with ``a`` the angle between the
     pushrod and the rocker lever in the plane normal to the rocker axis.
+
+    Attributes:
+        angle: Rocker angle in rad relative to the static pose, per-side signed.
+        pushrod_inner: Moved pushrod inner point, shape ``(3,)``, m, vehicle frame.
+        rocker_spring: Moved spring attachment on the rocker, shape ``(3,)``, m.
+        rocker_arb: Moved ARB drop-link attachment, shape ``(3,)``, m; ``None`` without ARB.
+        toggle_margin: Distance from the rocker dead centre in rad, in ``[0, pi/2]``.
     """
 
     angle: float
@@ -34,7 +50,15 @@ class RockerResult:
 
 
 def side_sign(corner: Corner) -> float:
-    """Return +1 for left corners and -1 for right corners (reflection sense)."""
+    """Return +1 for left corners and -1 for right corners (reflection sense).
+
+    Args:
+        corner: Side-resolved corner.
+
+    Returns:
+        The per-side angle sign ``s``; the physical rotation is ``s * angle`` about the
+        stored (mirrored) axis.
+    """
     return 1.0 if corner.side == "left" else -1.0
 
 
@@ -42,7 +66,12 @@ RockerTuple = tuple[float, _V3, _V3, _V3 | None, float]
 
 
 class RockerCtx:
-    """Static rocker data of a corner as plain floats (scalar fast path of the solver)."""
+    """Static rocker data of a corner as plain floats (scalar fast path of the solver).
+
+    Precomputes the rocker-frame vectors (relative to the pivot) and the pushrod length so
+    that :meth:`solve` is a handful of scalar operations. Used by
+    :func:`suspkin.kinematics.corner.solve_corner`.
+    """
 
     def __init__(self, corner: Corner) -> None:
         pts = corner.points
@@ -82,7 +111,7 @@ class RockerCtx:
         )
 
     def solve(self, po: _V3, guess: float = 0.0) -> RockerResult:
-        """See :func:`solve_rocker`; ``po`` is the pushrod outer point."""
+        """See :func:`solve_rocker`; ``po`` is the pushrod outer point (3-tuple, m)."""
         angle, p_in, p_spring, p_arb, toggle = self.solve_tuple(po, guess)
         return RockerResult(
             angle,
@@ -136,9 +165,16 @@ def solve_rocker(corner: Corner, pushrod_outer: ArrayLike, guess: float = 0.0) -
     constraint reduces to ``A cos(a) + B sin(a) = C``. Of the two roots the one
     closest to ``guess`` is used.
 
-    Raises
-    ------
-    KinematicsError
-        If the pushrod cannot reach the rocker circle (no real solution).
+    Args:
+        corner: Side-resolved corner (provides pivot, axis, pushrod and spring points).
+        pushrod_outer: Moved pushrod outer point, shape ``(3,)``, m, vehicle frame.
+        guess: Rocker angle in rad (per-side signed, as reported) selecting the root.
+
+    Returns:
+        :class:`RockerResult` with the moved rocker points (m), the per-side signed angle
+        (rad) and the toggle margin (rad).
+
+    Raises:
+        KinematicsError: If the pushrod cannot reach the rocker circle (no real solution).
     """
     return RockerCtx(corner).solve(_as3(pushrod_outer), guess)

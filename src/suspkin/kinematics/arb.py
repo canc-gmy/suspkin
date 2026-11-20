@@ -1,6 +1,7 @@
 """Anti-roll bar kinematics, stiffness and energy (pure functions).
 
-Three bar types (plan decision O3):
+Three bar types (``docs/concepts/corner-kinematics.md``; signs in
+``docs/concepts/conventions.md`` section 5.10):
 
 * ``torsional`` / ``blade``: each side's arm rotates rigidly about the bar axis
   line through that side's ``bar_pivot`` by an angle ``beta`` such that the drop
@@ -21,11 +22,10 @@ Stiffness ``k`` of the elastic coordinate ``q`` (``E = 1/2 k q^2``):
   bar axis). The second term is two cantilever arms: tip stiffness ``3EI/r^3``
   acting with lever ``r`` gives a twist compliance ``1/(k_tip r^2)`` each. Rigid
   arms (``arm_diameter`` None) omit it. Unit: N m/rad.
-* blade: same, with ``I = (w t^3 cos^2 a + t w^3 sin^2 a) / 12``, the standard
-  compliance (harmonic) form ``I_eff = 1 / (cos^2 a / I_flat + sin^2 a / I_edge)``
-  with ``I_flat = w t^3/12`` and ``I_edge = t w^3/12``: tip force along the load
-  direction, lateral deflection free. Exact at a = 0 (flat, soft) and a = pi/2
-  (edge-on, stiff).
+* blade: same, with the effective inertia in compliance (harmonic) form
+  ``I_eff = 1 / (cos^2 a / I_flat + sin^2 a / I_edge)`` with ``I_flat = w t^3/12`` and
+  ``I_edge = t w^3/12``: tip force along the load direction, lateral deflection free.
+  Exact at a = 0 (flat, soft) and a = pi/2 (edge-on, stiff).
 * beam: each half is a cantilever of length ``a`` with tip stiffness
   ``k_end = 3 E I / a^3``; the energy is ``2 * 1/2 k_end delta^2``, hence
   ``k = 2 k_end = 6 E I / a^3`` for ``E = 1/2 k delta^2``. Unit: N/m.
@@ -56,6 +56,17 @@ class ArbState:
     ``beta_left/right`` [rad] are used by torsional and blade bars, ``heave`` [m]
     by beams (unused fields are 0). ``elastic`` is ``twist`` [rad] or ``deflection``
     [m]. ``arm_end_left/right`` are the bar-side drop-link points.
+
+    Attributes:
+        type: ``"torsional"``, ``"blade"`` or ``"beam"``.
+        beta_left: Left arm angle in rad (per-side signed; 0 for beams).
+        beta_right: Right arm angle in rad (per-side signed; 0 for beams).
+        heave: Beam central-slider heave ``c`` in m (0 for tube bars).
+        elastic: Elastic coordinate: twist ``beta_left - beta_right`` [rad] for tube bars,
+            deflection ``delta`` [m] for beams. Zero in pure heave.
+        arm_end_left: Moved bar-side drop-link point, shape ``(3,)``, m (read-only).
+        arm_end_right: Same for the right side.
+        max_residual: Largest drop-link length error in m.
     """
 
     type: Literal["torsional", "blade", "beam"]
@@ -69,12 +80,14 @@ class ArbState:
 
 
 def _require_arb(axle_cfg: Axle) -> ARB:
+    """The axle's ARB; ``ValueError`` if the axle has none."""
     if axle_cfg.arb is None:
         raise ValueError("axle has no ARB")
     return axle_cfg.arb
 
 
 def _drop_length(axle_cfg: Axle, side_left: bool) -> float:
+    """Static drop-link length in m (``rocker_arb`` to ``arm_end``, right override honoured)."""
     arb = _require_arb(axle_cfg)
     rocker = axle_cfg.hardpoints.rocker_arb
     assert rocker is not None
@@ -140,6 +153,7 @@ def _rotate_about(pivot: Vec, axis: Vec, angle: float, p: Vec) -> Vec:
 
 
 def _frozen(v: Vec) -> Vec:
+    """Read-only float64 copy of ``v``."""
     out = np.array(v, dtype=np.float64)
     out.setflags(write=False)
     return out
@@ -148,6 +162,7 @@ def _frozen(v: Vec) -> Vec:
 def _residual(
     left: CornerState, right: CornerState, ends: list[Vec], lengths: list[float]
 ) -> float:
+    """Largest absolute drop-link length error in m over both sides."""
     worst = 0.0
     for i, state in enumerate((left, right)):
         r = state.points["rocker_arb"]
@@ -168,6 +183,7 @@ def _solve_tube(
     right: CornerState,
     guess: ArbState | None,
 ) -> ArbState:
+    """Torsional/blade bar: per-side arm angle so the drop link keeps its static length."""
     assert not isinstance(arb, BeamARB)
     betas: list[float] = []
     ends: list[Vec] = []
@@ -206,6 +222,7 @@ def _solve_beam(
     right: CornerState,
     guess: ArbState | None,
 ) -> ArbState:
+    """Beam bar: vertical end offsets so each drop link keeps its static length."""
     offsets: list[float] = []
     ends: list[Vec] = []
     lengths: list[float] = []
@@ -246,19 +263,19 @@ def solve_arb(
 ) -> ArbState:
     """Solve the ARB pose from the solved left/right corner states.
 
-    Parameters
-    ----------
-    axle_cfg : Axle
-        Axle with an ARB.
-    left, right : CornerState
-        Solved corners; ``points["rocker_arb"]`` drives the drop links.
-    guess : ArbState, optional
-        Neighbouring solution used to pick the root branch.
+    Args:
+        axle_cfg: Axle with an ARB.
+        left: Solved left corner; ``points["rocker_arb"]`` drives the left drop link.
+        right: Solved right corner; ``points["rocker_arb"]`` drives the right drop link.
+        guess: Neighbouring solution used to pick the root branch.
 
-    Raises
-    ------
-    KinematicsError
-        If a drop link cannot be closed or the residual exceeds 1e-9 m.
+    Returns:
+        :class:`ArbState` (arm angles in rad per-side signed, or beam offsets in m).
+
+    Raises:
+        ValueError: If the axle has no ARB.
+        KinematicsError: If a corner carries no ``rocker_arb`` point, a drop link cannot be
+            closed, or the residual exceeds 1e-9 m.
     """
     arb = _require_arb(axle_cfg)
     if "rocker_arb" not in left.points or "rocker_arb" not in right.points:
@@ -273,6 +290,7 @@ def solve_arb(
 
 
 def _rect_inertia(width: float, thickness: float, angle: float) -> float:
+    """Effective second moment of area in m^4 of a rotated rectangle (harmonic blend)."""
     i_flat = width * thickness**3 / 12.0
     i_edge = thickness * width**3 / 12.0
     c, sn = math.cos(angle), math.sin(angle)
@@ -280,7 +298,15 @@ def _rect_inertia(width: float, thickness: float, angle: float) -> float:
 
 
 def arm_length(arb: ARB) -> float:
-    """Arm length [m] of a torsional or blade bar (arm tip to the bar axis)."""
+    """Arm length [m] of a torsional or blade bar (arm tip to the bar axis).
+
+    Args:
+        arb: A ``TorsionalARB`` or ``BladeARB`` (a ``BeamARB`` is not supported).
+
+    Returns:
+        Perpendicular distance in m of ``arm_end`` from the bar axis line through
+        ``bar_pivot``.
+    """
     assert not isinstance(arb, BeamARB)
     d = np.array(arb.arm_end, dtype=np.float64) - np.array(arb.bar_pivot, dtype=np.float64)
     axis = np.array(arb.bar_axis, dtype=np.float64)
@@ -288,7 +314,18 @@ def arm_length(arb: ARB) -> float:
 
 
 def arb_stiffness(axle_cfg: Axle) -> float:
-    """Stiffness of the elastic coordinate: N m/rad (twist) or N/m (beam deflection)."""
+    """Stiffness of the elastic coordinate: N m/rad (twist) or N/m (beam deflection).
+
+    Args:
+        axle_cfg: Axle with an ARB (SI material and section data).
+
+    Returns:
+        ``k`` with bar energy ``E = 1/2 k q^2``: N m/rad for torsional/blade bars,
+        N/m for beams.
+
+    Raises:
+        ValueError: If the axle has no ARB.
+    """
     arb = _require_arb(axle_cfg)
     if isinstance(arb, BeamARB):
         a = float((np.array(arb.arm_end) - np.array(arb.beam_center)) @ np.array(arb.beam_axis))
@@ -308,5 +345,16 @@ def arb_stiffness(axle_cfg: Axle) -> float:
 
 
 def arb_energy(axle_cfg: Axle, arb_state: ArbState) -> float:
-    """Elastic energy [J] stored in the bar, ``1/2 k q^2``."""
+    """Elastic energy [J] stored in the bar, ``1/2 k q^2``.
+
+    Args:
+        axle_cfg: Axle with an ARB.
+        arb_state: Solved ARB pose; its ``elastic`` coordinate is ``q``.
+
+    Returns:
+        Energy in J (zero for the static pose and for pure heave).
+
+    Raises:
+        ValueError: If the axle has no ARB.
+    """
     return 0.5 * arb_stiffness(axle_cfg) * arb_state.elastic**2

@@ -5,6 +5,8 @@ Vehicle Dynamics* (RCVD): ISO 8855 frame (x forward, z up), origin on ground at 
 front axle, so the rear axle is at x = -wheelbase.
 
 :func:`vehicle_summary` (end of the module) assembles the static vehicle summary.
+Signs and formulas: ``docs/concepts/conventions.md`` sections 5.5, 5.6 and 5.9; discussion in
+``docs/concepts/metrics.md``.
 """
 
 from __future__ import annotations
@@ -39,6 +41,15 @@ def anti_dive_front(
     ``sv_angle`` is the signed side-view swing angle (positive = anti-geometry, see
     ``corner.sv_swing_angle``). Outboard brakes: pass the contact-patch angle;
     inboard brakes: the wheel-centre angle (see `anti_angle_for`).
+
+    Args:
+        sv_angle: Side-view swing angle in rad (positive = anti-geometry).
+        h_cg: Total CG height in m.
+        wheelbase: Wheelbase ``L`` in m.
+        brake_bias_front: Front share of the brake force, in [0, 1].
+
+    Returns:
+        Anti-dive in percent (the percent number itself; 100 = full cancellation of dive).
     """
     return math.tan(sv_angle) * brake_bias_front * wheelbase / h_cg * 100.0
 
@@ -46,7 +57,17 @@ def anti_dive_front(
 def anti_lift_rear(
     sv_angle: float, h_cg: float, wheelbase: float, brake_bias_front: float
 ) -> float:
-    """Rear anti-lift [%] = tan(angle) * (1 - bias_f) * L / h_cg * 100 (RCVD)."""
+    """Rear anti-lift [%] = tan(angle) * (1 - bias_f) * L / h_cg * 100 (RCVD).
+
+    Args:
+        sv_angle: Rear side-view swing angle in rad (positive = anti-geometry).
+        h_cg: Total CG height in m.
+        wheelbase: Wheelbase ``L`` in m.
+        brake_bias_front: Front share of the brake force, in [0, 1].
+
+    Returns:
+        Anti-lift in percent.
+    """
     return math.tan(sv_angle) * (1.0 - brake_bias_front) * wheelbase / h_cg * 100.0
 
 
@@ -57,6 +78,15 @@ def anti_squat_rear(
 
     Drive torque is reacted through the chassis, so the wheel-centre swing angle is
     used (positive = anti-geometry).
+
+    Args:
+        sv_wc_angle: Rear wheel-centre side-view angle in rad (positive = anti-geometry).
+        h_cg: Total CG height in m.
+        wheelbase: Wheelbase ``L`` in m.
+        drive_split_front: Front share of the drive torque, in [0, 1].
+
+    Returns:
+        Anti-squat in percent.
     """
     return math.tan(sv_wc_angle) * (1.0 - drive_split_front) * wheelbase / h_cg * 100.0
 
@@ -64,7 +94,17 @@ def anti_squat_rear(
 def anti_lift_front_accel(
     sv_wc_angle: float, h_cg: float, wheelbase: float, drive_split_front: float
 ) -> float:
-    """Front anti-lift under acceleration [%] = tan(angle_wc) * split_f * L / h_cg * 100."""
+    """Front anti-lift under acceleration [%] = tan(angle_wc) * split_f * L / h_cg * 100.
+
+    Args:
+        sv_wc_angle: Front wheel-centre side-view angle in rad (positive = anti-geometry).
+        h_cg: Total CG height in m.
+        wheelbase: Wheelbase ``L`` in m.
+        drive_split_front: Front share of the drive torque, in [0, 1].
+
+    Returns:
+        Front anti-lift under drive in percent.
+    """
     return math.tan(sv_wc_angle) * drive_split_front * wheelbase / h_cg * 100.0
 
 
@@ -80,6 +120,15 @@ def anti_angle_for(
     inboard brakes through the chassis (``sv_wc_angle``). Drive uses the wheel-centre
     angle (inboard drive with halfshafts, the usual layout); hub/outboard drive (drive
     torque reacted by the upright) would use the contact-patch angle instead.
+
+    Args:
+        axle_cfg: Axle (``brakes`` is ``"outboard"`` or ``"inboard"``).
+        phase: ``"brake"`` or ``"drive"``.
+        sv_swing_angle: Side-view angle of the contact patch in rad.
+        sv_wc_angle: Side-view angle of the wheel centre in rad.
+
+    Returns:
+        The governing angle in rad.
     """
     if phase == "drive":
         return sv_wc_angle
@@ -88,7 +137,15 @@ def anti_angle_for(
 
 # --------------------------------------------------------------------------- roll
 def roll_stiffness_springs(wheel_rate: float, track: float) -> float:
-    """Axle roll stiffness from springs [N*m/rad] = k_w * t^2 / 2 (k_w per wheel, N/m)."""
+    """Axle roll stiffness from springs [N*m/rad] = k_w * t^2 / 2 (k_w per wheel, N/m).
+
+    Args:
+        wheel_rate: Wheel rate per wheel in N/m.
+        track: Axle track in m.
+
+    Returns:
+        Roll stiffness in N m/rad.
+    """
     return wheel_rate * track**2 / 2.0
 
 
@@ -96,17 +153,41 @@ def roll_stiffness_arb(arb_wheel_rate_roll: float, track: float) -> float:
     """Axle roll stiffness from the ARB [N*m/rad] = k_w,roll * t^2 / 2.
 
     ``arb_wheel_rate_roll`` is the roll-mode ARB wheel rate (1/2 k MR^2, N/m).
+
+    Args:
+        arb_wheel_rate_roll: Roll-mode ARB wheel rate in N/m.
+        track: Axle track in m.
+
+    Returns:
+        Roll stiffness in N m/rad.
     """
     return arb_wheel_rate_roll * track**2 / 2.0
 
 
 def roll_stiffness_tyres(k_t: float, track: float) -> float:
-    """Axle roll stiffness of the tyres [N*m/rad] = k_t * t^2 / 2 (k_t per tyre)."""
+    """Axle roll stiffness of the tyres [N*m/rad] = k_t * t^2 / 2 (k_t per tyre).
+
+    Args:
+        k_t: Tyre vertical stiffness per tyre in N/m.
+        track: Axle track in m.
+
+    Returns:
+        Roll stiffness in N m/rad.
+    """
     return k_t * track**2 / 2.0
 
 
 def axle_roll_stiffness(k_spring_roll: float, k_arb_roll: float, k_tyre_roll: float) -> float:
-    """Axle roll stiffness [N*m/rad]: (springs + ARB) in series with the tyres."""
+    """Axle roll stiffness [N*m/rad]: (springs + ARB) in series with the tyres.
+
+    Args:
+        k_spring_roll: Spring roll stiffness in N m/rad.
+        k_arb_roll: ARB roll stiffness in N m/rad.
+        k_tyre_roll: Tyre roll stiffness in N m/rad.
+
+    Returns:
+        Combined axle roll stiffness in N m/rad.
+    """
     k_susp = k_spring_roll + k_arb_roll
     return k_susp * k_tyre_roll / (k_susp + k_tyre_roll)
 
@@ -118,7 +199,20 @@ def roll_gradient(
 
     phi/(a_y/g) = m_s g d / (K_f + K_r - m_s g d), d = h_cg - h_ra (RCVD). The
     ``- m_s g d`` term is the destabilising weight moment of the sprung mass. Multiply
-    by 180/pi for deg/g. Raises ValueError if the denominator is not positive.
+    by 180/pi for deg/g. Positive = the body rolls outward in a turn.
+
+    Args:
+        m_sprung: Sprung mass in kg.
+        h_cg: Sprung-mass CG height in m.
+        h_roll_axis_at_cg: Roll-axis height at the CG position in m.
+        k_front: Front axle roll stiffness in N m/rad.
+        k_rear: Rear axle roll stiffness in N m/rad.
+
+    Returns:
+        Roll gradient in rad per g of lateral acceleration.
+
+    Raises:
+        ValueError: If ``k_front + k_rear`` does not exceed ``m_s g d``.
     """
     moment = m_sprung * G * (h_cg - h_roll_axis_at_cg)
     denom = k_front + k_rear - moment
@@ -130,7 +224,18 @@ def roll_gradient(
 def roll_axis_height_at(
     x: float, x_front: float, rc_front: float, x_rear: float, rc_rear: float
 ) -> float:
-    """Roll-axis height at longitudinal position x: linear between the two roll centres."""
+    """Roll-axis height at longitudinal position x: linear between the two roll centres.
+
+    Args:
+        x: Longitudinal position in m (vehicle frame).
+        x_front: Front roll-centre x in m.
+        rc_front: Front roll-centre height in m.
+        x_rear: Rear roll-centre x in m.
+        rc_rear: Rear roll-centre height in m.
+
+    Returns:
+        Roll-axis height at ``x`` in m (linear extrapolation outside the axles).
+    """
     t = (x - x_front) / (x_rear - x_front)
     return rc_front + t * (rc_rear - rc_front)
 
@@ -142,6 +247,14 @@ class LoadTransfer:
     Each value is the load shift ``dW`` per wheel: the outside wheel gains ``dW`` and the
     inside wheel loses ``dW``, so the outside-minus-inside load difference of the axle
     is ``2 dW``.
+
+    Attributes:
+        front_elastic: Elastic (roll-stiffness) transfer of the front axle in N.
+        front_geometric: Geometric (roll-centre) transfer of the front axle in N.
+        front_unsprung: Unsprung-mass transfer of the front axle in N.
+        rear_elastic: Elastic transfer of the rear axle in N.
+        rear_geometric: Geometric transfer of the rear axle in N.
+        rear_unsprung: Unsprung-mass transfer of the rear axle in N.
     """
 
     front_elastic: float
@@ -153,22 +266,30 @@ class LoadTransfer:
 
     @property
     def front(self) -> float:
-        """Total front-axle transfer."""
+        """Total front-axle transfer ``dW`` per wheel in N."""
         return self.front_elastic + self.front_geometric + self.front_unsprung
 
     @property
     def rear(self) -> float:
-        """Total rear-axle transfer."""
+        """Total rear-axle transfer ``dW`` per wheel in N."""
         return self.rear_elastic + self.rear_geometric + self.rear_unsprung
 
     @property
     def tlltd_front(self) -> float:
-        """Total lateral load transfer distribution = dW_f / (dW_f + dW_r)."""
+        """Total lateral load transfer distribution = dW_f / (dW_f + dW_r), a fraction in [0, 1]."""
         return tlltd_front(self.front, self.rear)
 
 
 def tlltd_front(dw_front: float, dw_rear: float) -> float:
-    """Front TLLTD = dW_f / (dW_f + dW_r); nan if the total is zero."""
+    """Front TLLTD = dW_f / (dW_f + dW_r); nan if the total is zero.
+
+    Args:
+        dw_front: Front axle load transfer per wheel in N.
+        dw_rear: Rear axle load transfer per wheel in N.
+
+    Returns:
+        Fraction of the total transfer carried by the front axle (not a percent).
+    """
     total = dw_front + dw_rear
     return dw_front / total if total != 0.0 else _NAN
 
@@ -203,6 +324,29 @@ def lateral_load_transfer(
 
     ``m_unsprung_*`` are axle totals (both corners). ``h_cg`` is the sprung-mass CG
     height. K_f and K_r are the axle roll stiffnesses [N*m/rad].
+
+    Args:
+        ay: Lateral acceleration in m/s^2.
+        m_sprung: Sprung mass in kg.
+        m_unsprung_front: Front unsprung mass (both corners) in kg.
+        m_unsprung_rear: Rear unsprung mass (both corners) in kg.
+        h_cg: Sprung-mass CG height in m.
+        rc_front: Front roll-centre height in m.
+        rc_rear: Rear roll-centre height in m.
+        hu_front: Front unsprung CG height in m.
+        hu_rear: Rear unsprung CG height in m.
+        k_front: Front axle roll stiffness in N m/rad.
+        k_rear: Rear axle roll stiffness in N m/rad.
+        track_front: Front track in m.
+        track_rear: Rear track in m.
+        wheelbase: Wheelbase in m.
+        a: Sprung CG distance behind the front axle in m.
+
+    Returns:
+        :class:`LoadTransfer` with per-wheel shifts in N (outside wheel gains).
+
+    Raises:
+        ValueError: If the roll stiffness does not exceed ``m_s g d``.
     """
     h_ra = roll_axis_height_at(-a, 0.0, rc_front, -wheelbase, rc_rear)
     d = h_cg - h_ra
@@ -223,7 +367,14 @@ def lateral_load_transfer(
 
 
 def sprung_mass(vehicle: Vehicle) -> float:
-    """Sprung mass [kg] = total mass - 2 * (front + rear unsprung mass per corner)."""
+    """Sprung mass [kg] = total mass - 2 * (front + rear unsprung mass per corner).
+
+    Args:
+        vehicle: Vehicle description.
+
+    Returns:
+        Sprung mass in kg.
+    """
     return vehicle.vehicle.mass - 2.0 * (vehicle.front.unsprung_mass + vehicle.rear.unsprung_mass)
 
 
@@ -233,6 +384,13 @@ def inner_outer(delta_left: float, delta_right: float) -> tuple[float, float]:
 
     Left turn (mean > 0, +delta = left): left wheel is inner. Right turn: right wheel.
     Signs of the inputs are kept.
+
+    Args:
+        delta_left: Left road-wheel steer angle in rad (positive = wheel points left).
+        delta_right: Right road-wheel steer angle in rad.
+
+    Returns:
+        ``(delta_inner, delta_outer)`` in rad. A zero mean steer counts as a left turn.
     """
     if delta_left + delta_right >= 0.0:
         return delta_left, delta_right
@@ -247,6 +405,15 @@ def ackermann_percent(
     Ideal inner angle from cot d_o - cot d_i = t / L (steering-axis spacing taken as
     the track). 100 = true Ackermann, 0 = parallel steer, negative = anti-Ackermann.
     Angles are mirrored so the turn is positive. nan if |d_o| < 1e-4 rad.
+
+    Args:
+        delta_inner: Inner road-wheel steer angle in rad.
+        delta_outer: Outer road-wheel steer angle in rad.
+        wheelbase: Wheelbase ``L`` in m.
+        track: Front track ``t`` in m.
+
+    Returns:
+        Ackermann in percent (the percent number itself).
     """
     if abs(delta_outer) < 1e-4:
         return _NAN
@@ -261,6 +428,14 @@ def steering_ratio(rack: float, c_factor: float, mean_road_wheel: float) -> floa
 
     Handwheel angle = rack / c_factor * 2 pi (c_factor = rack travel per pinion
     revolution, m/rev). nan if the mean road-wheel angle is below 1e-9 rad.
+
+    Args:
+        rack: Rack displacement in m.
+        c_factor: Rack travel per pinion revolution in m/rev.
+        mean_road_wheel: Mean road-wheel steer angle in rad.
+
+    Returns:
+        Ratio handwheel angle / road-wheel angle (dimensionless, deg/deg).
     """
     if abs(mean_road_wheel) < 1e-9:
         return _NAN
@@ -271,6 +446,14 @@ def turning_radius(wheelbase: float, delta_inner: float, delta_outer: float) -> 
     """Low-speed turning radius [m] = L / tan(mean steer angle) (bicycle model).
 
     Measured to the rear-axle centre; inf for zero steer.
+
+    Args:
+        wheelbase: Wheelbase in m.
+        delta_inner: Inner road-wheel steer angle in rad.
+        delta_outer: Outer road-wheel steer angle in rad.
+
+    Returns:
+        Turning radius in m (``inf`` for zero mean steer).
     """
     t = math.tan(0.5 * (delta_inner + delta_outer))
     return math.inf if t == 0.0 else wheelbase / t
@@ -284,6 +467,13 @@ def pitch_centre(
     """Intersection (x, z) of two side-view lines, each (point, direction).
 
     Returns (nan, nan) if the lines are parallel.
+
+    Args:
+        front_line: ``(point, direction)`` in the ``(x, z)`` plane, m, each shape ``(2,)``.
+        rear_line: Same for the rear axle.
+
+    Returns:
+        ``(x, z)`` of the pitch centre in m, or ``(nan, nan)`` for parallel lines.
     """
     p1 = np.asarray(front_line[0], dtype=np.float64)
     d1 = np.asarray(front_line[1], dtype=np.float64)
@@ -305,8 +495,10 @@ def pitch_centre(
 #
 # * Roll sweep: body roll phi is right-hand about +x (positive = left side up, which is
 #   the roll of a LEFT turn). The outer wheel for positive roll is therefore the right
-#   wheel (FR / RR); ``roll_camber_*`` is d(camber_ground of that wheel)/d(roll), a
-#   negative value meaning the outer wheel gains negative camber relative to the ground.
+#   wheel (FR / RR); ``roll_camber`` is d(camber_ground of that wheel)/d(roll) [rad/rad].
+#   It includes the body roll itself, so it is positive on a normal car (reference car:
+#   +0.81 front, +0.76 rear): the outer wheel loses negative camber relative to the ground
+#   as the body rolls, because the suspension camber gain only partly cancels the roll.
 # * ``roll_steer_*`` = d(mean of left and right ``steer_ground``)/d(roll) [rad/rad].
 # * Roll centres: height above ground (ground frame); lateral position y relative to the
 #   car centreline (body frame, independent of the pivot); ``rc_migration_*`` =
@@ -329,7 +521,22 @@ _ACKERMANN_AT = (5.0, 10.0, 15.0)  # deg of outer-wheel steer
 
 @dataclass(frozen=True)
 class AxleSummary:
-    """Static per-axle values."""
+    """Static per-axle values (SI).
+
+    Attributes:
+        track: Axle track in m.
+        wheel_rate: Spring wheel rate at static in N/m (per wheel).
+        arb_wheel_rate_roll: Roll-mode ARB wheel rate in N/m (0 without ARB).
+        roll_stiffness_springs: Roll stiffness from springs in N m/rad.
+        roll_stiffness_arb: Roll stiffness from the ARB in N m/rad.
+        roll_stiffness_tyres: Roll stiffness of the tyres in N m/rad.
+        roll_stiffness: Axle roll stiffness, (springs + ARB) in series with tyres, N m/rad.
+        rc_height: Static roll-centre height above the ground in m.
+        roll_camber: ``d(camber_ground)/d(roll)`` of the outer (right) wheel in rad/rad.
+        roll_steer: ``d(mean ground steer)/d(roll)`` in rad/rad.
+        rc_migration: ``d(rc_y)/d(roll)`` in m/rad (positive = toward +y, left).
+        rc_height_curvature: ``d2(rc_z)/d(roll)2`` in m/rad^2.
+    """
 
     track: float
     wheel_rate: float
@@ -347,7 +554,36 @@ class AxleSummary:
 
 @dataclass(frozen=True)
 class VehicleSummary:
-    """Vehicle summary (SI). See the module docstring for conventions."""
+    """Vehicle summary (SI). See the module docstring for conventions.
+
+    Attributes:
+        front: Front :class:`AxleSummary`.
+        rear: Rear :class:`AxleSummary`.
+        wheelbase: Wheelbase in m.
+        sprung_mass: Sprung mass in kg.
+        sprung_cg_height: Sprung-mass CG height in m.
+        roll_axis_height_at_cg: Roll-axis height at the sprung CG x in m.
+        roll_stiffness_total: Sum of the axle roll stiffnesses in N m/rad.
+        roll_gradient: Roll gradient in rad per g of lateral acceleration.
+        ay_ref: Reference lateral acceleration used for the load transfer, m/s^2.
+        load_transfer_front: Front-axle lateral load transfer per wheel at ``ay_ref``, N.
+        load_transfer_rear: Rear-axle lateral load transfer per wheel at ``ay_ref``, N.
+        tlltd_front: Front total lateral load transfer distribution, a fraction in [0, 1].
+        anti_dive_front: Front anti-dive in percent.
+        anti_lift_rear: Rear anti-lift in percent.
+        anti_squat_rear: Rear anti-squat in percent.
+        anti_lift_front_accel: Front anti-lift under drive in percent; ``None`` when no
+            drive torque goes to the front.
+        pitch_centre_x: Side-view pitch-centre x in m (NaN if the lines are parallel).
+        pitch_centre_z: Side-view pitch-centre height in m.
+        max_steer_inner: Inner-wheel steer at full lock in rad, relative to straight ahead.
+        max_steer_outer: Outer-wheel steer at full lock in rad.
+        ackermann_5deg: Ackermann in percent at 5 deg outer-wheel steer (NaN if not reached).
+        ackermann_10deg: Ackermann in percent at 10 deg outer-wheel steer.
+        ackermann_15deg: Ackermann in percent at 15 deg outer-wheel steer.
+        steering_ratio: Handwheel angle / mean road-wheel angle (dimensionless).
+        turning_radius: Low-speed turning radius at full lock in m.
+    """
 
     front: AxleSummary
     rear: AxleSummary
@@ -376,7 +612,11 @@ class VehicleSummary:
     turning_radius: float
 
     def to_dict(self) -> dict[str, object]:
-        """Nested dict of SI floats (JSON-friendly; nan stays nan)."""
+        """Nested dict of SI floats (JSON-friendly; nan stays nan).
+
+        Returns:
+            Field name -> value, with the two axle summaries as nested dicts.
+        """
         return asdict(self)
 
 
@@ -395,6 +635,7 @@ def _curv0(x: NDArray[np.float64], y: NDArray[np.float64]) -> float:
 
 
 def _sv_line(st: CornerState, corner: object) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Side-view line (point, direction) from the contact patch through the SVIC, in ``(x, z)``."""
     cp = st.points["contact_patch"]
     ic = side_view_ic(st, corner)  # type: ignore[arg-type]
     p = np.array([cp[0], cp[2]], dtype=np.float64)
@@ -404,6 +645,7 @@ def _sv_line(st: CornerState, corner: object) -> tuple[NDArray[np.float64], NDAr
 
 
 def _axle_static(vehicle: Vehicle, cid_l: str, cid_r: str, axle_name: str) -> dict[str, float]:
+    """Static wheel rate and roll stiffnesses of one axle (travel sweep of +-10 mm)."""
     corners = build_corners(vehicle)
     cl, cr = corners[cid_l], corners[cid_r]  # type: ignore[index]
     cfg = cl.axle_cfg
@@ -428,6 +670,7 @@ def _axle_static(vehicle: Vehicle, cid_l: str, cid_r: str, axle_name: str) -> di
 def _steering(
     vehicle: Vehicle, pivot: ArrayLike | None = None, n_rack: int = 41
 ) -> dict[str, float]:
+    """Steering metrics from a full-rack sweep: lock angles, Ackermann, ratio, turning radius."""
     # lazy: suspkin.sweeps imports suspkin.metrics at module level (import cycle otherwise)
     from suspkin.sweeps import sweep_vehicle
 
@@ -490,7 +733,26 @@ def vehicle_summary(
     ay_ref: float = 9.81,
     pivot: ArrayLike | None = None,
 ) -> VehicleSummary:
-    """Compute the vehicle summary (see the module docstring)."""
+    """Compute the vehicle summary (see the module docstring).
+
+    Runs a roll sweep for the roll-centre, roll-camber and roll-steer coefficients, a +-10 mm
+    travel sweep per axle for the wheel rates, a full rack sweep for the steering metrics and
+    the static pose for the anti-features and pitch centre.
+
+    Args:
+        vehicle: Vehicle description.
+        roll_range: Half range of the roll sweep in rad (default 0.035 = 2 deg).
+        n: Number of roll samples (forced odd so that roll 0 is included).
+        ay_ref: Reference lateral acceleration for the load transfer in m/s^2.
+        pivot: Centre of the body rotations, shape ``(3,)``, m (default: the vehicle CG).
+
+    Returns:
+        :class:`VehicleSummary` in SI units (see its attributes).
+
+    Raises:
+        KinematicsError: If a sweep pose cannot be solved.
+        ValueError: If the roll stiffness does not exceed the destabilising moment.
+    """
     # lazy: suspkin.sweeps imports suspkin.metrics at module level (import cycle otherwise)
     from suspkin.sweeps import sweep_vehicle, vehicle_frame
 

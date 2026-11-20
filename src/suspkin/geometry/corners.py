@@ -1,4 +1,9 @@
-"""Per-corner geometry with left/right mirroring."""
+"""Per-corner geometry with left/right mirroring.
+
+Turns the left-side hardpoints of a :class:`~suspkin.geometry.model.Vehicle` into four
+side-resolved :class:`Corner` objects (FL, FR, RL, RR). Mirroring rule and per-side angle
+sign: ``docs/concepts/conventions.md`` section 2 and ``docs/concepts/vehicle-model.md``.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +22,20 @@ CornerId = Literal["FL", "FR", "RL", "RR"]
 
 @dataclass(frozen=True)
 class Corner:
-    """One corner with absolute (side-resolved) hardpoints."""
+    """One corner with absolute (side-resolved) hardpoints.
+
+    Attributes:
+        id: Corner name: ``"FL"``, ``"FR"``, ``"RL"`` or ``"RR"``.
+        axle: ``"front"`` or ``"rear"``.
+        side: ``"left"`` or ``"right"``.
+        points: Hardpoint name -> read-only ``(3,)`` array in m, vehicle frame (ISO 8855),
+            already mirrored for right corners. Includes ``rocker_arb`` when the axle
+            defines one.
+        rocker_axis: Read-only ``(3,)`` unit-direction array of the rocker rotation axis,
+            mirrored (x, -y, z) for right corners.
+        axle_cfg: The :class:`~suspkin.geometry.model.Axle` this corner belongs to
+            (shared by both sides).
+    """
 
     id: CornerId
     axle: Literal["front", "rear"]
@@ -28,12 +46,14 @@ class Corner:
 
 
 def _ro(v: object) -> NDArray[np.float64]:
+    """Read-only float64 copy of ``v``."""
     a = np.array(v, dtype=np.float64, copy=True)
     a.setflags(write=False)
     return a
 
 
 def _build(cid: CornerId, name: Literal["front", "rear"], axle: Axle) -> Corner:
+    """Build one corner: left uses the points as given, right mirrors then applies overrides."""
     side: Literal["left", "right"] = "left" if cid.endswith("L") else "right"
     hp = axle.hardpoints
     names = list(HARDPOINT_NAMES)
@@ -64,7 +84,14 @@ def build_corners(vehicle: Vehicle) -> dict[CornerId, Corner]:
     Left corners use the hardpoints as given. Right corners mirror y -> -y and then
     apply ``right_overrides`` (already in right-side coordinates). The right
     ``rocker_axis`` is (x, -y, z); since mirroring is a reflection, the rotation
-    sense about the mirrored axis flips relative to the left side.
+    sense about the mirrored axis flips relative to the left side (the solvers apply
+    the per-side sign, see ``docs/concepts/conventions.md`` section 2).
+
+    Args:
+        vehicle: Validated vehicle (hardpoints in m for the left side).
+
+    Returns:
+        Dict with keys ``"FL"``, ``"FR"``, ``"RL"``, ``"RR"``.
     """
     return {
         "FL": _build("FL", "front", vehicle.front),
@@ -77,9 +104,15 @@ def build_corners(vehicle: Vehicle) -> dict[CornerId, Corner]:
 def arb_points(corner: Corner) -> dict[str, NDArray[np.float64]]:
     """ARB points of a corner, mirrored for right-side corners.
 
-    Returns ``arm_end`` plus ``bar_pivot`` (torsional, blade) or ``beam_center``
-    (beam; on the centreline, so identical on both sides); an empty dict if the
-    axle has no ARB.
+    ARB points always mirror; ``right_overrides`` is ignored for them.
+
+    Args:
+        corner: Corner whose axle may define an anti-roll bar.
+
+    Returns:
+        Dict of read-only ``(3,)`` arrays in m (vehicle frame): ``arm_end`` plus
+        ``bar_pivot`` (torsional, blade) or ``beam_center`` (beam; on the centreline, so
+        identical on both sides). Empty dict if the axle has no ARB.
     """
     arb = corner.axle_cfg.arb
     if arb is None:

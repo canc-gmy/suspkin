@@ -19,6 +19,9 @@ Each wheel's contact point is the point of the tyre circle lowest along ``-n``. 
 ground height under wheel k is its *static* contact height (so the static pose has
 travel 0 exactly, even when the loaded radius or camber puts the static contact point
 slightly off z = 0). Wheel travel is found per corner by a 1-D secant iteration.
+
+Sign rules: ``docs/concepts/conventions.md`` section 5.1; derivation and code paths:
+``docs/concepts/vehicle-kinematics.md``.
 """
 
 from __future__ import annotations
@@ -58,7 +61,23 @@ _MAX_TRAVEL = 0.25
 
 @dataclass(frozen=True)
 class VehicleState:
-    """Solved vehicle pose. Lengths in m, angles in rad, body frame."""
+    """Solved vehicle pose. Lengths in m, angles in rad, body frame.
+
+    Attributes:
+        heave: Body heave in m (positive = body up).
+        roll: Body roll in rad (positive lifts the left side).
+        pitch: Body pitch in rad (positive = nose down).
+        rack: Rack displacement in m applied to the front corners.
+        corners: Solved :class:`~suspkin.kinematics.corner.CornerState` per corner id.
+        contact_points: Tyre contact point per corner, shape ``(3,)``, m, body frame
+            (read-only).
+        ground_normal: Unit ground normal in the body frame, shape ``(3,)``
+            (``R^T e_z``, read-only).
+        arb: ``"front"`` / ``"rear"`` -> :class:`~suspkin.kinematics.arb.ArbState`, or
+            ``None`` for an axle without ARB.
+        max_residual: Largest residual in m over corners, ground contact and ARBs.
+        pivot: Centre of the body rotations, shape ``(3,)``, m.
+    """
 
     heave: float
     roll: float
@@ -75,7 +94,19 @@ class VehicleState:
 
 
 def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: float) -> Vec:
-    """Tyre point lowest along ``-ground_normal`` (body frame)."""
+    """Tyre point lowest along ``-ground_normal`` (body frame).
+
+    The contact point is the point of the tyre circle (in the wheel plane, centred at the
+    wheel centre) that is lowest along ``-ground_normal``.
+
+    Args:
+        state: Solved corner (provides ``wheel_center`` and ``spin_axis``).
+        ground_normal: Ground normal in the body frame, shape ``(3,)`` (unit).
+        tyre_radius: Tyre radius in m.
+
+    Returns:
+        Contact point, shape ``(3,)``, m, body frame.
+    """
     return _contact(
         np.asarray(state.points["wheel_center"], dtype=np.float64),
         np.asarray(state.spin_axis, dtype=np.float64),
@@ -87,6 +118,7 @@ def contact_point(state: CornerState, ground_normal: ArrayLike, tyre_radius: flo
 def _contact(
     wc: Sequence[float] | Vec, s: Sequence[float] | Vec, n: Vec, tyre_radius: float
 ) -> Vec:
+    """Scalar-arithmetic :func:`contact_point` on plain vectors (wheel centre, spin axis)."""
     n0, n1, n2 = float(n[0]), float(n[1]), float(n[2])
     s0, s1, s2 = float(s[0]), float(s[1]), float(s[2])
     k = n0 * s0 + n1 * s1 + n2 * s2
@@ -102,12 +134,20 @@ def _contact(
 
 
 def cg_pivot(vehicle: Vehicle) -> Vec:
-    """Default rotation pivot: the vehicle CG ``(-a, 0, cg_height)`` in the vehicle frame."""
+    """Default rotation pivot: the vehicle CG ``(-a, 0, cg_height)`` in the vehicle frame.
+
+    Args:
+        vehicle: Vehicle description; ``a = wheelbase * (1 - front_mass_ratio)``.
+
+    Returns:
+        Pivot point, shape ``(3,)``, m.
+    """
     a = vehicle.wheelbase * (1.0 - vehicle.vehicle.front_mass_ratio)
     return np.array([-a, 0.0, vehicle.vehicle.cg_height])
 
 
 def _static_contact(corner: Corner, spin: Vec | None = None) -> Vec:
+    """Static tyre contact point (wheel centre minus ``R`` along the in-plane up direction)."""
     cfg = corner.axle_cfg
     s = (
         wheel_spin_axis(corner.side, cfg.wheel.static_camber, cfg.wheel.static_toe)
@@ -215,23 +255,28 @@ def solve_vehicle(
 ) -> VehicleState:
     """Solve all corners (and ARBs) for a prescribed body pose.
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-        Vehicle description (used for the ARBs and, if ``corners`` is None, the corners).
-    corners : dict, optional
-        Result of ``build_corners(vehicle)``; built on demand when omitted.
-    heave, roll, pitch, rack : float
-        Body heave [m, up positive], roll [rad, left up], pitch [rad, nose down], rack [m].
-    pivot : array-like
-        Centre of the body rotations (default: the vehicle CG, see ``cg_pivot``).
-    guess : VehicleState, optional
-        Neighbouring solution for continuation.
+    The ground is expressed in the body frame; each corner's wheel travel is found so that
+    the tyre contact point reaches its static ground height (secant iteration over
+    :func:`~suspkin.kinematics.corner.solve_corner`).
 
-    Raises
-    ------
-    KinematicsError
-        If a corner cannot reach the ground, or a corner/ARB solve fails.
+    Args:
+        vehicle: Vehicle description (used for the ARBs and, if ``corners`` is None, the
+            corners).
+        corners: Result of ``build_corners(vehicle)``; built on demand when omitted.
+        heave: Body heave in m (positive = body up, wheels droop).
+        roll: Body roll in rad (right-hand about +x; positive lifts the left side).
+        pitch: Body pitch in rad (right-hand about +y; positive = nose down).
+        rack: Rack displacement in m (positive steers left); front corners only.
+        pivot: Centre of the body rotations, shape ``(3,)``, m (default: the vehicle CG,
+            see :func:`cg_pivot`); applies to roll and pitch, not to heave.
+        guess: Neighbouring solution for continuation (warm start).
+
+    Returns:
+        The solved :class:`VehicleState` (SI units, body frame).
+
+    Raises:
+        KinematicsError: If a corner cannot reach the ground (travel beyond 0.25 m or no
+            convergence), or a corner/ARB solve fails.
     """
     if corners is None:
         corners = build_corners(vehicle)

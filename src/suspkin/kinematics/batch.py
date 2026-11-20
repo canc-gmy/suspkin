@@ -4,6 +4,10 @@ Vectorised ``corner._pose`` + ``_finish`` at rack 0 for ``B`` designs (per-desig
 hardpoints) and ``K`` states each, given the joint angles. Every corner column (metrics,
 gradients, joint angles, point coordinates) follows from the rebuilt points with the formulas
 of :mod:`suspkin.metrics.arrays`. Numpy only; the surrogate evaluator is the main user.
+
+Array conventions: ``B`` designs, ``K`` states per design; points are ``(B, K, 3)`` in m
+(vehicle frame), angles in rad with the per-side sign of ``docs/concepts/conventions.md``
+section 2, columns ``(B, K)``. Column meanings and signs: ``docs/concepts/metrics.md``.
 """
 
 from __future__ import annotations
@@ -30,7 +34,7 @@ from suspkin.kinematics.ic_arrays import ic_arrays, roll_line_arrays, swing_angl
 Arr = NDArray[np.float64]
 _NAN = float("nan")
 
-# metric column -> gradient column, per sweep variable
+# metric column -> gradient column, per sweep variable (``d(metric)/d(travel or rack)``).
 GRADIENTS: dict[str, dict[str, str]] = {
     "travel": {
         "camber": "camber_gain",
@@ -58,7 +62,21 @@ def _grad(y: Arr, x: Arr) -> Arr:
 
 @dataclass
 class CStatic:
-    """Static corner data of ``B`` designs (side-resolved hardpoints, ``(B, 3)``)."""
+    """Static corner data of ``B`` designs (side-resolved hardpoints, ``(B, 3)``).
+
+    Attributes:
+        cid: Corner id (``"FL"`` ...), same for all designs.
+        side: ``"left"`` or ``"right"``.
+        axle: ``"front"`` or ``"rear"``.
+        sign: Per-side angle sign (+1 left, -1 right).
+        p: Hardpoint name -> ``(B, 3)`` array in m.
+        axis: Rocker axes, ``(B, 3)`` (as stored on the corner).
+        cfg: Axle configuration of the first design (shared wheel, coilover, mount type).
+        spin0: Static wheel spin axis, ``(3,)``.
+        scp: Static contact patch per design, ``(B, 3)``, m.
+        len0: Static coilover length per design, ``(B,)``, m.
+        corner0: First design's :class:`~suspkin.geometry.corners.Corner`.
+    """
 
     cid: str
     side: str
@@ -74,6 +92,15 @@ class CStatic:
 
 
 def make_static(corners: Sequence[Corner]) -> CStatic:
+    """Stack the same corner of ``B`` designs into a :class:`CStatic`.
+
+    Args:
+        corners: ``B`` corners with the same id, side and hardpoint names (one per design).
+            Wheel, coilover and pushrod-mount data are taken from the first.
+
+    Returns:
+        Static data with ``(B, 3)`` hardpoint arrays.
+    """
     c0 = corners[0]
     p = {
         n: np.array([c.points[n] for c in corners], dtype=np.float64).reshape(-1, 3)
@@ -102,7 +129,19 @@ def make_static(corners: Sequence[Corner]) -> CStatic:
 
 @dataclass
 class Rebuilt:
-    """Rebuilt corner states: ``(B, K, ...)`` arrays of the moved points and solver outputs."""
+    """Rebuilt corner states: ``(B, K, ...)`` arrays of the moved points and solver outputs.
+
+    Attributes:
+        st: The :class:`CStatic` these states belong to.
+        moved: Moved point name -> ``(B, K, 3)`` array in m (includes ``contact_patch``).
+        spin: Unit wheel spin axes, ``(B, K, 3)``.
+        coil: Coilover lengths, ``(B, K)``, m.
+        toggle: Toggle margins, ``(B, K)``, rad.
+        rocker: Rocker angles, ``(B, K)``, rad, per-side signed.
+        theta_uca: Upper wishbone angles, ``(B, K)``, rad.
+        theta_lca: Lower wishbone angles, ``(B, K)``, rad.
+        psi: Upright spin angles, ``(B, K)``, rad.
+    """
 
     st: CStatic
     moved: dict[str, Arr]
@@ -115,7 +154,11 @@ class Rebuilt:
     psi: Arr
 
     def pt(self, name: str) -> Arr:
-        """Point ``name`` as ``(B, K, 3)`` (static points are broadcast)."""
+        """Point ``name`` as ``(B, K, 3)`` in m (static points are broadcast).
+
+        Raises:
+            KeyError: If ``name`` is neither a moved nor a static point.
+        """
         if name in self.moved:
             return self.moved[name]
         if name not in self.st.p:
@@ -125,9 +168,19 @@ class Rebuilt:
 
 
 def rebuild(st: CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> Rebuilt:
-    """Vectorised ``corner._pose`` + ``_finish`` at rack 0 (``th_*``/``psi``/``guess``: ``(B, K)``).
+    """Vectorised ``corner._pose`` + ``_finish`` at rack 0 for given joint angles.
 
-    Invalid states (flipped upright, pushrod out of reach, non-finite angles) give NaN.
+    Args:
+        st: Static corner data of ``B`` designs.
+        th_u: Upper wishbone angles, ``(B, K)``, rad, per-side signed.
+        th_l: Lower wishbone angles, ``(B, K)``, rad, per-side signed.
+        psi: Upright spin angles, ``(B, K)``, rad, per-side signed.
+        guess: Rocker angles ``(B, K)`` in rad (per-side signed) selecting the root branch.
+
+    Returns:
+        :class:`Rebuilt` with the moved points (m), spin axes, coilover lengths, rocker
+        angles and toggle margins. Invalid states (flipped upright, pushrod out of reach,
+        non-finite angles) give NaN; nothing raises.
     """
 
     def b3(a: Arr) -> Arr:
@@ -231,7 +284,20 @@ def rebuild(st: CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> Rebuilt:
 
 
 def corner_columns(rb: Rebuilt, travel: Arr) -> dict[str, Arr]:
-    """All ``states_to_frame(metrics=True)`` + ``add_gradients`` columns, each ``(B, K)``."""
+    """All ``states_to_frame(metrics=True)`` + ``add_gradients`` columns, each ``(B, K)``.
+
+    Same formulas and signs as :func:`suspkin.metrics.arrays.corner_arrays`; the gradient
+    columns are central differences along the ``K`` axis (``numpy.gradient``).
+
+    Args:
+        rb: Rebuilt states of ``B`` designs and ``K`` travels.
+        travel: Wheel travels in m, ``(K,)`` strictly monotonic (also used as the gradient
+            abscissa).
+
+    Returns:
+        Column name -> ``(B, K)`` array in SI units (lengths m, angles rad, rates N/m,
+        gradients per metre). Rack is 0 and ``max_residual`` is 0 (exact rebuild).
+    """
     st = rb.st
     b, k = rb.rocker.shape
     m = b * k

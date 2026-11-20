@@ -1,7 +1,10 @@
 """suspkin: Formula Student double-wishbone suspension kinematics toolkit.
 
-The names in ``__all__`` form the stable public API. They are imported lazily
-(PEP 562) so that ``import suspkin`` stays cheap.
+The names in ``__all__`` form the stable public API (vehicle loading, corner and vehicle
+solvers, sweep tables, metrics, report and 3D plot). They are imported lazily (PEP 562
+module ``__getattr__``) so that ``import suspkin`` stays cheap and does not load the
+solver, plotting or report dependencies. Frame, unit and sign rules are in
+``docs/concepts/conventions.md``.
 """
 
 from __future__ import annotations
@@ -58,6 +61,17 @@ if TYPE_CHECKING:
 
 
 def __getattr__(name: str) -> Any:
+    """Import a public name on first access (PEP 562) and cache it in the module globals.
+
+    Args:
+        name: Attribute requested from the ``suspkin`` module.
+
+    Returns:
+        The object registered under ``name`` in ``_LAZY``.
+
+    Raises:
+        AttributeError: If ``name`` is not a public lazy name.
+    """
     module = _LAZY.get(name)
     if module is None:
         raise AttributeError(f"module 'suspkin' has no attribute {name!r}")
@@ -67,4 +81,5 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
+    """Module attributes plus the lazy public names (for completion)."""
     return sorted([*globals(), *_LAZY])
