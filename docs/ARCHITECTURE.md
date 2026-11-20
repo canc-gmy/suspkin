@@ -2055,22 +2055,18 @@ The surrogate predicts the **left corner** of each axle on a fixed grid (front: 
 
 | Module | Role |
 |---|---|
-| [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry: name, source column, encoding (`value`, `line_angle`), SI tolerance, axle membership; `wrap_line_angle`. 29 front and 28 rear channels. |
-| [grid.py](../src/suspkin/surrogate/grid.py) | Fixed output grid per axle (`AxleGrid`): travel and, on the front, rack; both contain 0. |
-| [extract.py](../src/suspkin/surrogate/extract.py) | Corner extractor: one design's left-corner sweep gives the channel tensor `Y` and the validity mask. |
-| [data_types.py](../src/suspkin/surrogate/data_types.py) | `AxleDataset`: the in-memory contract between sampling and training. |
-| [sampling.py](../src/suspkin/surrogate/sampling.py) | Sub design space of one axle (`AxleSpace`) and the Latin hypercube (`lhs`). |
+| [channels.py](../src/suspkin/surrogate/channels.py) | Channel registry (name, source column, encoding `value` or `line_angle`, SI tolerance, axle membership; `wrap_line_angle`; 29 front and 28 rear channels) and the corner extractor: one design's left-corner sweep gives the channel tensor `Y` and the validity mask. |
+| [data.py](../src/suspkin/surrogate/data.py) | `AxleDataset` (the in-memory contract between sampling and training), the sub design space of one axle (`AxleSpace`) with the Latin hypercube (`lhs`), and the fixed output grid per axle (`AxleGrid`: travel and, on the front, rack; both contain 0). |
 | [dataset.py](../src/suspkin/surrogate/dataset.py) | Sharded `.npz` dataset: sampling with resume, append, load, split assignment, meta hashes. |
-| [normalise.py](../src/suspkin/surrogate/normalise.py) | Per-channel standardisation (`ChannelScaler`) and POD basis (`PodBasis`); numpy only. |
-| [model.py](../src/suspkin/surrogate/model.py) | `MLPConfig` and `SurrogateMLP`: body, regression head and validity head. |
-| [train.py](../src/suspkin/surrogate/train.py) | `TrainConfig`, `resolve_device`, masked loss, training and fine-tuning, `evaluate`, `TrainedModel` save and load. |
-| [hpo.py](../src/suspkin/surrogate/hpo.py) | Optuna architecture search per axle (TPE, Hyperband pruner, SQLite storage). |
-| [predict.py](../src/suspkin/surrogate/predict.py) | Batched inference from a saved axle model. |
+| [model.py](../src/suspkin/surrogate/model.py) | `MLPConfig` and `SurrogateMLP` (body, regression head and validity head), per-channel standardisation (`ChannelScaler`) and POD basis (`PodBasis`). |
+| [train.py](../src/suspkin/surrogate/train.py) | `TrainConfig`, `resolve_device`, masked loss, training and fine-tuning, `evaluate`, `TrainedModel` save and load, `SurrogatePredictor` (batched inference from a saved axle model). |
+| [hpo.py](../src/suspkin/surrogate/hpo.py) | Optuna architecture search per axle (TPE, Hyperband pruner, SQLite storage) and its Markdown report (`write_hpo_report`). |
 | [workflow.py](../src/suspkin/surrogate/workflow.py) | `train_surrogate` and `validate_surrogate` from a study and a surrogate root; validation tables and figures. |
 | [vehicle_layer.py](../src/suspkin/surrogate/vehicle_layer.py) | Analytic vehicle layer (numpy): heave, roll and pitch travel, roll centre, anti-features, roll stiffness, TLLTD, steering, summary; `layer_error`. |
 | [evaluate.py](../src/suspkin/surrogate/evaluate.py) | `SurrogateEvaluator`: networks, then exact corner states, then the v0.8 constraint evaluator. |
 | [problem.py](../src/suspkin/surrogate/problem.py) | `SurrogateProblem`: the v0.8 `Problem` on the networks, with constraint margin `delta`. |
-| [active.py](../src/suspkin/surrogate/active.py) | `run_active_learning`: trust region, infill, FOM verification, fine-tuning, stop rules, run folder. |
+| [active.py](../src/suspkin/surrogate/active.py) | `run_active_learning`: the driver (FOM verification, run folder, resume). |
+| [active_steps.py](../src/suspkin/surrogate/active_steps.py) | Pure trust-region, stop, infill and fine-tune rules, `BoxProblem`, per-axle fine-tuning. |
 
 Outside the package: [metrics/batch.py](../src/suspkin/metrics/batch.py) (vectorised corner kernels, [15.6](#156-where-metricsbatch-fits)) and [plotting/surrogate.py](../src/suspkin/plotting/surrogate.py) (validation plots and active-learning figures).
 
@@ -2145,7 +2141,7 @@ Options and exit codes are in the [CLI guide](guides/cli.md). Settings are in th
 
 ### 15.6 Where `metrics.batch` fits
 
-[metrics/batch.py](../src/suspkin/metrics/batch.py) holds vectorised kernels over N corner states at once (`corner_metric_arrays`, `joint_angle_arrays`). The FOM uses them in `metrics_frame` and `states_to_frame`, which makes a full evaluation about 3× faster (0.75 s to 0.24 s on the reference study; max deviation 9e-16 from the per-state functions). The surrogate uses the same formulas in two places: [extract.py](../src/suspkin/surrogate/extract.py) builds the training targets, and [evaluate.py](../src/suspkin/surrogate/evaluate.py) rebuilds the corner columns from the solver coordinates (`theta_uca`, `theta_lca`, `psi`, rocker angle). Training targets and surrogate outputs therefore come from the same formulas as the FOM.
+[metrics/batch.py](../src/suspkin/metrics/batch.py) holds vectorised kernels over N corner states at once (`corner_metric_arrays`, `joint_angle_arrays`). The FOM uses them in `metrics_frame` and `states_to_frame`, which makes a full evaluation about 3× faster (0.75 s to 0.24 s on the reference study; max deviation 9e-16 from the per-state functions). The surrogate uses the same formulas in two places: [channels.py](../src/suspkin/surrogate/channels.py) builds the training targets, and [evaluate.py](../src/suspkin/surrogate/evaluate.py) rebuilds the corner columns from the solver coordinates (`theta_uca`, `theta_lca`, `psi`, rocker angle). Training targets and surrogate outputs therefore come from the same formulas as the FOM.
 
 ### 15.7 Measured performance and accuracy
 

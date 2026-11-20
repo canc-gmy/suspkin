@@ -67,20 +67,20 @@ from suspkin.optimize.spec.constraints import (
     SummaryConstraint,
 )
 from suspkin.optimize.spec.variables import CornerSweep, VehicleSweep, parse_point_ref, sweep_range
-from suspkin.surrogate.channels import channels_for
-from suspkin.surrogate.extract import extract_corner
-from suspkin.surrogate.grid import AxleGrid
-from suspkin.surrogate.sampling import AxleSpace
+from suspkin.surrogate.channels import channels_for, extract_corner
+from suspkin.surrogate.data import AxleGrid, AxleSpace
 from suspkin.surrogate.vehicle_layer import (
     AxleBatch,
     LayerResult,
     VehicleStatics,
+    _Hermite,
+    _travel_curves,
     vehicle_layer,
     vehicle_statics,
 )
 
 if TYPE_CHECKING:
-    from suspkin.surrogate.predict import SurrogatePredictor
+    from suspkin.surrogate.train import SurrogatePredictor
 
 Arr = NDArray[np.float64]
 P_VALID_MIN = 0.5
@@ -213,47 +213,21 @@ def _tile(obj: _T, n: int) -> _T:
 
 
 def hermite(y: Arr, x: Arr, q: Arr) -> Arr:
-    """Local cubic Hermite interpolation of ``y (..., L)`` along the last axis.
+    """Local cubic Hermite interpolation of ``y (..., L)`` along the last axis at ``q (N,)``.
 
-    Slopes by ``np.gradient`` (as the vehicle layer and ``add_gradients``). The result is
-    ``(..., len(q))``; NaN outside ``[x[0], x[-1]]`` (``1e-9`` tolerance) and wherever a node
-    that the interval or its slopes touch is NaN.
+    Thin shape adapter over the vehicle layer's :class:`_Hermite` (slopes by ``np.gradient``).
+    The result is ``(..., N)``; NaN outside ``[x[0], x[-1]]`` (``1e-9`` tolerance) and wherever
+    a node that the interval or its slopes touch is NaN.
     """
     x = np.asarray(x, dtype=np.float64)
     q = np.asarray(q, dtype=np.float64)
-    ok = (q >= x[0] - _TOL) & (q <= x[-1] + _TOL)
-    if x.size == 1:
-        out1: Arr = np.where(np.abs(q - x[0]) <= _TOL, y[..., :1], _NAN)
-        return out1
-    m = np.gradient(y, x, axis=-1)
-    idx = np.clip(np.searchsorted(x, q, side="right") - 1, 0, x.size - 2)
-    x0 = x[idx]
-    h = x[idx + 1] - x0
-    t = (q - x0) / h
-    t2 = t * t
-    t3 = t2 * t
-    out: Arr = (
-        (2.0 * t3 - 3.0 * t2 + 1.0) * y[..., idx]
-        + (t3 - 2.0 * t2 + t) * h * m[..., idx]
-        + (3.0 * t2 - 2.0 * t3) * y[..., idx + 1]
-        + (t3 - t2) * h * m[..., idx + 1]
-    )
-    return np.where(ok, out, _NAN)
+    out = _Hermite(y.reshape(1, -1, y.shape[-1]), x)(q)
+    return np.asarray(out.reshape(*y.shape[:-1], q.size))
 
 
 def _rack0_curves(batch: AxleBatch, names: Sequence[str]) -> Arr:
     """Channels ``names`` versus travel at rack 0, ``(B, len(names), T)``; NaN at masked nodes."""
-    ix = [batch.channels.index(n) for n in names]
-    y: Arr = np.where(batch.mask[:, None], batch.Y[:, ix], _NAN)  # (B, K, R, T)
-    nodes = batch.grid.rack
-    j = int(np.argmin(np.abs(nodes)))
-    if abs(nodes[j]) <= _TOL:
-        out: Arr = y[:, :, j, :]
-        return out
-    if nodes.size == 1:
-        return np.full(y[:, :, 0, :].shape, _NAN)
-    red: Arr = hermite(y.transpose(0, 1, 3, 2), nodes, np.zeros(1))[..., 0]
-    return red
+    return _travel_curves(batch, names).y
 
 
 # --------------------------------------------------------------------------------------
@@ -741,7 +715,7 @@ class SurrogateEvaluator:
         spec = self.space.study.surrogate
         if spec is None:
             return
-        from suspkin.surrogate.grid import axle_grids
+        from suspkin.surrogate.data import axle_grids
 
         for a, g in axle_grids(spec.grid).items():
             mine = self.grids[a]

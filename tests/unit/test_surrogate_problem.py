@@ -20,6 +20,7 @@ from suspkin.optimize.history import read_history
 from suspkin.optimize.problem import BudgetExhausted
 from suspkin.optimize.spec import StudyConfigError, load_study
 from suspkin.surrogate import axle_grids
+from suspkin.surrogate.channels import extract_corner
 from suspkin.surrogate.dataset import DatasetError, _current_hashes
 from suspkin.surrogate.evaluate import (
     BaselineAxle,
@@ -28,7 +29,6 @@ from suspkin.surrogate.evaluate import (
     _joint_angles,
     hermite,
 )
-from suspkin.surrogate.extract import extract_corner
 from suspkin.surrogate.problem import SurrogateProblem
 from suspkin.sweeps import states_to_frame
 
@@ -377,9 +377,8 @@ def synthetic_models(
 ) -> None:  # type: ignore[no-untyped-def]
     """Save tiny networks (baseline curves + smooth x-dependent noise) as ``root/<axle>/model``."""
     from suspkin.surrogate.channels import channels_for
-    from suspkin.surrogate.data_types import SPLIT_TEST, SPLIT_VAL, AxleDataset
+    from suspkin.surrogate.data import SPLIT_TEST, SPLIT_VAL, AxleDataset, AxleSpace
     from suspkin.surrogate.model import MLPConfig
-    from suspkin.surrogate.sampling import AxleSpace
     from suspkin.surrogate.train import TrainConfig, train
 
     for axle in ("front", "rear"):
@@ -442,7 +441,7 @@ def test_problem_loads_models_and_runs_de(setup, tmp_path: Path) -> None:  # typ
 
 def test_model_parameter_mismatch_is_reported(setup, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
     pytest.importorskip("torch")
-    from suspkin.surrogate.sampling import AxleSpace
+    from suspkin.surrogate.data import AxleSpace
 
     path, space, grids, _ = setup
     n_front = AxleSpace(space, "front").n  # type: ignore[arg-type]

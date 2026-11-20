@@ -8,8 +8,7 @@ pytest.importorskip("torch")
 pytest.importorskip("optuna")
 
 from suspkin.surrogate.hpo import search, search_axles
-from suspkin.surrogate.predict import SurrogatePredictor
-from suspkin.surrogate.train import TrainConfig
+from suspkin.surrogate.train import SurrogatePredictor, TrainConfig
 from tests.unit.test_surrogate_model import make_ds
 
 

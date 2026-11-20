@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from suspkin.optimize.spec import Study, load_study
-from suspkin.surrogate.grid import axle_grids
+from suspkin.surrogate.data import axle_grids
 
 FIX = Path(__file__).parents[1] / "fixtures" / "studies" / "surrogate_study.yaml"
 

@@ -7,7 +7,7 @@ import pytest
 
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.spec import StudyConfigError, load_study
-from suspkin.surrogate.sampling import AxleSpace, lhs
+from suspkin.surrogate.data import AxleSpace, lhs
 
 VEHICLE = Path("configs/vehicles/fs_reference.yaml").resolve().as_posix()
 

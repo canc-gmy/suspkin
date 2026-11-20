@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 from numpy.typing import NDArray
 
+from suspkin.plotting.figures import save_figure
 from suspkin.plotting.style import design_color, figure_size, side_linestyle, use_style
 
 __all__ = [
@@ -28,6 +30,7 @@ __all__ = [
     "plot_parity",
     "plot_rmse_ratio",
     "plot_worst_curves",
+    "write_surrogate_figures",
 ]
 
 _PASS = "#0072B2"
@@ -195,3 +198,34 @@ def plot_al_radius(al: pd.DataFrame, title: str = "") -> Figure:
         ax.set_ylabel("trust-region radius (unit cube)")
         ax.set_title(title or "Active learning: trust region")
     return fig
+
+
+def write_surrogate_figures(
+    fig_dir: str | Path,
+    *,
+    al: pd.DataFrame | None = None,
+    validation: pd.DataFrame | None = None,
+    parity: pd.DataFrame | None = None,
+    curves: pd.DataFrame | None = None,
+    axle: str = "",
+    dpi: int = 200,
+) -> None:
+    """Save the surrogate PNG figures of the tables given, into ``fig_dir``.
+
+    ``al`` (the active-learning table, skipped if empty) gives ``al_progress``,
+    ``al_residual`` and ``al_radius``. ``validation`` gives ``rmse_ratio`` (titled with
+    ``axle``); ``parity`` and ``curves`` give ``parity`` and ``worst_curves`` when non-empty.
+    """
+    fdir = Path(fig_dir)
+    if al is not None and len(al):
+        save_figure(plot_al_progress(al), fdir / "al_progress", ("png",), dpi)
+        save_figure(plot_al_residual(al), fdir / "al_residual", ("png",), dpi)
+        save_figure(plot_al_radius(al), fdir / "al_radius", ("png",), dpi)
+    if validation is not None:
+        title = f"{axle}: test error per channel"
+        save_figure(plot_rmse_ratio(validation, title), fdir / "rmse_ratio", ("png",), dpi)
+    if parity is not None and len(parity):
+        title = f"{axle}: parity (test split)"
+        save_figure(plot_parity(parity, title=title), fdir / "parity", ("png",), dpi)
+    if curves is not None and len(curves):
+        save_figure(plot_worst_curves(curves), fdir / "worst_curves", ("png",), dpi)

@@ -22,10 +22,10 @@ from numpy.typing import NDArray
 
 from suspkin.optimize.spec import StudyConfigError, load_study
 from suspkin.optimize.spec.surrogate import SurrogateSpec
-from suspkin.surrogate.data_types import SPLIT_TEST, Axle, AxleDataset
+from suspkin.plotting.surrogate import write_surrogate_figures
+from suspkin.surrogate.data import SPLIT_TEST, Axle, AxleDataset
 from suspkin.surrogate.dataset import DatasetError, check_dataset_matches, load_dataset
-from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles
-from suspkin.surrogate.report import write_hpo_report
+from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles, write_hpo_report
 from suspkin.surrogate.train import (
     EvalReport,
     TrainConfig,
@@ -294,29 +294,6 @@ def validation_table(report: EvalReport) -> pd.DataFrame:
     )
 
 
-def _write_figures(
-    table: pd.DataFrame, parity: pd.DataFrame, curves: pd.DataFrame, fig_dir: Path, axle: str
-) -> None:
-    from suspkin.plotting.figures import save_figure
-    from suspkin.plotting.surrogate import plot_parity, plot_rmse_ratio, plot_worst_curves
-
-    save_figure(
-        plot_rmse_ratio(table, f"{axle}: test error per channel"),
-        fig_dir / "rmse_ratio",
-        ("png",),
-        150,
-    )
-    if len(parity):
-        save_figure(
-            plot_parity(parity, title=f"{axle}: parity (test split)"),
-            fig_dir / "parity",
-            ("png",),
-            150,
-        )
-    if len(curves):
-        save_figure(plot_worst_curves(curves), fig_dir / "worst_curves", ("png",), 150)
-
-
 def validate_surrogate(
     study_path: str | Path,
     root: str | Path,
@@ -389,6 +366,13 @@ def validate_surrogate(
             ),
             encoding="utf-8",
         )
-        _write_figures(table, parity, curves, vdir / "figures", ax)
+        write_surrogate_figures(
+            vdir / "figures",
+            validation=table,
+            parity=parity,
+            curves=curves,
+            axle=ax,
+            dpi=150,
+        )
         out[ax] = report
     return out

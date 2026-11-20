@@ -13,7 +13,15 @@ from suspkin.kinematics.rocker import KinematicsError
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.spec import StudyConfigError, load_study
 from suspkin.surrogate import AxleGrid
-from suspkin.surrogate.data_types import SPLIT_TEST, SPLIT_TRAIN, SPLIT_VAL, AxleDataset
+from suspkin.surrogate.channels import CornerSample
+from suspkin.surrogate.data import (
+    SPLIT_TEST,
+    SPLIT_TRAIN,
+    SPLIT_VAL,
+    AxleDataset,
+    AxleSpace,
+    NoAxleVariablesError,
+)
 from suspkin.surrogate.dataset import (
     DatasetError,
     append_rows,
@@ -22,8 +30,6 @@ from suspkin.surrogate.dataset import (
     load_dataset,
     sample_axle,
 )
-from suspkin.surrogate.extract import CornerSample
-from suspkin.surrogate.sampling import AxleSpace, NoAxleVariablesError
 from tests.unit.test_surrogate_sampling import REAR_VAR, STUDY
 
 
@@ -172,7 +178,7 @@ def test_append_rows(study_path: Path, tmp_path: Path) -> None:
 def test_lhs_stored_once_and_setting_checked(
     study_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from suspkin.surrogate.sampling import resolve_lhs_optimization
+    from suspkin.surrogate.data import resolve_lhs_optimization
 
     assert resolve_lhs_optimization("auto", 5000) == "random-cd"
     assert resolve_lhs_optimization("auto", 5001) == "none"

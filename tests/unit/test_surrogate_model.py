@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from suspkin.surrogate.data_types import SPLIT_TEST, SPLIT_VAL, AxleDataset
-from suspkin.surrogate.normalise import ChannelScaler, PodBasis
+from suspkin.surrogate.data import SPLIT_TEST, SPLIT_VAL, AxleDataset
+from suspkin.surrogate.model import ChannelScaler, PodBasis
 
 torch = pytest.importorskip("torch")
 

@@ -1,6 +1,14 @@
 """Surrogate model support: output grid, channel registry and corner-curve extraction."""
 
-from suspkin.surrogate.channels import CHANNELS, Channel, channels_for
+from suspkin.surrogate.channels import (
+    CHANNELS,
+    Channel,
+    CornerSample,
+    channels_for,
+    extract_axles,
+    extract_corner,
+)
+from suspkin.surrogate.data import AxleGrid, axle_grids
 from suspkin.surrogate.evaluate import (
     AxlePredictor,
     BaselineAxle,
@@ -8,8 +16,6 @@ from suspkin.surrogate.evaluate import (
     OraclePredictor,
     SurrogateEvaluator,
 )
-from suspkin.surrogate.extract import CornerSample, extract_axles, extract_corner
-from suspkin.surrogate.grid import AxleGrid, axle_grids
 from suspkin.surrogate.problem import SurrogateProblem
 from suspkin.surrogate.vehicle_layer import (
     AxleBatch,

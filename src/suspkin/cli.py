@@ -917,9 +917,8 @@ def surrogate_sample(
     error.
     """
     from suspkin.optimize.spec import StudyConfigError
-    from suspkin.surrogate.data_types import Axle
+    from suspkin.surrogate.data import Axle, NoAxleVariablesError
     from suspkin.surrogate.dataset import DatasetError, sample_axle
-    from suspkin.surrogate.sampling import NoAxleVariablesError
 
     if root is None:
         root = out

@@ -6,13 +6,18 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from suspkin.surrogate.data_types import SPLIT_VAL
+from suspkin.surrogate.data import SPLIT_VAL
 
 torch = pytest.importorskip("torch")
 
 from suspkin.surrogate.model import MLPConfig  # noqa: E402
-from suspkin.surrogate.predict import SurrogatePredictor  # noqa: E402
-from suspkin.surrogate.train import TrainConfig, TrainedModel, evaluate, train  # noqa: E402
+from suspkin.surrogate.train import (  # noqa: E402
+    SurrogatePredictor,
+    TrainConfig,
+    TrainedModel,
+    evaluate,
+    train,
+)
 from tests.unit.test_surrogate_model import make_ds  # noqa: E402
 
 MCFG = MLPConfig(n_layers=3, width=64, activation="silu", residual=True)

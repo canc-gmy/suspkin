@@ -352,9 +352,9 @@ def test_classic_optimise_continuous_when_null(tmp_path: Path) -> None:
 
 def test_surrogate_problem_feeds_quantised_reencoded_inputs(tmp_path: Path) -> None:
     from suspkin.surrogate import axle_grids
+    from suspkin.surrogate.data import AxleSpace
     from suspkin.surrogate.evaluate import OraclePredictor
     from suspkin.surrogate.problem import SurrogateProblem
-    from suspkin.surrogate.sampling import AxleSpace
 
     path = tmp_path / "s.yaml"
     path.write_text(STUDY.replace("n_initial: 12", "n_initial: 6"), encoding="utf-8")
@@ -390,8 +390,8 @@ def test_surrogate_problem_feeds_quantised_reencoded_inputs(tmp_path: Path) -> N
 
 
 def test_dataset_sampling_is_continuous_and_hashes_ignore_resolution(tmp_path: Path) -> None:
+    from suspkin.surrogate.data import lhs
     from suspkin.surrogate.dataset import _current_hashes, load_dataset, sample_axle
-    from suspkin.surrogate.sampling import lhs
 
     text = STUDY.replace("n_initial: 12", "n_initial: 6")
     runs = {}
@@ -412,7 +412,7 @@ def test_dataset_sampling_is_continuous_and_hashes_ignore_resolution(tmp_path: P
     # the sampled X is the seeded LHS (baseline first), never snapped
     study, veh = load_study(runs["default"][0])
     space = DesignSpace(study, veh)
-    from suspkin.surrogate.sampling import AxleSpace
+    from suspkin.surrogate.data import AxleSpace
 
     asp = AxleSpace(space, "rear")
     ref = lhs(6, asp.n, seed=3)
@@ -427,7 +427,7 @@ def test_dataset_sampling_is_continuous_and_hashes_ignore_resolution(tmp_path: P
 def test_select_infill_dedupes_designs_that_round_together() -> None:
     import pandas as pd
 
-    from suspkin.surrogate.active import select_infill
+    from suspkin.surrogate.active_steps import select_infill
     from suspkin.surrogate.channels import CHANNELS  # noqa: F401  (import check)
     from tests.unit.test_surrogate_active import _tiny_study_objects
 
@@ -458,7 +458,7 @@ def test_select_infill_dedupes_designs_that_round_together() -> None:
 
 
 def test_hits_boundary_slack() -> None:
-    from suspkin.surrogate.active import hits_boundary
+    from suspkin.surrogate.active_steps import hits_boundary
 
     c = np.array([0.5, 0.5])
     x = np.array([0.5, 0.5 + 0.19])  # snapped 0.01 inside the 0.2 box

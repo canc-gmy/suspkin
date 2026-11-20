@@ -17,8 +17,8 @@ from suspkin.optimize.history import cache_key, read_history
 from suspkin.optimize.spec import Optimizer, StudyConfigError, load_study
 from suspkin.optimize.spec.surrogate import ActiveLearningSpec, TrustRegionSpec
 from suspkin.plotting.surrogate import plot_al_progress, plot_al_radius, plot_al_residual
-from suspkin.surrogate.active import (
-    AL_COLUMNS,
+from suspkin.surrogate.active import AL_COLUMNS
+from suspkin.surrogate.active_steps import (
     BoxProblem,
     StopState,
     advance_stop,
@@ -155,7 +155,7 @@ def test_curve_residual() -> None:
     from suspkin.surrogate.channels import channels_for
 
     names = tuple(c.name for c in channels_for("rear"))[:2]
-    from suspkin.surrogate.active import _TOL
+    from suspkin.surrogate.active_steps import _TOL
 
     r = curve_residual(p, y, mask, names)
     assert r == pytest.approx(0.5 * tol0 / _TOL[names[0]])
@@ -713,7 +713,7 @@ def test_pareto_mode_oracle(tmp_path: Path) -> None:
 
 
 def test_dominated_helper() -> None:
-    from suspkin.surrogate.active import _dominated
+    from suspkin.surrogate.active_steps import _dominated
 
     front = np.array([[1.0, 3.0], [2.0, 2.0], [3.0, 1.0]])
     assert _dominated([2.5, 2.5], front)
@@ -731,8 +731,8 @@ def test_failed_infill_point_is_appended_all_invalid(
     from suspkin.optimize.design import DesignSpace, InfeasibleDesign
     from suspkin.surrogate import axle_grids
     from suspkin.surrogate.active import _axle_sample
+    from suspkin.surrogate.data import AxleSpace
     from suspkin.surrogate.dataset import append_rows, load_dataset
-    from suspkin.surrogate.sampling import AxleSpace
 
     study, root, _ = work
     st, veh = load_study(study)

@@ -50,8 +50,8 @@ from suspkin.kinematics.arb import arb_stiffness
 from suspkin.kinematics.vehicle import cg_pivot
 from suspkin.metrics import vehicle as vm
 from suspkin.metrics.vehicle import AxleSummary, VehicleSummary, vehicle_summary
-from suspkin.surrogate.extract import CornerSample, extract_axles
-from suspkin.surrogate.grid import AxleGrid
+from suspkin.surrogate.channels import CornerSample, extract_axles
+from suspkin.surrogate.data import AxleGrid
 
 Arr = NDArray[np.float64]
 _NAN = float("nan")

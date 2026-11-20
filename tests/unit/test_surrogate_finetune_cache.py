@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from suspkin.surrogate.data_types import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
+from suspkin.surrogate.data import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
 
 torch = pytest.importorskip("torch")
 

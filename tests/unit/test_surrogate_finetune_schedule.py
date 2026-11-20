@@ -10,8 +10,8 @@ import pandas as pd
 import pytest
 
 from suspkin.optimize.spec.surrogate import FinetuneSpec
-from suspkin.surrogate.active import (
-    AL_COLUMNS,
+from suspkin.surrogate.active import AL_COLUMNS
+from suspkin.surrogate.active_steps import (
     FinetuneState,
     _replay_finetune_state,
     advance_finetune,

@@ -8,8 +8,7 @@ from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics.corner import joint_angles_frame
 from suspkin.metrics.table import metrics_frame
 from suspkin.surrogate import CHANNELS, channels_for
-from suspkin.surrogate.channels import wrap_line_angle
-from suspkin.surrogate.extract import _metric_arrays
+from suspkin.surrogate.channels import _metric_arrays, wrap_line_angle
 
 REF = "configs/vehicles/fs_reference.yaml"
 

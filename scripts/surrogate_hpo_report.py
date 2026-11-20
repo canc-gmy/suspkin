@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from suspkin.surrogate.report import write_hpo_report
+from suspkin.surrogate.hpo import write_hpo_report
 
 
 def main() -> None:

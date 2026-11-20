@@ -27,19 +27,17 @@ from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.outputs import git_hash
 from suspkin.optimize.pool import make_pool, resolve_workers
 from suspkin.optimize.spec import StudyConfigError, load_study
-from suspkin.surrogate.channels import channels_for
-from suspkin.surrogate.data_types import (
+from suspkin.surrogate.channels import CornerSample, channels_for, extract_corner
+from suspkin.surrogate.data import (
     SPLIT_TEST,
     SPLIT_TRAIN,
     SPLIT_VAL,
     Axle,
     AxleDataset,
-)
-from suspkin.surrogate.extract import CornerSample, extract_corner
-from suspkin.surrogate.grid import AxleGrid, axle_grids
-from suspkin.surrogate.sampling import (
+    AxleGrid,
     AxleSpace,
     NoAxleVariablesError,
+    axle_grids,
     lhs,
     resolve_lhs_optimization,
 )

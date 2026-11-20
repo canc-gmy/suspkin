@@ -5,7 +5,7 @@ from pathlib import Path
 
 import optuna
 
-from suspkin.surrogate.report import TRIAL_RATIO_ATTR, write_hpo_report
+from suspkin.surrogate.hpo import TRIAL_RATIO_ATTR, write_hpo_report
 
 RATIOS = {"a": 1.0, "b": 5.0, "c": 3.0, "d": 100.0, "e": 2.0, "f": 7.0, "g": 4.0}
 

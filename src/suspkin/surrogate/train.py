@@ -1,4 +1,6 @@
-"""Training, evaluation and persistence of the per-axle surrogate (experimental, needs torch).
+"""Training, evaluation, persistence and batched inference of the per-axle surrogate.
+
+Experimental, needs torch.
 
 Install note: the ``surrogate`` extra resolves to the CUDA 12.4 torch wheels on Windows.
 They also run on machines without an NVIDIA GPU (CUDA is then simply unavailable and
@@ -18,7 +20,7 @@ import copy
 import json
 import logging
 import math
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -30,9 +32,8 @@ from numpy.typing import NDArray
 from torch.nn import functional as F  # noqa: N812  # noqa: E402
 
 from suspkin.surrogate.channels import CHANNELS
-from suspkin.surrogate.data_types import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
-from suspkin.surrogate.model import MLPConfig, SurrogateMLP
-from suspkin.surrogate.normalise import ChannelScaler, PodBasis
+from suspkin.surrogate.data import SPLIT_TRAIN, SPLIT_VAL, AxleDataset
+from suspkin.surrogate.model import ChannelScaler, MLPConfig, PodBasis, SurrogateMLP
 
 _MAX_RESIDENT_FRACTION = 0.35
 _LOG = logging.getLogger(__name__)
@@ -646,3 +647,50 @@ def evaluate(
         validity_auc=auc,
         n=sub.n,
     )
+
+
+# --------------------------------------------------------------------------------------
+# batched inference
+# --------------------------------------------------------------------------------------
+
+
+class SurrogatePredictor:
+    """Evaluate a trained axle network on design vectors in the unit cube."""
+
+    def __init__(self, model: TrainedModel, device: str = "auto", batch_size: int = 8192) -> None:
+        self.model = model
+        self.device = resolve_device(device)
+        self.batch_size = batch_size
+        self._net = model.build_network(self.device)
+
+    @classmethod
+    def load(
+        cls, model_dir: str | Path, device: str = "auto", batch_size: int = 8192
+    ) -> SurrogatePredictor:
+        """Load ``model.pt`` / ``model.json`` / ``norm.npz`` from ``model_dir``."""
+        return cls(
+            TrainedModel.load(model_dir, device=device), device=device, batch_size=batch_size
+        )
+
+    @property
+    def param_names(self) -> tuple[str, ...]:
+        """Expected design parameter order."""
+        return self.model.param_names
+
+    def predict(
+        self, X: NDArray[np.float64], *, param_names: Sequence[str] | None = None
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Return ``(Y (B, C, R, T) physical units float64, p_valid (B, R, T))``.
+
+        Raises ``ValueError`` if ``X`` is not ``(B, d)`` or ``param_names`` differ.
+        """
+        x = np.asarray(X, dtype=np.float64)
+        d = len(self.model.param_names)
+        if x.ndim != 2 or x.shape[1] != d:
+            raise ValueError(f"X must have shape (B, {d}), got {x.shape}")
+        if param_names is not None and tuple(param_names) != self.model.param_names:
+            raise ValueError("param_names do not match the model")
+        with torch.no_grad():
+            return predict_physical(
+                self.model, x, net=self._net, device=self.device, batch_size=self.batch_size
+            )

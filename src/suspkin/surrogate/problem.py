@@ -25,14 +25,13 @@ from suspkin.optimize.evaluate import ConstraintResult, Evaluation
 from suspkin.optimize.history import cache_keys
 from suspkin.optimize.problem import Problem
 from suspkin.optimize.spec import StudyConfigError
+from suspkin.surrogate.data import AxleSpace, axle_grids
 from suspkin.surrogate.evaluate import (
     AxlePredictor,
     BaselineAxle,
     NetworkPredictor,
     SurrogateEvaluator,
 )
-from suspkin.surrogate.grid import axle_grids
-from suspkin.surrogate.sampling import AxleSpace
 
 F64 = NDArray[np.float64]
 
@@ -137,7 +136,7 @@ class SurrogateProblem(Problem):
         if not (model_dir / "model.json").is_file():
             raise FileNotFoundError(f"no trained model in {model_dir}")
         from suspkin.surrogate.dataset import check_model_matches
-        from suspkin.surrogate.predict import SurrogatePredictor  # imports torch
+        from suspkin.surrogate.train import SurrogatePredictor  # imports torch
 
         check_model_matches(study_path, model_dir, asp.axle)
 
