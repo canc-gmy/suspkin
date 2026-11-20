@@ -12,7 +12,7 @@ The orchestrator names the slice, the files, and the plan section(s) to check ag
 Use `git diff` / `git diff --staged` to see changes.
 
 ## Check, in order
-1. Math: frames (ISO 8855: x fwd, y left, z up), sign conventions in `docs/DESIGN_PLAN.md` §2, units (SI, rad), left/right mirroring, degenerate cases (parallel lines for instant centres, rocker toggle, zero-length links).
+1. Math: frames (ISO 8855: x fwd, y left, z up), sign conventions in `docs/concepts/conventions.md`, units (SI, rad), left/right mirroring, degenerate cases (parallel lines for instant centres, rocker toggle, zero-length links).
 2. Spec: public API and behaviour match the orchestrator's spec and the plan section.
 3. Tests: do they actually prove the behaviour (invariants, analytical cases), or only that the code runs?
 4. Code: pure core functions, no hidden state, no needless complexity.

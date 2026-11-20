@@ -219,7 +219,7 @@ tools with different update rules.
 | Location | `tests/regression/golden/` | `tests/regression/behaviour/snapshots/` |
 | Tests | `tests/regression/test_golden.py` | `test_cli_lock.py`, `test_app_lock.py`, `test_surrogate_lock.py` under `tests/regression/behaviour/` |
 | Protects | numeric results of the reference car and the two reference studies | CLI stdout, exit codes, every file a command writes, the app API responses, the OpenAPI schema, the surrogate dataset and oracle evaluation |
-| Compared by | values, `rtol=1e-6`, `atol=1e-9` (`1e-8` for finite-difference gradient columns) | CSV/JSON/YAML by value at `1e-12`; `.md`/`.html`/`.txt` exactly after scrubbing volatile text; binary files by existence and size only |
+| Compared by | values, `rtol=1e-6`, `atol=1e-9` (`1e-8` for finite-difference gradient columns) | CSV/JSON/YAML by value at `1e-12`; `.md`/`.html`/`.txt` by exact text skeleton after scrubbing volatile text, with float literals at `rtol = atol = 1e-9` (`TEXT_RTOL` in `tests/regression/behaviour/_lock.py`); binary files by existence and size only |
 | Update flag | `--update-golden` | `--update-lock` |
 
 ### 4.1 When a test fails
@@ -474,8 +474,8 @@ Resumable benchmark of the surrogate workflow (sample, train, validate, active l
 direct differential evolution at equal evaluation cost, report). It runs for a long time
 and writes under `results/benchmark_surrogate/`; use `--dry-run` to see the stages first.
 `scripts/surrogate_hpo_report.py` and `scripts/surrogate_retrain_best.py` are follow-ups
-of the same study. The numba fast path compiles once per process (about 0.8 s, cached on
-disk), so use enough repeats or discard the first run when you compare.
+of the same study. The numba fast path costs 0.91 s once per process (kernel load plus first sweep, cached
+on disk), so use enough repeats or discard the first run when you compare.
 
 ## 7. Releases
 

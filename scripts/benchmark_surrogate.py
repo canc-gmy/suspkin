@@ -1,4 +1,4 @@
-"""Resumable benchmark driver of the v1.1 surrogate (DESIGN_PLAN 13.13).
+"""Resumable benchmark driver of the v1.1 surrogate (see docs/concepts/surrogate.md).
 
 Stages (each skipped when its output exists; ``--force STAGE`` redoes it):
 

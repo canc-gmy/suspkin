@@ -46,8 +46,8 @@ nav:
       - Development: guides/development.md
       - Stability and versioning: guides/stability.md
   - Concepts:
-      - Architecture: concepts/architecture.md
       - Conventions and signs: concepts/conventions.md
+      - Glossary: concepts/glossary.md
       - Vehicle model: concepts/vehicle-model.md
       - Corner kinematics: concepts/corner-kinematics.md
       - Vehicle kinematics: concepts/vehicle-kinematics.md
@@ -56,6 +56,7 @@ nav:
       - Optimisation: concepts/optimization.md
       - Surrogate model: concepts/surrogate.md
       - Web app: concepts/web-app.md
+      - Architecture: concepts/architecture.md
   - API reference:
       - Overview: reference/index.md
       - suspkin: reference/suspkin.md

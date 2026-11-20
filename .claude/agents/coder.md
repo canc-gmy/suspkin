@@ -16,7 +16,7 @@ report the question instead of guessing.
 
 ## Context to read (only what you need)
 - `CLAUDE.md` for conventions.
-- The section of `docs/DESIGN_PLAN.md` the orchestrator names. Do not read the whole plan unless told.
+- The `docs/concepts/` page the orchestrator names (conventions in `docs/concepts/conventions.md`). Read only that page unless told.
 - Only the existing source files your slice imports from.
 
 ## Rules

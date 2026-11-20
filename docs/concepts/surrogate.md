@@ -99,17 +99,17 @@ of a network.
 The study YAML gets a `surrogate:` section, parsed by `suspkin.optimize.spec.surrogate.SurrogateSpec`
 (frozen pydantic models, SI units; time values accept `"90 min"`, lengths `"30 mm"`).
 
-| Model | Field (default) | Meaning |
-|---|---|---|
-| `GridSpec` | `travel: AxisGrid`, `rack: AxisGrid` (optional) | output grid. `AxisGrid(min, max, points>=3)`, uniform, **must contain 0** (static pose). `rack` only for the front axle (without it the front grid is `rack=[0]`). |
-| `DatasetSpec` | `n_initial=20000`, `seed=1`, `shard_size=500`, `lhs_optimization="auto"` | initial LHS size per axle, RNG seed, rows per shard, `auto`/`random-cd`/`none` |
-| `TrainingSpec` | `device="auto"`, `max_epochs=2000`, `patience=100`, `num_threads=None`, `finetune_lr_factor=0.1` | final training and fine-tune learning-rate factor |
-| `HpoSpec` | `n_trials=100`, `timeout=4 h`, `parallel="auto"`, `max_epochs=300`, `subsample=None` | Optuna search budget. Effective trial cap = $\min(\texttt{hpo.max\_epochs},\texttt{training.max\_epochs})$ |
-| `ActiveLearningSpec` | `max_iterations=50`, `fom_evaluations=2000`, `time=None`, `surrogate_evaluations=20000`, `margin=0.05`, plus the three sub-blocks below | active-learning loop |
-| `InfillSpec` | `top=0`, `perturb=4` | extra FOM points per iteration |
-| `FinetuneSpec` | `epochs=60`, `weight=5.0`, `replay=2048`, `patience=30`, `trigger=1.0`, `skip_after=2`, `skip_for=2`, `stall_override=3.0`, `on_cpu="skip"` | fine-tuning schedule |
-| `TrustRegionSpec` | `initial=0.2`, `min=0.01`, `max=0.5` | trust-region radius in the unit cube (`min <= initial <= max`) |
-| `StopSpec` | `eps_f=0.01`, `patience=5` | stopping tolerance (relative) and consecutive-iteration count |
+The models are `GridSpec` (with `AxisGrid`: uniform output grid that **must contain 0**, the
+static pose; `rack` only for the front axle, without it the front grid is `rack=[0]`),
+`DatasetSpec` (initial LHS size per axle, seed, shard size, LHS optimisation),
+`TrainingSpec` (final training and the fine-tune learning-rate factor), `HpoSpec` (Optuna search
+budget; the effective trial cap is $\min(\texttt{hpo.max\_epochs},\texttt{training.max\_epochs})$
+because a search trial must not train longer than the final training), `ActiveLearningSpec`
+(iteration, FOM and time budgets, margin) with the sub-blocks `InfillSpec`, `FinetuneSpec`,
+`TrustRegionSpec` (radius in the unit cube, `min <= initial <= max`) and `StopSpec`
+(relative agreement tolerance and consecutive-iteration count). The key-by-key table with
+defaults is kept in one place, the
+[Study YAML guide](../guides/study-yaml.md#surrogate-experimental).
 
 The committed benchmark study `configs/studies/fs_reference_surrogate.yaml` sets
 `travel: -30..30 mm, 41 points`, `rack: -30..30 mm, 21 points`, `n_initial: 20000`,
@@ -815,6 +815,7 @@ Each iteration $k$:
    and `perturb` points uniform in a box of radius $r/4$ around $x^\ast$ clipped to the trust
    box. All are snapped by `quantise_x` and de-duplicated against each other and the known FOM cache.
    If every point is already known the loop stops with `no_candidates`.
+   The same reason is used when the network search returns an empty history.
 3. **FOM verification** of the infill (source `al_<k>`) within the remaining FOM budget; $x^\ast$
    must fit (else stop `fom_budget`).
 4. **Residual and dataset growth.** The FOM curves of every new point and axle are extracted;
@@ -855,7 +856,7 @@ else unchanged. The minimum radius is raised to the largest per-variable hardpoi
 improved means: a newly feasible best, or a feasible best whose `f` decreased by more than
 $0.1\,\varepsilon_f f_{scale}$, or, while infeasible, a `max_g` decrease; `at_min` counts iterations whose next radius $r_{next}\le r_{min}$ without improvement. Order of checks: `agreement` ($\ge p$), `stagnation`, `radius_min`, `max_iterations`,
 `fom_budget` (rows in the history, baseline and resumed rows included), `time_budget`. Other
-reasons from the loop: `no_candidates`, `error`.
+reasons from the loop: `no_candidates` (the network search returned nothing, or all infill points were already verified designs), `error`.
 
 **Fine-tune decision** (`finetune_decision(resid, state, ft, device_type)`): not on CPU when
 `on_cpu == "skip"` (reason `cpu`); a non-finite residual always trains; a residual $\le$ `trigger`

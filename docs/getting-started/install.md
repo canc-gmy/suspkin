@@ -76,7 +76,7 @@ breaks the feature that needs it, and the message says which extra to add.
 | `viz` | plotly | `suspkin show --html` (interactive 3D); the 3D tab of the web app | those features fail with an `ImportError` / exit message; matplotlib views still work |
 | `opt` | pymoo | the `nsga2` optimiser (and so `pareto` mode, which only runs with it) | the other optimisers still work |
 | `app` | fastapi, uvicorn | `suspkin app` and `suspkin app-export` (the web app backend) | the two commands exit with an install hint |
-| `fast` | numba | a compiled corner solver, about 1.8 times faster for `run_standard_studies` (92 ms against 163 ms at 61 points, see [Architecture](../concepts/architecture.md)) | pure-Python solver, same results (within the solver tolerance) |
+| `fast` | numba | a compiled corner solver, about 1.8 times faster for `run_standard_studies` (94 ms against 166 ms at 61 points, see [Corner kinematics, section 6](../concepts/corner-kinematics.md#6-performance)) | pure-Python solver, same results (within the solver tolerance) |
 | `surrogate` | torch, optuna | `surrogate train`, `surrogate validate`, `optimize --surrogate` (experimental) | `surrogate sample` and the exact-model oracle still work |
 
 Set `SUSPKIN_NO_NUMBA=1` to force the pure-Python solver even when numba is installed.

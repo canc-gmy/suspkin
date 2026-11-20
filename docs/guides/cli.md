@@ -338,7 +338,7 @@ optimizer: mode weighted, method de+slsqp
 check.csv
 ```
 
-Read `g`: negative = margin, positive = violation, in scale units (here mm, 0.1 deg, ...).
+Read `g`: negative = margin, positive = violation, in scale units (here `camber_band_f` has `scale: 1 deg`, so g = -0.629 is 0.629 deg of margin; `toe_band_f` has `scale: 0.1 deg`, so a 0.365 deg margin reads -3.654).
 For an `inside` constraint the `value` is the signed distance to the region boundary
 (-40 mm = 40 mm inside); for `relation`, `value` is the left-hand coordinate and `min` shows
 `rhs + offset`; for `reach` it is the term with the largest `g` (named in `detail`).
@@ -437,7 +437,7 @@ their curves are appended to `DIR/dataset/` and the networks are fine-tuned
   `al_residual`, `al_radius`. `best.yaml` is the best FOM-verified design; in Pareto mode
   `pareto/` holds FOM-verified points only. A line `active learning: N new iterations (M in
   al.csv), stopped on <reason>, device <d>` is printed; reasons include `no_candidates` (the
-  network search returned nothing).
+  network search returned nothing, or all infill points were already verified designs).
 - Trust ratio: when the FOM rejects the predicted optimum the ratio is 0; with no feasible
   verified design yet, a feasible FOM point counts as 1. In Pareto mode the region is centred on
   the knee of the FOM-verified front and the ratio is 1 when the verified optimum extends the

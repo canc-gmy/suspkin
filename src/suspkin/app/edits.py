@@ -54,9 +54,13 @@ def apply_hardpoint_edits(vehicle: Vehicle, edits: Sequence[HardpointEdit]) -> V
         vehicle: Source vehicle (not modified).
         edits: Hardpoint coordinate overrides in m, applied in order.
 
+    Returns:
+        A new validated :class:`~suspkin.geometry.model.Vehicle`; ``vehicle`` is unchanged.
+
     Raises:
-        HardpointEditError: Unknown point, an edit without coordinates, or a geometry that fails
-            validation. The message names the edited points.
+        HardpointEditError: ``edits`` is empty (message ``"no edits given"``), an unknown
+            point, an edit without coordinates, or a geometry that fails validation. The
+            message names the edited points.
     """
     if not edits:
         raise HardpointEditError("no edits given")

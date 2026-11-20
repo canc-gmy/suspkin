@@ -174,7 +174,7 @@ reference pages for all of them).
 
 | Module | Responsibility | Main names |
 |---|---|---|
-| `kinematics.corner` | Single-corner solver: Newton iteration on the three closing angles of the upper arm, lower arm and steering link; travel and rack sweeps with continuation. | `CornerState`, `solve_corner`, `sweep_corner`, `sweep_rack` |
+| `kinematics.corner` | Single-corner solver: Newton iteration on three unknowns: the upper-arm angle, the lower-arm angle and `psi` (spin of the upright about the LBJ→UBJ axis, closed by the tie-rod length); travel and rack sweeps with continuation. | `CornerState`, `solve_corner`, `sweep_corner`, `sweep_rack` |
 | `kinematics.rocker` | Closed-form pushrod-length constraint on a rotating rocker; raises `KinematicsError` when unreachable. | `solve_rocker`, `RockerResult`, `RockerCtx`, `KinematicsError` |
 | `kinematics.arb` | Anti-roll bar solve (drop-link constraint), stiffness and stored energy; pure functions. | `ArbState`, `solve_arb`, `arb_stiffness`, `arb_energy`, `arm_length` |
 | `kinematics.vehicle` | Vehicle poses: prescribed heave/roll/pitch/rack, wheel travel found per corner by a secant iteration so the contact patch lies on the ground. | `VehicleState`, `solve_vehicle`, `contact_point`, `cg_pivot` |
@@ -422,10 +422,14 @@ surrogate dataset generator, so its cost matters. Where the time goes and what w
   The warm start moves the converged pose only within the ground-contact tolerance
   (`_G_TOL = 1e-11` m), so golden snapshots pass unchanged.
 - **numba** compiles the Newton solve and the whole ground-contact secant. Results match the
-  pure-Python path to rtol 1e-9 (checked in `tests/unit/test_fast_kernel.py`), and any kernel
-  failure on one corner re-runs that corner in pure Python, so error behaviour is unchanged.
-  The price is a one-off load of about 0.9 s per process (cached on disk after the first
-  compile). It pays off in the app, optimiser runs and dataset generation; for a single short
+  pure-Python path to rtol 1e-9 (checked in `tests/unit/test_fast_kernel.py`). Fallback is
+  narrow: a *failed* Newton (status 0) returns `None` from `_numba.newton`, exactly as the Python
+  body does, and is not re-run; only an exception in the kernel call disables the fast path and
+  re-runs the Python body; `_numba.ground` returns `None` on any non-zero status so the
+  pure-Python secant runs and the error behaviour is unchanged (details in
+  [Corner kinematics, section 3](corner-kinematics.md)).
+  The price is a one-off cost of 0.91 s per process (kernel load plus first vehicle sweep, warm
+  disk cache; compile is cached after the first run). It pays off in the app, optimiser runs and dataset generation; for a single short
   command set `SUSPKIN_NO_NUMBA=1`.
 - **The batch path** (`kinematics.batch`) avoids iteration altogether when the arm angles are
   already known (surrogate networks predict them), rebuilding the points of many designs and
@@ -503,7 +507,8 @@ with float literals compared at `rtol = atol = 1e-9`; binary files (`.png`, `.gi
 `_files.txt` listing makes extra or missing output files fail. Regenerate with
 `python -m uv run pytest tests/regression/behaviour --update-lock`; like `--update-golden` this
 is **refused when `CI` or `GITHUB_ACTIONS` is set**, so a pipeline can never rewrite its own
-expectations.
+expectations. The tolerances and the update workflow are summarised in
+[Development, section 4](../guides/development.md#4-golden-tests-and-the-behaviour-lock).
 
 ### Continuous integration
 

@@ -57,13 +57,15 @@ looking up.
 |---|---|---|
 | **Getting started** | You are new and want a working session | [Install](getting-started/install.md), [Tutorial](getting-started/tutorial.md) |
 | **Guides** | You know what you want to do and need the steps | [Vehicle YAML](guides/vehicle-yaml.md), [Study YAML](guides/study-yaml.md), [Command line](guides/cli.md), [Examples](guides/examples.md), [Surrogate optimisation](guides/surrogate.md), [Web app](guides/app.md), [Stability and versioning](guides/stability.md), [Development](guides/development.md) |
-| **Concepts** | You want to know why a number is what it is, and which code computes it | see the list below |
+| **Concepts** | You want to know why a number is what it is, and which code computes it | see the list below; the [Glossary](concepts/glossary.md) expands every abbreviation |
+| **Reports** | You want a recorded, dated study with its numbers | [Surrogate training (Nov 2026)](reports/surrogate-training.md) |
 | **Reference** | You need a signature, a parameter or a return type | [Python API](reference/index.md) and the per-package pages |
 | **ADRs** | You want to know why the project is built this way | [ADR 0001 to 0008](adr/0001-webapp-architecture.md) |
 
 Concept pages, in a sensible reading order:
 
 1. [Conventions](concepts/conventions.md): frame, units, sign rules. Read this first.
+   The [Glossary](concepts/glossary.md) expands every abbreviation; keep it open.
 2. [Vehicle model](concepts/vehicle-model.md): hardpoints, corners, mirroring, YAML loading.
 3. [Corner kinematics](concepts/corner-kinematics.md): the constraint equations and the Newton solver.
 4. [Vehicle kinematics](concepts/vehicle-kinematics.md): body poses, anti-roll bar.

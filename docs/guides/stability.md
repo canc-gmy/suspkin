@@ -148,7 +148,7 @@ The commit message and the changelog must state why the numbers moved.
 
 **Behaviour lock** (`tests/regression/behaviour/`): recorded stdout, exit codes and written
 files of every CLI command, one JSON snapshot per web endpoint (plus the generated OpenAPI
-schema) and the surrogate file layouts, compared at `rtol = 1e-12` (human-readable text exactly).
+schema) and the surrogate file layouts, compared by value at `rtol = 1e-12`; human-readable text by exact skeleton with float literals at `rtol = atol = 1e-9` (tolerances in [Development](development.md#4-golden-tests-and-the-behaviour-lock)).
 It is regenerated only with `--update-lock`, which is refused in CI, and only for a deliberate
 output change with a stated reason. How to run and update both nets is in the
 [Development guide](development.md).
@@ -156,7 +156,7 @@ output change with a stated reason. How to run and update both nets is in the
 ## What this means for you
 
 - Scripts that use only `suspkin.__all__`, the CLI and the YAML files keep working across minor
-  and patch releases. Pin the version (`suspkin==1.1.*`) in a project that must not change
+  and patch releases. Suspkin is not on PyPI: pin a git tag (for example `v1.1.0`) in a project that must not change
   numbers.
 - Compare results between versions by diffing the CSV tables. A change to a published number
   must show up as a golden-snapshot diff with a stated reason in the commit message and the

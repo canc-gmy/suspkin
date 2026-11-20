@@ -124,34 +124,12 @@ surrogate:
     stop: {eps_f: 0.01, patience: 5}
 ```
 
-The full set of keys with their defaults (omitted keys take the default):
-
-| Key | Default | Meaning |
-|---|---|---|
-| `grid.travel`, `grid.rack` | required (`rack` optional) | Output grid, uniform, must contain 0. Omit `rack` to fix the rack at 0 |
-| `dataset.n_initial` | 20000 | LHS samples per axle |
-| `dataset.seed`, `dataset.shard_size` | 1, 500 | Seed of LHS and split; rows per shard file |
-| `dataset.lhs_optimization` | `auto` | `random-cd` up to 5000 samples, none above |
-| `training.device` | `auto` | `auto`, `cpu` or `cuda` |
-| `training.max_epochs`, `training.patience` | 2000, 100 | Epoch cap and early stopping of the **final** training |
-| `training.num_threads`, `training.finetune_lr_factor` | none, 0.1 | CPU threads; learning-rate factor when fine-tuning |
-| `hpo.n_trials`, `hpo.timeout` | 100, `4 h` | Optuna budget per axle |
-| `hpo.parallel` | `auto` | Axles in parallel on CUDA, sequential on CPU |
-| `hpo.max_epochs`, `hpo.subsample` | 300, all rows | Epoch cap and training rows of each search trial; the final retrain is not reduced |
-| `active_learning.max_iterations` | 50 | Iteration cap |
-| `active_learning.fom_evaluations`, `.time` | 2000, none | FOM and wall-time budgets of the whole run |
-| `active_learning.surrogate_evaluations` | 20000 | Budget of each inner search on the networks |
-| `active_learning.infill` | `top` 0, `perturb` 4 | Extra candidates per iteration besides the predicted optimum |
-| `active_learning.finetune` | see below | Fine-tuning schedule |
-| `active_learning.margin` | 0.05 | Safety margin on normalised constraints `g` |
-| `active_learning.trust_region` | `initial` 0.2, `min` 0.01, `max` 0.5 | Radius in the unit cube |
-| `active_learning.stop` | `eps_f` 0.01, `patience` 5 | Agreement tolerance (relative) and consecutive iterations |
-
-`active_learning.finetune` keys: `epochs` 60 (cap), `weight` 5.0 (weight of new rows), `replay`
-2048 (earlier rows replayed), `patience` 30, `trigger` 1.0, `skip_after` 2, `skip_for` 2,
-`stall_override` 3.0, `on_cpu` `skip` (or `run`). Units in the block are SI numbers or strings
-with units (`"30 mm"`, `"90 min"`). The exhaustive field list with validation rules is in the
-[Study YAML guide](study-yaml.md) and in the
+The block has six groups: `grid` (travel and rack axes), `dataset` (sampling), `training`
+(final training), `hpo` (architecture search), `active_learning` (loop budgets, infill, trust
+region, stop rule, fine-tune schedule). Omitted keys take their defaults. Units in the block are
+SI numbers or strings with units (`"30 mm"`, `"90 min"`). Every key with type, default and
+validation rule is in the
+[Study YAML guide](study-yaml.md#surrogate-experimental); what each group does is explained in the
 [concept page](../concepts/surrogate.md#3-study-block-surrogate-and-optimizespecsurrogate).
 
 !!! warning "Same study for every command"
@@ -356,8 +334,8 @@ and timings `sec_*`.
 
 The **stop reason** is in `meta.json` (`active_learning`) and printed at the end:
 `agreement` (network and FOM agree on f and feasibility for `stop.patience` iterations),
-`stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget`, `no_candidates` (all
-infill points were already verified designs) or `error`. The final report and `best.yaml` are
+`stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget`, `no_candidates` (the network
+search returned nothing, or all infill points were already verified designs) or `error`. The final report and `best.yaml` are
 the FOM-verified best; compare them with the baseline as with any optimisation
 ([Optimisation](../concepts/optimization.md)).
 

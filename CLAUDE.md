@@ -39,6 +39,6 @@ Independent slices (no shared files) may run in parallel.
 Agent reports stay short; agents never paste code back.
 
 ## Git
-- `main` stays green. Conventional Commits. SemVer tag `vX.Y.Z` per milestone (plan §11).
+- `main` stays green. Conventional Commits. SemVer tag `vX.Y.Z` per release (see `docs/guides/development.md`).
 - `CHANGELOG.md` in Keep a Changelog format.
 - Only the orchestrator commits.

@@ -117,12 +117,12 @@ sign, in [Metrics](../concepts/metrics.md). A reading guide to the numbers that 
 | `rc_height` | 33.7 / 40.0 mm | Height of the roll centre above the ground at the car centreline (line from the patch through the front-view instant centre). [Roll centre height](../concepts/metrics.md#roll-centre-height-one-corner) |
 | `pushrod_angle` | 64.7 / 67.6 deg | Elevation of the pushrod (rocker end higher than the wheel end). A steep rod loses little motion ratio; a flat one carries a high axial load. [Pushrod angles](../concepts/metrics.md#pushrod-angles) |
 | `bump_stroke_remaining` | 40 mm | Room left before the coilover reaches its minimum length `length_min` (and `droop_stroke_remaining` before `length_max`). Both are 40 mm at the static length of 200 mm. |
-| `spring_force`, `spring_rate` | 574 N, 35 N/mm | Static coilover preload force and spring constant, from the YAML. |
+| `spring_force`, `spring_rate` | 574 N, 35 N/mm | Static coilover spring force, $F_\mathrm{preload} + k\,(L_\mathrm{free}-L)$ (the reference has preload 0, so 35000 N/m x 0.0164 m = 574 N) and spring constant, from the YAML and the static pose. |
 | `camber_gain` | -0.0175 / -0.0231 deg/mm | Camber change per mm of bump. Negative: the wheel gains negative camber as it moves up. [Gradients](../concepts/metrics.md#gradients) |
 | `bump_steer` | 0.0001 / 0.0003 deg/mm | Toe change per mm of bump. Near zero is the aim. [Bump steer](../concepts/metrics.md#bump-steer) |
 | `rc_migration_rate` | -0.338 mm/mm | The roll-centre height changes by -0.34 mm per mm of bump travel of this wheel. |
 | `mr_spring` | 0.981 / 0.993 | **Motion ratio**: spring shortening per mm of wheel travel. [Motion ratio](../concepts/metrics.md#motion-ratio) |
-| `wheel_rate` | 34.57 / 40.95 N/mm | Stiffness at the wheel: $k\,\mathrm{MR}^2$ plus a term from the spring preload and the MR progression. [Wheel rate](../concepts/metrics.md#wheel-rate) |
+| `wheel_rate` | 34.57 / 40.95 N/mm | Stiffness at the wheel: $k\,\mathrm{MR}^2 + F_s\,\mathrm{d}MR/\mathrm{d}z$: the spring-force term times the MR progression. [Wheel rate](../concepts/metrics.md#wheel-rate) |
 | `ride_rate` | 25.69 / 29.05 N/mm | Wheel rate in series with the tyre (100 N/mm). [Ride rate](../concepts/metrics.md#ride-rate) |
 
 Now the car-level numbers:
@@ -205,7 +205,7 @@ The CSV has 7 rows and 107 columns, all SI. The first columns are `corner`, `tra
 (inputs), then the three solved unknowns `theta_uca`, `theta_lca`, `psi` (the two wishbone angles and the
 spin of the upright about its ball-joint axis, see
 [Corner kinematics](../concepts/corner-kinematics.md)), the rocker angle, `coilover_length`,
-`toggle_margin`, `max_residual` (the solver's final error), then the 3D position of every
+`toggle_margin`, `max_residual` (the solver's final error), `spin_x`, `spin_y`, `spin_z` (the upright's rotation vector), then the 3D position of every
 hardpoint (`uca_outer_x`, `uca_outer_y`, ...), then the metrics. Read it in Python and convert to display
 units:
 

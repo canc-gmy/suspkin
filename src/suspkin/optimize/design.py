@@ -104,7 +104,33 @@ def _point_of(vehicle: Vehicle, slot: _Slot) -> F64:
 
 
 class DesignSpace:
-    """Normalised parameterisation of the study variables around a baseline vehicle."""
+    """Normalised parameterisation of the study variables around a baseline vehicle.
+
+    Maps a design vector ``x`` in the unit cube ``[0, 1]^n`` to hardpoint coordinates (offset
+    or hexahedron domains, optionally snapped to the manufacturing grid) and back, and builds
+    the corresponding :class:`~suspkin.geometry.model.Vehicle`. A symmetric variable moves the
+    left point and mirrors it to the right; an asymmetric one moves one side only.
+
+    Args:
+        study: Study whose ``variables`` define the free coordinates and the grid.
+        vehicle: Baseline vehicle the offsets and domains refer to.
+
+    Attributes:
+        study: The study.
+        baseline: The baseline vehicle.
+        n: Number of parameters (free coordinates over all variables).
+        names: One name per parameter, e.g. ``"front.uca_outer.x"``.
+        bounds: ``(n, 2)`` array of ``[0, 1]`` rows (the unit-cube bounds).
+
+    Key methods:
+        :meth:`points` and :meth:`points_batch` (decoded coordinates), :meth:`quantise_x`
+        (snap to the grid), :meth:`to_vehicle`, :meth:`from_vehicle` and
+        :meth:`vehicle_from_points`, :meth:`grid_step_z`.
+
+    Raises:
+        ValueError: A variable names a point missing in the vehicle, a symmetric variable
+            sits on a point with a right override, or an offset domain has no free axis.
+    """
 
     def __init__(self, study: Study, vehicle: Vehicle) -> None:
         self.study = study

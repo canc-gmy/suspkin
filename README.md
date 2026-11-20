@@ -94,7 +94,7 @@ The published site is <https://canc-gmy.github.io/suspkin/>.
 - `examples/`: runnable Python scripts (load and sweep, compare designs, optimise a study).
 - `frontend/`: the web app browser UI (Node project, built into the package).
 - `tests/`: unit, golden regression and behaviour-lock tests.
-- `scripts/`: setup scripts for Windows and Linux/macOS.
+- `scripts/`: setup scripts for Windows and Linux/macOS, plus the benchmark, profiling and surrogate scripts (`bench_kinematics.py`, `profile_fom.py`, `benchmark_surrogate.py`, `surrogate_*.py`).
 - `results/`: tracked result folders, including the benchmark surrogate models.
 
 ## Development

@@ -6,8 +6,8 @@ Measures, single process, on ``configs/studies/fs_reference_optimize.yaml``:
 2. a stage breakdown (exclusive time per stage via wrapped functions) plus a cProfile
    top list (cumulative);
 3. the number of corner states solved per evaluation;
-4. the cost of one dataset sample (DESIGN_PLAN 13.6): left front corner on a travel x rack
-   grid and left rear corner on a travel grid, solve only and solve + metric tables;
+4. the cost of one dataset sample (see docs/concepts/surrogate.md): left front corner on a
+   travel x rack grid and left rear corner on a travel grid, solve only and solve + metric tables;
 5. the per-state cost of solving and of building the metric tables.
 
 Run: ``python -m uv run python scripts/profile_fom.py [--study PATH] [--repeats N]``.
