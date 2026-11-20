@@ -1,7 +1,8 @@
 # suspkin — project rules
 
 Python package for Formula Student double-wishbone + pushrod suspension kinematics.
-Design source of truth: `docs/DESIGN_PLAN.md` (decisions log in §12).
+How it works: `docs/concepts/` (start at `architecture.md`). Decisions: `docs/adr/`.
+Behaviour is locked by `tests/regression/behaviour/` and `tests/regression/golden/`; never regenerate them to make a change pass.
 
 ## Language
 English only: code, comments, docs, commit messages, configs.
@@ -9,7 +10,8 @@ English only: code, comments, docs, commit messages, configs.
 ## Conventions
 - ISO 8855 frame: x forward, y left, z up. Origin on ground, mid front axle.
 - SI units internally and in YAML (m, rad, N, N/m). mm/deg only for display.
-- Sign conventions: `docs/DESIGN_PLAN.md` §2.
+- Sign conventions: `docs/concepts/conventions.md`.
+- Docstrings: Google style (`Args:`, `Returns:`, `Raises:`), SI units and array shapes stated.
 - Core math = pure functions on numpy arrays. Plotting reads result tables only, never calls the solver.
 - Tooling: `uv`, ruff, mypy, pytest (+ hypothesis).
 - On this PC `uv` may not be on PATH: call it as `python -m uv` (e.g. `python -m uv run pytest -q`).

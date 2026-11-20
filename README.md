@@ -4,156 +4,109 @@
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://canc-gmy.github.io/suspkin/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
+`suspkin` is a Python toolkit for the kinematics of Formula Student double-wishbone pushrod
+suspensions. You describe the car as a YAML file of hardpoints; it solves how the wheels move
+under bump, roll, pitch and steering, computes the metrics a designer reads (camber, toe, roll
+centre, motion ratio, anti-dive, ...), and turns them into plots and reports. Geometry can then be
+optimised against a constraint specification, a neural-network surrogate speeds up large
+studies, and a local web app compares designs. The optimiser, surrogate and web app are
+experimental.
+
 Documentation: <https://canc-gmy.github.io/suspkin/>
 
-Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars.
-It computes kinematic curves (camber, toe, caster, anti-dive/anti-squat, roll centre,
-motion ratios, steering geometry) from hardpoint geometry and turns them into
-vehicle-dynamics plots and reports. Planned later: FEM checks of key parts. A neural-network
-surrogate for fast design sweeps is available as an experimental feature (v1.1, see below).
-Geometry optimization (v0.8) is available: multi-objective and weighted-sum studies on the
-constraint specification.
+## Features
 
-Stability: 1.0 freezes the vehicle and study YAML (`schema: 1`), the CLI and `suspkin.__all__`
-([details](docs/guides/stability.md)); `suspkin.optimize` stays experimental.
+- Corner kinematics solved in 3D for bump, droop and rack travel, with pushrod actuation on the
+  upright, lower or upper wishbone, for front and rear axles.
+- Whole-car body motion (heave, roll, pitch, rack) with anti-roll bar coupling.
+- More than 40 per-corner metrics with gradients, plus a vehicle summary (rates, roll stiffness,
+  load transfer distribution, anti-features, steering).
+- Command line, Python API, matplotlib figures, interactive 3D, animations and a self-contained
+  HTML report.
+- Constrained single- and multi-objective optimisation of hardpoints on a manufacturing grid
+  (experimental).
+- Neural surrogate with active learning for studies with many variables (experimental).
+- Local web app to compare designs, edit hardpoints and export snapshots (experimental).
 
-## Conventions
+## Install
 
-- ISO 8855 frame: x forward, y left, z up. Origin on the ground, mid front axle.
-- SI units internally and in YAML (m, rad, N, N/m). mm and deg are display only.
-
-## Setup
-
-Prerequisites: git and Python 3.11+ (uv is optional, the script installs it if missing).
+`suspkin` is installed from a clone of the repository; it is not on PyPI. Requires Python 3.11+.
+The one-command setup (`scripts/setup.ps1` on Windows, `scripts/setup.sh` elsewhere) installs
+everything. On some Windows machines `uv` is not on `PATH`; use `python -m uv` instead.
 
 ```bash
 git clone https://github.com/canc-gmy/suspkin.git && cd suspkin
+uv sync --all-extras          # with uv: core, all extras and dev tools
+pip install -e ".[viz,opt,app,fast]"   # with pip (in a venv): extras, no dev tools
 ```
 
-Then one command:
+Extras (see [Install](docs/getting-started/install.md) for details):
 
-```powershell
-# Windows (PowerShell)
-powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
-```
+- `viz`: plotly, for interactive 3D (`suspkin show --html`).
+- `opt`: pymoo, for the `nsga2` optimiser.
+- `app`: fastapi and uvicorn, for the web app (`suspkin app`).
+- `fast`: numba, a compiled corner solver (about 1.8 times faster).
+- `surrogate`: torch and optuna, for the neural surrogate (`pip install -e ".[surrogate]"`).
+
+## Quick start
+
+Run these from the repository root on the reference car:
 
 ```bash
-# Linux / macOS / Git Bash
-bash scripts/setup.sh
-```
-
-Flags: `-Minimal` / `--minimal` skips the `viz` and `opt` extras; `-Test` / `--test` also runs the test suite.
-
-Manual equivalent (use `python -m uv` instead of `uv` when uv is not on PATH):
-
-```bash
-uv sync --all-extras
-uv run pre-commit install
-uv run suspkin version
-```
-
-## Usage
-
-User-facing inputs are in mm and deg; CSV/JSON files are SI. `--help` on any command lists the options.
-
-```bash
-uv run suspkin show configs/vehicles/fs_reference.yaml --roll 2 --heave 5 --out pose.png
+uv run suspkin summary configs/vehicles/fs_reference.yaml
 uv run suspkin sweep configs/vehicles/fs_reference.yaml --corner FL --travel -30 30 --metrics --out fl.csv
-uv run suspkin summary configs/vehicles/fs_reference.yaml --json summary.json
-uv run suspkin vehicle configs/vehicles/fs_reference.yaml --json vehicle.json
 uv run suspkin vsweep configs/vehicles/fs_reference.yaml --roll -2 2 --out roll.csv
-uv run suspkin animate configs/vehicles/fs_reference.yaml --roll -2 2 --out roll.gif
-uv run suspkin report configs/vehicles/fs_reference.yaml --compare other.yaml --out report/
-```
-
-`report` writes `report.html` (self-contained), `report.md`, `figures/`, `data/*.csv` and
-`summary.json`; every design given with `--compare` is overlaid on the same figures.
-
-### Constraint check
-
-A study YAML in `configs/studies/` points to a vehicle and lists the design variables and
-constraints (see [DESIGN_PLAN section 7](docs/DESIGN_PLAN.md) and
-[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08)). `check` evaluates the
-baseline vehicle against every constraint and prints PASS/FAIL per row; `--plot` writes the 3D
-view of the variable domains and keep-outs.
-
-```bash
+uv run suspkin report configs/vehicles/fs_reference.yaml --out report/
 uv run suspkin check configs/studies/fs_reference_constraints.yaml --plot results/study.png
 ```
 
-### Optimization
+Inputs to the CLI are in mm and degrees; files written (CSV, JSON) are SI. `uv run suspkin --help`
+and `uv run suspkin <command> --help` list every option. The
+[Tutorial](docs/getting-started/tutorial.md) walks through these outputs.
 
-A study with an `objectives` list and an `optimizer` block is optimised by `suspkin optimize`.
-The run folder holds the study and vehicle copies, `history.csv` (one row per evaluation),
-`best.yaml` (or `pareto/` in pareto mode), `result.json`, `meta.json`, `figures/` and a
-before/after `report/`. The demo study takes a few minutes.
+## Documentation
 
-```bash
-uv run suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo
-```
+- [Documentation home](docs/index.md): how the docs are organised and the reading order.
+- Getting started: [Install](docs/getting-started/install.md), [Tutorial](docs/getting-started/tutorial.md).
+- Guides: [Vehicle YAML](docs/guides/vehicle-yaml.md), [Study YAML](docs/guides/study-yaml.md),
+  [Command line](docs/guides/cli.md), [Examples](docs/guides/examples.md),
+  [Surrogate](docs/guides/surrogate.md), [Web app](docs/guides/app.md),
+  [Stability and versioning](docs/guides/stability.md),
+  [Development](docs/guides/development.md).
+- Concepts (the math and the code that computes it): [Conventions](docs/concepts/conventions.md),
+  [Vehicle model](docs/concepts/vehicle-model.md),
+  [Corner kinematics](docs/concepts/corner-kinematics.md),
+  [Vehicle kinematics](docs/concepts/vehicle-kinematics.md), [Metrics](docs/concepts/metrics.md),
+  [Sweeps and reports](docs/concepts/sweeps-and-reports.md),
+  [Optimisation](docs/concepts/optimization.md), [Surrogate](docs/concepts/surrogate.md),
+  [Web app](docs/concepts/web-app.md), [Architecture](docs/concepts/architecture.md).
+- Reference: [docs/reference/](docs/reference/index.md), per-package API pages.
+- Architecture decisions: [docs/adr/](docs/adr/0001-webapp-architecture.md).
 
-Resume an interrupted run from its history (the folder must contain `history.csv`; the budget
-counts only new evaluations):
+The published site is <https://canc-gmy.github.io/suspkin/>.
 
-```bash
-uv run suspkin optimize configs/studies/fs_reference_optimize.yaml --out results/opt/demo --resume
-```
+## Project layout
 
-The `nsga2` method needs pymoo: `pip install suspkin[opt]` or `uv sync --extra opt`. The other
-methods (`de`, `slsqp`, `trust-constr`, `de+slsqp`) use scipy only. See
-[ARCHITECTURE section 14](docs/ARCHITECTURE.md#14-optimization-v07v08) for the math and outputs.
-
-### Surrogate optimisation (experimental)
-
-A neural-network surrogate of the corner kinematics proposes designs with far fewer full-order
-(FOM) runs. Every design that is reported is verified with the FOM. The API may change in minor
-releases. See [ARCHITECTURE section 15](docs/ARCHITECTURE.md#15-surrogate-v11-experimental) and
-[DESIGN_PLAN section 13](docs/DESIGN_PLAN.md#13-surrogate-model-and-active-learning-v110-implemented).
-
-Install the optional extra (torch and optuna; not part of the dev group):
-
-```bash
-uv sync --extra surrogate
-```
-
-On Windows this installs the CUDA build of torch (a download of about 2.5 GB). On Linux it installs
-the CPU build. `--device auto` uses CUDA when it is available and the CPU otherwise. Intel macOS has
-no torch build in the supported range, so the extra is not available there; Apple silicon works.
-
-The workflow has four commands. The `--root` folder holds `dataset/`, `models/` and `validation/`:
-
-```bash
-uv run suspkin surrogate sample configs/studies/fs_reference_surrogate.yaml --root results/surrogate
-uv run suspkin surrogate train configs/studies/fs_reference_surrogate.yaml --root results/surrogate
-uv run suspkin surrogate validate configs/studies/fs_reference_surrogate.yaml --root results/surrogate
-uv run suspkin optimize configs/studies/fs_reference_surrogate.yaml --surrogate results/surrogate --out results/opt/surrogate
-```
-
-`sample` builds the Latin-hypercube dataset (resume with `--resume`), `train` runs the architecture
-search and trains one network per axle, `validate` scores the networks on a held-out split, and
-`optimize --surrogate` runs the active-learning loop. The benchmark study has 90 variables and takes
-several hours; the sample size and budgets are set in its `surrogate` block.
-
-## Web app (experimental, branch feat/webapp)
-
-Interactive figures, overlay of several results and a shareable HTML snapshot. See `docs/guides/app.md`.
-
-```bash
-uv sync --extra app --extra viz
-(cd frontend && npm ci && npm run build && npm run build:single)   # Node 22.12+
-uv run suspkin app configs/vehicles/fs_reference.yaml
-uv run suspkin app-export configs/vehicles/fs_reference.yaml --out compare.html
-```
+- `src/suspkin/`: the Python package (core kinematics, metrics, CLI, plotting, optimisation,
+  surrogate, web app backend).
+- `configs/`: reference vehicle YAML and study YAML files (SI units, ISO 8855 frame).
+- `docs/`: the MkDocs source for the documentation site.
+- `examples/`: runnable Python scripts (load and sweep, compare designs, optimise a study).
+- `frontend/`: the web app browser UI (Node project, built into the package).
+- `tests/`: unit, golden regression and behaviour-lock tests.
+- `scripts/`: setup scripts for Windows and Linux/macOS.
+- `results/`: tracked result folders, including the benchmark surrogate models.
 
 ## Development
 
 ```bash
 uv run pre-commit install
+uv run pytest -q -m "not examples"
 ```
 
-Design plan: [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md)
-Architecture and math: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+See [Development](docs/guides/development.md) for the tooling (ruff, mypy, pytest) and the
+contribution workflow. Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
-![Reference FS vehicle](docs/images/fs_reference.png)
+## License
 
-Render it yourself: `uv run suspkin show configs/vehicles/fs_reference.yaml`
+MIT. See [LICENSE](LICENSE).
