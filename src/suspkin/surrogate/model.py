@@ -52,6 +52,7 @@ class _Block(nn.Module):
         self.skip = cfg.residual and n_in == n_out
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply linear, activation, norm and dropout; add the input if the skip is active."""
         h = self.drop(self.norm(self.act(self.lin(x))))
         out: torch.Tensor = x + h if self.skip else h
         return out

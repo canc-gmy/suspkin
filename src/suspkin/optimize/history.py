@@ -41,10 +41,8 @@ class EvalCache(dict[tuple[float, ...], CacheEntry]):
     def from_history(cls, df: pd.DataFrame, space: DesignSpace, study: Study) -> EvalCache:
         """Rebuild the cache from a history table (for resume).
 
-        Raises
-        ------
-        HistoryError
-            If the history columns differ from the study's expected columns.
+        Raises:
+            HistoryError: If the history columns differ from the study's expected columns.
         """
         out = cls()
         out.update(cache_from_history(df, space, study))
@@ -73,7 +71,12 @@ def constraint_names(study: Study) -> list[str]:
 
 
 def history_columns(space: DesignSpace, study: Study) -> list[str]:
-    """Column order of ``history.csv``."""
+    """Column order of ``history.csv``.
+
+    Args:
+        space: Design space (gives the variable columns).
+        study: Study (gives the objective and constraint columns).
+    """
     cols = ["eval_id"]
     cols += [f"x_{n}" for n in space.names]
     labels = list(space.points(space.from_vehicle()))
@@ -174,10 +177,16 @@ def cache_from_history(
 ) -> dict[tuple[float, ...], CacheEntry]:
     """Rebuild the evaluation cache from a history table (for resume).
 
-    Raises
-    ------
-    HistoryError
-        If the history columns differ from the study's expected columns.
+    Args:
+        df: History table as written by the driver.
+        space: Design space and study the history must belong to.
+        study: Design space and study the history must belong to.
+
+    Returns:
+        dict: Maps the design vector (tuple of floats) to its cached evaluation result.
+
+    Raises:
+        HistoryError: If the history columns differ from the study's expected columns.
     """
     expected = history_columns(space, study)
     if list(df.columns) != expected:

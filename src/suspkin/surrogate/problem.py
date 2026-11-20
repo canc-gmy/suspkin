@@ -70,26 +70,19 @@ def _shifted(ev: Evaluation, margin: float) -> Evaluation:
 class SurrogateProblem(Problem):
     """Evaluate designs on the trained axle networks with the :class:`Problem` interface.
 
-    Parameters
-    ----------
-    study_path
-        Study YAML (its ``surrogate.grid`` must match the models; symmetric variables only).
-    model_root
-        Folder with ``<axle>/model/`` of each axle that has design variables (what
-        ``suspkin surrogate train`` saves). May be ``None`` when ``predictors`` is given.
-    run_dir
-        Run folder; the history goes to ``run_dir/history.csv`` with source ``surrogate``.
-    device
-        ``auto``, ``cpu`` or ``cuda`` for the networks.
-    margin
-        Constraint margin delta on the normalised ``g`` (see the module docstring).
-    evaluations, time
-        Budget overrides (as :class:`Problem`); ``workers`` is not accepted (no pool).
-    resume
-        Continue an existing history (as :class:`Problem`).
-    predictors
-        Injected axle predictors (``front`` / ``rear``), e.g. an
-        :class:`~suspkin.surrogate.evaluate.OraclePredictor`; replaces loading the models.
+    Args:
+        study_path: Study YAML (its ``surrogate.grid`` must match the models; symmetric variables
+            only).
+        model_root: Folder with ``<axle>/model/`` of each axle that has design variables (what
+            ``suspkin surrogate train`` saves). May be ``None`` when ``predictors`` is given.
+        run_dir: Run folder; the history goes to ``run_dir/history.csv`` with source ``surrogate``.
+        device: ``auto``, ``cpu`` or ``cuda`` for the networks.
+        margin: Constraint margin delta on the normalised ``g`` (see the module docstring).
+        evaluations: Budget overrides (as :class:`Problem`); ``workers`` is not accepted (no pool).
+        time: Budget overrides (as :class:`Problem`); ``workers`` is not accepted (no pool).
+        resume: Continue an existing history (as :class:`Problem`).
+        predictors: Injected axle predictors (``front`` / ``rear``), e.g. an
+            :class:`~suspkin.surrogate.evaluate.OraclePredictor`; replaces loading the models.
     """
 
     def __init__(

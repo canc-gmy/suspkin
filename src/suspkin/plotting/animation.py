@@ -23,29 +23,20 @@ def animate_sweep(
 ) -> Path:
     """Render a sweep of solved poses as an animation (body frame fixed, ground moves).
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-    states : sequence of VehicleState
-        One frame per state; axis limits are fixed over the whole sweep.
-    path : str or Path
-        Output file; ``.gif`` (Pillow) or ``.mp4`` (needs ffmpeg on PATH).
-    fps : int
-        Frames per second.
-    view : (float, float)
-        Camera ``(elevation, azimuth)`` in degrees.
+    Args:
+        vehicle (Vehicle):
+        states (sequence of VehicleState): One frame per state; axis limits are fixed over the whole
+            sweep.
+        path (str or Path): Output file; ``.gif`` (Pillow) or ``.mp4`` (needs ffmpeg on PATH).
+        fps (int): Frames per second.
+        view ((float, float)): Camera ``(elevation, azimuth)`` in degrees.
 
-    Returns
-    -------
-    Path
-        The written file.
+    Returns:
+        Path: The written file.
 
-    Raises
-    ------
-    ValueError
-        If ``states`` is empty or the suffix is neither ``.gif`` nor ``.mp4``.
-    RuntimeError
-        For ``.mp4`` when ffmpeg is not available.
+    Raises:
+        ValueError: If ``states`` is empty or the suffix is neither ``.gif`` nor ``.mp4``.
+        RuntimeError: For ``.mp4`` when ffmpeg is not available.
     """
     out = Path(path)
     suffix = out.suffix.lower()

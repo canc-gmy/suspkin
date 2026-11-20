@@ -121,12 +121,9 @@ class AxleSpace:
     Only symmetric variables are supported (the surrogate models the left corner and mirrors
     it). The other axle's parameters stay at the baseline.
 
-    Parameters
-    ----------
-    space
-        Full study design space.
-    axle
-        ``"front"`` or ``"rear"``.
+    Args:
+        space: Full study design space.
+        axle: ``"front"`` or ``"rear"``.
     """
 
     def __init__(self, space: DesignSpace, axle: Literal["front", "rear"]) -> None:
@@ -175,7 +172,15 @@ AUTO_RANDOM_CD_MAX = 5000
 
 
 def resolve_lhs_optimization(setting: str, n: int) -> Literal["random-cd", "none"]:
-    """Resolve ``auto`` / ``random-cd`` / ``none`` for ``n`` samples."""
+    """Resolve ``auto`` / ``random-cd`` / ``none`` for ``n`` samples.
+
+    Args:
+        setting: ``"auto"``, ``"random-cd"`` or ``"none"``.
+        n: Number of samples.
+
+    Returns:
+        The concrete optimization name.
+    """
     if setting == "auto":
         return "random-cd" if n <= AUTO_RANDOM_CD_MAX else "none"
     if setting in ("random-cd", "none"):
@@ -188,6 +193,15 @@ def lhs(n: int, d: int, seed: int, optimization: str = "random-cd") -> F64:
 
     ``optimization`` is ``"random-cd"`` or ``"none"``. Deterministic: depends only on
     ``(n, d, seed, optimization)``. The caller replaces row 0 by the baseline.
+
+    Args:
+        n: Number of samples.
+        d: Dimension.
+        seed: Random seed.
+        optimization: ``"random-cd"`` or ``"none"``.
+
+    Returns:
+        Samples ``(n, d)`` in [0, 1].
     """
     if n < 1 or d < 1:
         raise ValueError("n and d must be >= 1")

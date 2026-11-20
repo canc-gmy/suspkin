@@ -6,7 +6,7 @@ The surrogate predicts only left-corner curves on a fixed grid (see
 :func:`suspkin.sweeps.vehicle_frame` return, vectorised over a batch of
 designs. SI units and the sign conventions of ``vehicle_summary`` throughout.
 
-Method (DESIGN_PLAN section 13.5):
+Method (see ``docs/concepts/surrogate.md``):
 
 * The right corner is the mirrored left corner (the right wheel at rack ``r`` is the
   mirrored left wheel at ``-r``). Overrides of right-hand hardpoints are not representable.
@@ -99,7 +99,15 @@ class AxleBatch:
 
 
 def stack_samples(samples: Sequence[CornerSample], grid: AxleGrid) -> AxleBatch:
-    """Stack the :class:`CornerSample` of ``B`` designs (one axle) into an :class:`AxleBatch`."""
+    """Stack the :class:`CornerSample` of ``B`` designs (one axle) into an :class:`AxleBatch`.
+
+    Args:
+        samples: One corner sample per design.
+        grid: Travel and rack grid shared by the samples.
+
+    Returns:
+        Batched channel arrays.
+    """
     if not samples:
         raise ValueError("samples must not be empty")
     chans = samples[0].channels
@@ -317,7 +325,16 @@ def _masked(batch: AxleBatch, names: Sequence[str]) -> Arr:
 
 
 def travel_curves(batch: AxleBatch, names: Sequence[str], rack: float = 0.0) -> Hermite:
-    """Curves versus travel at a fixed rack (interpolated along the rack axis if needed)."""
+    """Curves versus travel at a fixed rack (interpolated along the rack axis if needed).
+
+    Args:
+        batch: Batched channel arrays of ``B`` designs.
+        names: Channel names to interpolate.
+        rack: Fixed rack displacement [m].
+
+    Returns:
+        Hermite interpolator of travel [m] returning ``(B, len(names), K)``.
+    """
     y = _masked(batch, names)  # (B, K, R, T)
     nodes = batch.grid.rack
     j = int(np.argmin(np.abs(nodes - rack)))
@@ -921,26 +938,23 @@ def vehicle_layer(
 ) -> LayerResult:
     """Vehicle summary (and optional sweeps) from the corner curves of ``B`` designs.
 
-    Parameters
-    ----------
-    samples : mapping
-        ``"front"`` and ``"rear"`` :class:`AxleBatch` with the same ``B`` as ``statics``.
-    statics : VehicleStatics
-        Output of :func:`vehicle_statics`.
-    roll_range, n, ay_ref
-        As :func:`suspkin.metrics.vehicle.vehicle_summary`.
-    sweeps : mapping, optional
-        Sweep kind (``heave``, ``roll``, ``pitch``, ``rack``) -> input values (SI).
-    columns : mapping, optional
-        Sweep kind -> ``vehicle_frame`` columns to return (default: all supported).
+    Args:
+        samples (mapping): ``"front"`` and ``"rear"`` :class:`AxleBatch` with the same ``B`` as
+            ``statics``.
+        statics (VehicleStatics): Output of :func:`vehicle_statics`.
+        roll_range: As :func:`suspkin.metrics.vehicle.vehicle_summary`.
+        n: As :func:`suspkin.metrics.vehicle.vehicle_summary`.
+        ay_ref: As :func:`suspkin.metrics.vehicle.vehicle_summary`.
+        sweeps (mapping, optional): Sweep kind (``heave``, ``roll``, ``pitch``, ``rack``) -> input
+            values (SI).
+        columns (mapping, optional): Sweep kind -> ``vehicle_frame`` columns to return (default: all
+            supported).
 
-    Raises
-    ------
-    ValueError
-        If the travel or rack grid of an axle has no node at 0 (the static pose must be a
-        grid node; wheel/ARB rates and statics are read there).
-    UnsupportedColumnError
-        If a requested column is not in :func:`supported_sweep_columns`.
+    Raises:
+        ValueError: If the travel or rack grid of an axle has no node at 0 (the static pose must be
+            a
+            grid node; wheel/ARB rates and statics are read there).
+        UnsupportedColumnError: If a requested column is not in :func:`supported_sweep_columns`.
     """
     for axle in ("front", "rear"):
         if axle not in samples:
@@ -1005,6 +1019,13 @@ def layer_error(vehicles: Sequence[Vehicle], grids: Mapping[str, AxleGrid]) -> p
     each sweep kind and supported column, ``sweep.<kind>.<column>`` = max over the sweep of
     the error versus ``vehicle_frame`` (heave +-20 mm, roll +-0.035 rad, pitch +-0.02 rad,
     rack +-30 mm). A field that is NaN on only one side gives NaN.
+
+    Args:
+        vehicles: Vehicles to evaluate.
+        grids: Grid per axle name.
+
+    Returns:
+        DataFrame with one row per vehicle.
     """
     from suspkin.sweeps import sweep_vehicle, vehicle_frame
 

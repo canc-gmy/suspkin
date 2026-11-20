@@ -186,7 +186,16 @@ def _solve_line(
 def extract_corner(
     vehicle: Vehicle, axle: Literal["front", "rear"], grid: AxleGrid
 ) -> CornerSample:
-    """Solve the left corner (FL or RL) of ``axle`` on ``grid`` and build the channel tensor."""
+    """Solve the left corner (FL or RL) of ``axle`` on ``grid`` and build the channel tensor.
+
+    Args:
+        vehicle: Vehicle model (SI).
+        axle: Axle whose left corner is solved.
+        grid: Travel and rack grid.
+
+    Returns:
+        The channel tensor and validity mask on the grid.
+    """
     corner = build_corners(vehicle)["FL" if axle == "front" else "RL"]
     chans = channels_for(axle)
     n_r, n_t = grid.shape
@@ -219,5 +228,13 @@ def extract_corner(
 
 
 def extract_axles(vehicle: Vehicle, grids: dict[str, AxleGrid]) -> dict[str, CornerSample]:
-    """:func:`extract_corner` for every axle in ``grids`` (keys ``front`` / ``rear``)."""
+    """:func:`extract_corner` for every axle in ``grids`` (keys ``front`` / ``rear``).
+
+    Args:
+        vehicle: Vehicle model (SI).
+        grids: Grid per axle name.
+
+    Returns:
+        Corner sample per axle name.
+    """
     return {axle: extract_corner(vehicle, g.axle, g) for axle, g in grids.items()}

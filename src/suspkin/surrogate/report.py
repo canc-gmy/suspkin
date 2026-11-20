@@ -304,6 +304,14 @@ def write_hpo_report(
     Reads ``models_dir/<axle>/optuna.db`` read-only (safe while the search still runs) and,
     when present, ``hpo_result.json`` and ``model/model.json`` of the axle. The default
     output is ``models_dir/hpo_report.md``; axles without a database are noted, not fatal.
+
+    Args:
+        models_dir: Folder holding one sub-folder per axle.
+        axles: Axle names to include.
+        out: Output Markdown path; ``None`` uses ``models_dir/hpo_report.md``.
+
+    Returns:
+        The written path.
     """
     mdir = Path(models_dir)
     target = Path(out) if out is not None else mdir / "hpo_report.md"

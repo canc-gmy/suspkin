@@ -44,7 +44,15 @@ def _need(df: pd.DataFrame, cols: Sequence[str], what: str) -> None:
 
 
 def plot_rmse_ratio(table: pd.DataFrame, title: str = "") -> Figure:
-    """Horizontal bars of ``RMSE / tolerance`` per channel with the 1.0 pass line."""
+    """Horizontal bars of ``RMSE / tolerance`` per channel with the 1.0 pass line.
+
+    Args:
+        table: Validation table with one row per channel (RMSE and ratio to tolerance).
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(table, ("channel", "ratio"), "validation")
     names = [str(c) for c in table["channel"]]
     ratio = table["ratio"].to_numpy(dtype=float)
@@ -68,7 +76,16 @@ def plot_rmse_ratio(table: pd.DataFrame, title: str = "") -> Figure:
 def plot_parity(
     parity: pd.DataFrame, channels: Sequence[str] | None = None, title: str = ""
 ) -> Figure:
-    """Predicted vs FOM scatter with the identity line, one panel per channel."""
+    """Predicted vs FOM scatter with the identity line, one panel per channel.
+
+    Args:
+        parity: Table of predicted and FOM values per channel.
+        channels: Channels to plot; ``None`` plots all present.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(parity, ("channel", "fom", "pred"), "parity")
     names = list(channels) if channels is not None else list(dict.fromkeys(parity["channel"]))
     if not names:
@@ -98,7 +115,15 @@ def plot_parity(
 
 
 def plot_worst_curves(curves: pd.DataFrame, title: str = "") -> Figure:
-    """FOM (solid) and predicted (dashed) curves of the worst test samples on one channel."""
+    """FOM (solid) and predicted (dashed) curves of the worst test samples on one channel.
+
+    Args:
+        curves: Table of FOM and predicted curves of the worst samples.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(curves, ("rank", "channel", "travel_mm", "fom", "pred"), "worst_curves")
     ranks = sorted({int(r) for r in curves["rank"]})
     if not ranks:
@@ -132,7 +157,15 @@ def _finite(a: NDArray[np.float64]) -> NDArray[np.float64]:
 
 
 def plot_al_progress(al: pd.DataFrame, title: str = "") -> Figure:
-    """Best verified ``f`` and ``f_nn`` / ``f_fom`` of the infill optimum per iteration."""
+    """Best verified ``f`` and ``f_nn`` / ``f_fom`` of the infill optimum per iteration.
+
+    Args:
+        al: Active-learning table, one row per iteration.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(al, ("k", "f_nn", "f_fom", "best_f"), "al")
     k = al["k"].to_numpy(dtype=float)
     cols = (
@@ -164,7 +197,15 @@ def plot_al_progress(al: pd.DataFrame, title: str = "") -> Figure:
 
 
 def plot_al_residual(al: pd.DataFrame, title: str = "") -> Figure:
-    """Curve residual (mean RMSE / tolerance at the infill optimum) per axle and iteration."""
+    """Curve residual (mean RMSE / tolerance at the infill optimum) per axle and iteration.
+
+    Args:
+        al: Active-learning table, one row per iteration and axle.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(al, ("k",), "al")
     cols = [c for c in ("resid_front", "resid_rear") if c in al.columns]
     with use_style():
@@ -187,7 +228,15 @@ def plot_al_residual(al: pd.DataFrame, title: str = "") -> Figure:
 
 
 def plot_al_radius(al: pd.DataFrame, title: str = "") -> Figure:
-    """Trust-region radius per iteration."""
+    """Trust-region radius per iteration.
+
+    Args:
+        al: Active-learning table, one row per iteration.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure.
+    """
     _need(al, ("k", "radius"), "al")
     with use_style():
         fig = Figure(figsize=figure_size("a4_width"), layout="constrained")
@@ -215,6 +264,15 @@ def write_surrogate_figures(
     ``al`` (the active-learning table, skipped if empty) gives ``al_progress``,
     ``al_residual`` and ``al_radius``. ``validation`` gives ``rmse_ratio`` (titled with
     ``axle``); ``parity`` and ``curves`` give ``parity`` and ``worst_curves`` when non-empty.
+
+    Args:
+        fig_dir: Output folder (created if missing).
+        al: Active-learning table.
+        validation: Per-channel validation table.
+        parity: Predicted-vs-FOM table.
+        curves: Worst-curve table.
+        axle: Axle name used in the ``rmse_ratio`` title.
+        dpi: Raster resolution in dots per inch.
     """
     fdir = Path(fig_dir)
     if al is not None and len(al):

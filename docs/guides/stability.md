@@ -51,7 +51,7 @@ The list is snapshotted by `tests/unit/test_public_api.py` (`EXPECTED_ALL`) whic
 that each name imports and has a docstring, so adding or removing a public name is a deliberate,
 reviewed change. Names are imported lazily (`import suspkin` stays cheap, see
 [Architecture](../concepts/architecture.md)). The signatures are in the
-[Python API reference](../reference/api.md).
+[Python API reference](../reference/index.md).
 
 **Not stable:** everything not in `suspkin.__all__`, including the module layout under
 `suspkin.geometry`, `suspkin.kinematics`, `suspkin.metrics`, `suspkin.plotting`,

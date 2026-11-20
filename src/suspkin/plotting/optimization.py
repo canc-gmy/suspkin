@@ -80,7 +80,15 @@ def knee_index(objs: np.ndarray[Any, Any]) -> int:
 def best_so_far(
     values: np.ndarray[Any, Any], valid: np.ndarray[Any, Any] | None = None
 ) -> np.ndarray[Any, Any]:
-    """Running minimum of ``values`` over the ``valid`` entries (NaN before the first one)."""
+    """Running minimum of ``values`` over the ``valid`` entries (NaN before the first one).
+
+    Args:
+        values: Objective values per evaluation, shape ``(n,)``.
+        valid: Boolean mask ``(n,)`` of entries allowed to count; ``None`` means all.
+
+    Returns:
+        Array ``(n,)``; NaN until the first valid entry.
+    """
     v = np.asarray(values, dtype=float).copy()
     if valid is not None:
         v[~np.asarray(valid, dtype=bool)] = np.inf
@@ -169,6 +177,17 @@ def plot_pareto(
     2 objectives: scatter with the connected front. 3: 3D scatter. More: scatter matrix.
     ``objectives`` are history column names (with or without the ``f_`` prefix);
     ``front_mask`` is a boolean per history row (default: computed over the feasible rows).
+
+    Args:
+        history: Optimization history table.
+        objectives: Objective column names; ``None`` uses all ``f_*`` columns except ``f_total``.
+        front_mask: Boolean per history row marking the front.
+
+    Returns:
+        Matplotlib figure.
+
+    Raises:
+        ValueError: A named objective column is missing or fewer than 2 objectives are given.
     """
     cols = _objective_columns(history, objectives)
     if len(cols) < 2:
@@ -277,6 +296,13 @@ def plot_parallel_coordinates(
 
     Feasible rows use a colour scale; infeasible rows are faint grey. ``highlight`` is one
     ``eval_id`` or a sequence of them, drawn thick on top.
+
+    Args:
+        history: Optimization history table (``x_*``, ``f_total``, ``feasible``).
+        highlight: ``eval_id`` or ids to draw thick.
+
+    Returns:
+        Matplotlib figure.
     """
     xcols = _cols(history, "x_")
     if not xcols:
@@ -323,6 +349,13 @@ def plot_constraint_margins(baseline: pd.DataFrame, best: pd.DataFrame) -> Figur
     """Horizontal bars of ``g`` per constraint, baseline vs best (``g > 0`` is infeasible).
 
     Bars are clipped at ``g = +-G_CLIP`` and annotated "clipped" with the true value.
+
+    Args:
+        baseline: Constraint table (with ``g``) of the starting design.
+        best: Constraint table of the best design.
+
+    Returns:
+        Matplotlib figure.
     """
     names = [str(n) for n in baseline["name"]]
     gb = pd.Series(baseline["g"].to_numpy(dtype=float), index=names)

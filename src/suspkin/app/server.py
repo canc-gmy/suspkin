@@ -68,19 +68,16 @@ def create_app(
 ) -> FastAPI:
     """Create the app: ``/api/v1`` plus the built frontend (or a hint page) at ``/``.
 
-    Parameters
-    ----------
-    workspace : Path
-        Root folder; every path the API touches must be inside it.
-    static_dir : Path, optional
-        Built frontend (default ``suspkin/app/static``); may be missing.
-    preload : sequence of Path
-        Paths opened at start-up; failures are logged and skipped.
-    study_params : mapping, optional
-        Overrides for ``run_standard_studies`` (e.g. ``{"steps": 7}``).
-    allowed_hosts : sequence of str
-        Extra ``Host`` header names accepted besides localhost (DNS-rebinding guard); ``"*"``
-        disables the check.
+    Args:
+        workspace (Path): Root folder; every path the API touches must be inside it.
+        static_dir (Path, optional): Built frontend (default ``suspkin/app/static``); may be
+            missing.
+        preload (sequence of Path): Paths opened at start-up; failures are logged and skipped.
+        study_params (mapping, optional): Overrides for ``run_standard_studies`` (e.g. ``{"steps":
+            7}``).
+        allowed_hosts (sequence of str): Extra ``Host`` header names accepted besides localhost
+            (DNS-rebinding guard); ``"*"``
+            disables the check.
     """
     app = FastAPI(title="suspkin app (experimental)", version=__version__)
     manager = DatasetManager(workspace, study_params=study_params)
@@ -88,6 +85,7 @@ def create_app(
 
     hosts = {h.lower() for h in (*_LOCAL_HOSTS, *allowed_hosts)}
 
+    # Reject requests whose Host header is not an allowed local name (DNS-rebinding guard).
     @app.middleware("http")
     async def host_guard(request: Request, call_next: Any) -> Response:
         if "*" not in hosts and _host_name(request.headers.get("host", "")) not in hosts:
@@ -129,6 +127,7 @@ def create_app(
         if (sdir / "assets").is_dir():
             app.mount("/assets", StaticFiles(directory=sdir / "assets"), name="assets")
 
+        # Serve built frontend files; unknown paths fall back to index.html (client routing).
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa(full_path: str) -> Response:
             if full_path.startswith("api/"):
@@ -139,7 +138,7 @@ def create_app(
             return FileResponse(sdir / "index.html")
 
     else:
-
+        # No built frontend found: show a placeholder page.
         @app.get("/", include_in_schema=False)
         def no_frontend() -> HTMLResponse:
             return HTMLResponse(_NO_FRONTEND.format(version=__version__))
@@ -161,6 +160,15 @@ def run(
 
     ``dev``: serve only the API (with CORS for the Vite dev server on port 5173) and print
     the Vite URL; no static files are served and no browser is opened.
+
+    Args:
+        workspace: Root folder served to the API.
+        host: Bind address.
+        port: TCP port.
+        preload: Paths opened at start-up.
+        open_browser: Open the default browser shortly after start (ignored with ``dev``).
+        static_dir: Built frontend folder; ``None`` uses the packaged one.
+        dev: API only, see above.
     """
     import uvicorn
 

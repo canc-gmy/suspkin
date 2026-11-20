@@ -47,6 +47,13 @@ def scene_centres(vehicle: Vehicle, state: VehicleState | None = None) -> SceneC
     Undefined centres (at infinity or degenerate) are ``None``. ``roll_height`` is the ground
     height of the roll centre (the ``rc_*_z`` column of ``vehicle_frame``); ``roll`` is its
     body-frame position, x being the mean contact-patch x of the axle.
+
+    Args:
+        vehicle: Solved-able vehicle model (SI).
+        state: Vehicle pose to evaluate; ``None`` solves the static pose.
+
+    Returns:
+        Instant centres, roll centres and pitch centre as vehicle-frame points [m].
     """
     corners = build_corners(vehicle)
     st = solve_vehicle(vehicle, corners) if state is None else state

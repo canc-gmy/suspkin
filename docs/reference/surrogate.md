@@ -1,66 +1,34 @@
 # Surrogate (experimental)
 
+Neural surrogate models: datasets, training, hyper-parameter search, evaluation, active learning and the vehicle layer. Torch-dependent modules are documented by static analysis, so torch is not needed to build these docs. Background and derivations: [Surrogate](../concepts/surrogate.md).
+
 !!! warning "Experimental"
-    `suspkin.surrogate` may change in minor releases and is not exported in `suspkin.__all__`.
-    Training and inference need the `surrogate` extra (`uv sync --extra surrogate`). The study YAML
-    `surrogate` block is part of the study schema 1 and is documented in the
-    [Study YAML](../guides/study-yaml.md) guide. The design and limitations are in
-    [Architecture section 15](../ARCHITECTURE.md#15-surrogate-v11-experimental).
+    This package may change in minor releases. See [Stability and versioning](../guides/stability.md).
 
-## Channels and dataset
-
-::: suspkin.surrogate.channels
-    options:
-      members:
-        - Channel
-        - CHANNELS
-        - channels_for
+::: suspkin.surrogate.data
 
 ::: suspkin.surrogate.dataset
-    options:
-      members:
-        - sample_axle
-        - load_dataset
-        - DatasetError
 
-## Training and validation
+::: suspkin.surrogate.channels
+
+::: suspkin.surrogate.normalise
+
+::: suspkin.surrogate.model
 
 ::: suspkin.surrogate.train
-    options:
-      members:
-        - TrainConfig
-        - TrainedModel
-        - resolve_device
 
-::: suspkin.surrogate.workflow
-    options:
-      members:
-        - train_surrogate
-        - validate_surrogate
+::: suspkin.surrogate.hpo
 
-## Vehicle layer
-
-::: suspkin.surrogate.vehicle_layer
-    options:
-      members:
-        - vehicle_layer
-        - layer_error
-        - LayerResult
-
-## Optimization on the networks
+::: suspkin.surrogate.report
 
 ::: suspkin.surrogate.evaluate
-    options:
-      members:
-        - SurrogateEvaluator
 
-::: suspkin.surrogate.problem
-    options:
-      members:
-        - SurrogateProblem
+::: suspkin.surrogate.vehicle_layer
 
 ::: suspkin.surrogate.active
-    options:
-      members:
-        - run_active_learning
-        - ActiveResult
+
+::: suspkin.surrogate.active_steps
+
+::: suspkin.surrogate.workflow
+
+::: suspkin.surrogate.problem

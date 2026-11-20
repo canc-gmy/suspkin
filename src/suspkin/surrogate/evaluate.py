@@ -604,20 +604,15 @@ def _used_sweeps(space: DesignSpace) -> tuple[set[str], bool]:
 class SurrogateEvaluator:
     """Evaluate batches of designs on the axle predictors (see the module docstring).
 
-    Parameters
-    ----------
-    space
-        Design space of the study (symmetric variables only).
-    predictors
-        ``{"front": ..., "rear": ...}`` axle predictors with the same grids as the study.
-    chunk
-        Maximum designs per internal batch (memory bound).
+    Args:
+        space: Design space of the study (symmetric variables only).
+        predictors: ``{"front": ..., "rear": ...}`` axle predictors with the same grids as the
+            study.
+        chunk: Maximum designs per internal batch (memory bound).
 
-    Attributes
-    ----------
-    timers
-        Cumulative seconds per stage: ``vehicles``, ``predict``, ``layer``, ``rebuild``
-        (inside ``evaluator``), ``evaluator``.
+    Attributes:
+        timers: Cumulative seconds per stage: ``vehicles``, ``predict``, ``layer``, ``rebuild``
+            (inside ``evaluator``), ``evaluator``.
     """
 
     def __init__(

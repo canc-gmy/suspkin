@@ -46,7 +46,15 @@ _TOL = {c.name: c.tol for c in CHANNELS}
 
 
 def box_bounds(center: ArrayLike, r: float) -> tuple[F64, F64]:
-    """Trust-region box ``[c - r, c + r]`` intersected with the unit cube."""
+    """Trust-region box ``[c - r, c + r]`` intersected with the unit cube.
+
+    Args:
+        center: Box center ``(d,)`` in the normalised design cube.
+        r: Half-width of the box (normalised units).
+
+    Returns:
+        ``(lo, hi)``, each ``(d,)``, clipped to [0, 1].
+    """
     c = np.asarray(center, dtype=np.float64)
     return np.clip(c - r, 0.0, 1.0), np.clip(c + r, 0.0, 1.0)
 
@@ -62,6 +70,13 @@ def hits_boundary(
 
     A side clipped by the unit cube is not a trust-region boundary. ``slack`` (scalar or per
     coordinate) shortens the radius, e.g. by half a grid step when ``x`` was snapped to a grid.
+
+    Args:
+        x: Design ``(d,)`` in the normalised cube.
+        center: Trust-region center ``(d,)``.
+        r: Trust-region radius (normalised units).
+        rtol: Relative tolerance on ``r`` for "reaches".
+        slack: Scalar or ``(d,)`` radius reduction (normalised units).
     """
     d = np.abs(np.asarray(x, dtype=np.float64) - np.asarray(center, dtype=np.float64))
     return bool(np.any(d >= (r - np.asarray(slack, dtype=np.float64)) * (1.0 - rtol)))
@@ -83,6 +98,18 @@ def trust_ratio(
     improvement was predicted (the caller shrinks), ``0`` when the FOM finds the point
     infeasible. Without a feasible verified design the ``f`` comparison is meaningless: a
     feasible FOM result gives 1, a smaller ``max_g`` gives 0.5, anything else 0.
+
+    Args:
+        f_best: Weighted objective ``f_total`` of the best verified design.
+        f_nn: Surrogate prediction of ``f_total`` at the infill optimum.
+        f_fom: FOM value of ``f_total`` at the infill optimum.
+        feasible_fom: The FOM finds the infill optimum feasible.
+        feasible_best: The best verified design is feasible.
+        max_g_fom: Largest normalised ``g`` of the infill optimum on the FOM.
+        max_g_best: Largest normalised ``g`` of the best verified design.
+
+    Returns:
+        The ratio ``rho`` (dimensionless), possibly ``nan``.
     """
     if not feasible_best:
         if feasible_fom:
@@ -101,6 +128,15 @@ def update_radius(r: float, rho: float, hit_boundary: bool, tr: TrustRegionSpec)
 
     ``rho > 0.75`` and the step reached the boundary: double (up to ``max``); ``rho < 0.25``
     or undefined: halve (down to ``min``); otherwise keep.
+
+    Args:
+        r: Current radius (normalised units).
+        rho: Ratio from :func:`trust_ratio`.
+        hit_boundary: The infill optimum reached the trust-region boundary.
+        tr: Trust-region settings (``min``, ``max``).
+
+    Returns:
+        New radius (normalised units).
     """
     if math.isnan(rho) or rho < 0.25:
         return max(r / 2.0, tr.min)
@@ -119,7 +155,17 @@ class StopState:
 
 
 def advance_stop(state: StopState, *, agree: bool, improved: bool, at_min: bool) -> StopState:
-    """Counters after one iteration (``at_min``: radius at its minimum without improvement)."""
+    """Counters after one iteration (``at_min``: radius at its minimum without improvement).
+
+    Args:
+        state: Counters before the iteration.
+        agree: Prediction and FOM agreed within tolerance.
+        improved: The best verified design improved.
+        at_min: Radius is at its minimum.
+
+    Returns:
+        Updated counters.
+    """
     return StopState(
         agree=state.agree + 1 if agree else 0,
         stale=0 if improved else state.stale + 1,
@@ -141,6 +187,18 @@ def stop_reason(
 
     Order: ``agreement``, ``stagnation``, ``radius_min``, ``max_iterations``, ``fom_budget``,
     ``time_budget``. Budget overrides replace the ``al`` values.
+
+    Args:
+        state: Stopping counters.
+        iterations_done: Iterations finished so far.
+        n_fom: FOM evaluations spent so far.
+        elapsed: Wall time spent [s].
+        al: Active-learning settings with the thresholds.
+        fom_budget: Overrides the FOM-evaluation limit of ``al``.
+        time_budget: Overrides the time limit of ``al`` [s].
+
+    Returns:
+        Rule name, or ``None`` to continue.
     """
     p = al.stop.patience
     if state.agree >= p:
@@ -203,6 +261,22 @@ def select_infill(
     infeasible) and the candidates the next best distinct designs. Pareto mode: ``x_star`` is
     the knee of the predicted front and the candidates the points with the largest crowding
     distance; without a feasible front point it falls back to the weighted rule.
+
+    Args:
+        sur_history: History of the surrogate run of this iteration.
+        study: Study specification.
+        mode: ``"weighted"`` or ``"pareto"``.
+        top: Number of further candidates.
+        perturb: Number of random perturbations.
+        lo: Lower bound ``(d,)`` of the trust-region box (normalised).
+        hi: Upper bound ``(d,)`` of the trust-region box (normalised).
+        r: Trust-region radius (normalised units).
+        rng: Random generator for the perturbations.
+        known: Already evaluated designs (tuples of floats) to skip.
+        quantise: Maps a design to its grid-snapped version.
+
+    Returns:
+        ``(x_star, X)``: ``x_star`` has shape ``(d,)``, ``X`` has shape ``(m, d)``.
     """
     xcols = [c for c in sur_history.columns if c.startswith("x_")]
     xs = sur_history[xcols].to_numpy(dtype=np.float64)
@@ -253,6 +327,15 @@ def curve_residual(
     """Mean over channels of ``RMSE / tol`` on the FOM-valid grid nodes (``nan`` if none).
 
     ``y_pred`` and ``y_fom`` are ``(C, R, T)`` in physical units, ``mask`` is ``(R, T)``.
+
+    Args:
+        y_pred: Predicted curves ``(C, R, T)`` in physical units.
+        y_fom: FOM curves ``(C, R, T)`` in physical units.
+        mask: FOM-valid grid nodes ``(R, T)``.
+        channels: Channel names (``C`` of them), used for their tolerances.
+
+    Returns:
+        Mean RMSE / tolerance (dimensionless), ``nan`` if no node is valid.
     """
     if not mask.any():
         return math.nan
@@ -428,6 +511,11 @@ class BoxProblem:
 
 
 def is_improved(old: dict[str, Any], new: dict[str, Any], min_gain: float) -> bool:
+    """True if history row ``new`` beats ``old``.
+
+    Feasible beats infeasible; two feasible rows compare ``f`` (gain above ``min_gain``); two
+    infeasible rows compare ``max_g`` (gain above 1e-9).
+    """
     if new["feasible"] and not old["feasible"]:
         return True
     if new["feasible"] and old["feasible"]:
@@ -438,7 +526,12 @@ def is_improved(old: dict[str, Any], new: dict[str, Any], min_gain: float) -> bo
 
 
 def dominated(obj: ArrayLike, front: F64) -> bool:
-    """True if some row of ``front`` is <= ``obj`` everywhere and < somewhere."""
+    """True if some row of ``front`` is <= ``obj`` everywhere and < somewhere.
+
+    Args:
+        obj: Objective vector ``(m,)``.
+        front: Objective rows ``(k, m)``.
+    """
     o = np.asarray(obj, dtype=np.float64)
     if len(front) == 0:
         return False
@@ -467,6 +560,12 @@ def finetune_decision(
     whatever the residual), ``"trigger"`` (residual of the new point within ``ft.trigger``,
     tolerance units) or ``"stall"`` (skip window after repeated kept-init fine-tunes, unless
     the residual exceeds ``ft.stall_override * ft.trigger``). A non-finite residual trains.
+
+    Args:
+        resid: Curve residual of the new point (tolerance units).
+        state: Fine-tuning state of the axle.
+        ft: Fine-tuning settings.
+        device_type: ``"cuda"`` or ``"cpu"``.
     """
     if device_type == "cpu" and ft.on_cpu == "skip":
         return False, "cpu"
@@ -486,6 +585,15 @@ def advance_finetune(
 
     A skip uses up one skip iteration. A fine-tune that kept the init weights counts towards
     ``ft.skip_after`` (then ``ft.skip_for`` skips start); an improving one resets the count.
+
+    Args:
+        state: State before the iteration.
+        skipped: The fine-tune was skipped.
+        kept: The fine-tune kept the initial weights.
+        ft: Fine-tuning settings.
+
+    Returns:
+        Updated state.
     """
     if skipped:
         return FinetuneState(state.kept_run, max(state.skip_left - 1, 0))
@@ -498,7 +606,16 @@ def advance_finetune(
 def replay_finetune_state(
     rows: list[dict[str, Any]], axle: Axle, ft: FinetuneSpec
 ) -> FinetuneState:
-    """Rebuild the fine-tuning state of ``axle`` from the rows of an earlier al.csv."""
+    """Rebuild the fine-tuning state of ``axle`` from the rows of an earlier al.csv.
+
+    Args:
+        rows: Rows of the earlier ``al.csv`` as dicts.
+        axle: Axle whose state is rebuilt.
+        ft: Fine-tuning settings.
+
+    Returns:
+        The state after the last recorded iteration.
+    """
     st = FinetuneState()
     for rw in rows:
         skipped = bool(rw.get(f"skipped_{axle}", False))

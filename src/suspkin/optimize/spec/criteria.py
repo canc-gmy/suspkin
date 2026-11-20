@@ -226,7 +226,19 @@ Constraint = Annotated[
 
 
 def raw_sweep(sweeps: Mapping[str, Any], name: Any) -> tuple[str, Dim, Mapping[str, Any]]:
-    """(kind, input dim, raw) of the named raw sweep; helpful errors."""
+    """(kind, input dim, raw) of the named raw sweep; helpful errors.
+
+    Args:
+        sweeps: Raw ``sweeps`` mapping of the study YAML.
+        name: Sweep name referenced by a constraint or objective.
+
+    Returns:
+        ``(kind, input_dim, raw)``: ``"corner"`` or ``"vehicle"``, the dimension of the sweep
+        input and the raw sweep mapping.
+
+    Raises:
+        ValueError: Unknown sweep name (with close-match hint) or invalid kind/input.
+    """
     if not isinstance(name, str) or name not in sweeps:
         close = difflib.get_close_matches(str(name), list(sweeps), n=2, cutoff=0.5)
         hint = f"; did you mean {', '.join(repr(c) for c in close)}?" if close else ""
@@ -243,7 +255,18 @@ def raw_sweep(sweeps: Mapping[str, Any], name: Any) -> tuple[str, Dim, Mapping[s
 
 
 def prep_constraint(raw: Any, sweeps: Mapping[str, Any]) -> Any:
-    """Parse the unit-carrying fields of a raw constraint into SI (needs the sweeps)."""
+    """Parse the unit-carrying fields of a raw constraint into SI (needs the sweeps).
+
+    Args:
+        raw: Raw constraint mapping from the YAML (strings with units allowed).
+        sweeps: Raw ``sweeps`` mapping, used to find the dimension of the metric.
+
+    Returns:
+        The mapping with limits, targets and scales converted to SI floats.
+
+    Raises:
+        ValueError: Unknown sweep or unparsable quantity.
+    """
     if not isinstance(raw, Mapping):
         return raw
     out = dict(raw)
@@ -453,7 +476,10 @@ class Budget(Frozen):
 
 
 class Optimizer(Frozen):
-    """Optimizer block (the drivers live in a later slice)."""
+    """Optimizer block: mode, method, seed, workers, budget, start design and driver options.
+
+    The drivers that consume it live in :mod:`suspkin.optimize.drivers`.
+    """
 
     mode: Literal["weighted", "pareto"] = "weighted"
     method: Literal["nsga2", "de", "slsqp", "trust-constr", "de+slsqp"] = "de+slsqp"
@@ -491,7 +517,15 @@ def prep_optimizer(raw: Any) -> Any:
 
 
 def objective_dim(sweeps: Mapping[str, CornerSweep | VehicleSweep], o: Any) -> Dim:
-    """Dimension of the raw value of an objective (SI); the sweep must exist."""
+    """Dimension of the raw value of an objective (SI); the sweep must exist.
+
+    Args:
+        sweeps: Parsed sweeps of the study.
+        o: Objective model.
+
+    Returns:
+        Physical dimension of the objective's raw value (SI).
+    """
     if o.sweep is None:
         return summary_metric_dim(o.metric)
     sw = sweeps[o.sweep]
@@ -502,7 +536,15 @@ def objective_dim(sweeps: Mapping[str, CornerSweep | VehicleSweep], o: Any) -> D
 
 
 def objective_scale(o: Any, dim: Dim) -> float | None:
-    """Normalisation scale (SI): user ``scale``, else the dim default, else ``|target|``."""
+    """Normalisation scale (SI): user ``scale``, else the dim default, else ``|target|``.
+
+    Args:
+        o: Objective model.
+        dim: Dimension of its raw value, see :func:`objective_dim`.
+
+    Returns:
+        Scale in SI units, or ``None`` when no default exists and none was given.
+    """
     if o.scale is not None:
         return float(o.scale)
     d = default_scale(dim)
@@ -520,7 +562,18 @@ def _seq_any(v: Any, what: str) -> list[Any]:
 
 
 def prep_objective(raw: Any, sweeps: Mapping[str, Any]) -> Any:
-    """Parse the unit-carrying fields of a raw objective into SI (needs the sweeps)."""
+    """Parse the unit-carrying fields of a raw objective into SI (needs the sweeps).
+
+    Args:
+        raw: Raw objective mapping from the YAML (strings with units allowed).
+        sweeps: Raw ``sweeps`` mapping, used to find the dimension of the metric.
+
+    Returns:
+        The mapping with targets and scales converted to SI floats.
+
+    Raises:
+        ValueError: Unknown sweep or unparsable quantity.
+    """
     if not isinstance(raw, Mapping):
         return raw
     out = dict(raw)

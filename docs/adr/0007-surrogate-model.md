@@ -4,7 +4,7 @@ Status: accepted (experimental). Date: 2026-11-18, amended 2026-11-19 (released 
 
 ## Context
 
-One full-order-model (FOM) design evaluation cost about 240 ms (historical, measured 2026-11-18/19, DESIGN_PLAN section 13), so a search of tens of
+One full-order-model (FOM) design evaluation cost about 240 ms (historical, measured 2026-11-18/19, former design plan section 13, git history), so a search of tens of
 thousands of designs takes hours. The kinematics are smooth in the hardpoints, so a neural
 network can predict the corner curves much faster. The risk is trusting a network where it is
 wrong: a reported design must be the true result, not a prediction.
@@ -37,7 +37,7 @@ verified by the FOM**; the surrogate only proposes designs.
   anti-features, steering) come from an analytic, vectorised layer built on the curves
   (`suspkin.surrogate.vehicle_layer`), never from the network. Its error is measured
   separately from the network error and is far below the tolerances (for example roll-centre
-  height about $10^{-13}$ mm; historical, measured 2026-11-18/19, DESIGN_PLAN section 13). Curves are interpolated with local cubic Hermite splines;
+  height about $10^{-13}$ mm; historical, measured 2026-11-18/19, former design plan section 13, git history). Curves are interpolated with local cubic Hermite splines;
   queries outside the grid or touching a masked node give NaN, never an extrapolation.
 
 **Data.** Latin-hypercube sampling (`random-cd` optimisation up to 5000 samples, none above),
@@ -79,7 +79,7 @@ surrogate as a later (v3.x) feature, then as v0.9.0; it shipped as 1.1.0.
 
 ## Consequences
 
-* Historical measurements (2026-11-18/19, DESIGN_PLAN section 13): a surrogate evaluation was
+* Historical measurements (2026-11-18/19, former design plan section 13, git history): a surrogate evaluation was
   about 2.5 to 3 ms per design (batch 1024; network plus constraint logic, not the forward
   pass alone) against about 240 ms for the FOM, and the vehicle layer about 0.46 ms per
   design (batch 256).

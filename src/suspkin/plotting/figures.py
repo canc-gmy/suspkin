@@ -262,6 +262,13 @@ def fig_corner_alignment(datasets: Datasets, axle: str = "front") -> Figure:
     """Camber, toe (bump steer), caster, KPI, scrub radius, mechanical trail vs wheel travel.
 
     ``datasets``: corner frames (one corner per frame; ``axle`` only labels the title).
+
+    Args:
+        datasets: Sequence of ``(label, DataFrame)``; one curve per dataset (SI columns).
+        axle: ``"front"`` or ``"rear"``; only used in the title.
+
+    Returns:
+        Matplotlib figure (angles shown in deg, lengths in mm).
     """
     _check(datasets, "datasets")
     panels = _PANELS["fig_corner_alignment"]
@@ -272,6 +279,13 @@ def fig_corner_position(datasets: Datasets, axle: str = "front") -> Figure:
     """Half-track change, contact-patch shift, wheel-centre recession, wheelbase change.
 
     ``datasets``: corner frames (one corner per frame).
+
+    Args:
+        datasets: Sequence of ``(label, DataFrame)``; one curve per dataset (SI columns).
+        axle: ``"front"`` or ``"rear"``; only used in the title.
+
+    Returns:
+        Matplotlib figure (lengths in mm).
     """
     _check(datasets, "datasets")
     panels = _PANELS["fig_corner_position"]
@@ -283,6 +297,13 @@ def fig_corner_centres(datasets: Datasets, axle: str = "front") -> Figure:
 
     ``datasets``: corner frames. Instant centres at infinity (nan/inf) are dropped and
     annotated.
+
+    Args:
+        datasets: Sequence of ``(label, DataFrame)``; one curve per dataset (SI columns).
+        axle: ``"front"`` or ``"rear"``; only used in the title.
+
+    Returns:
+        Matplotlib figure (lengths in mm, angles in deg).
     """
     _check(datasets, "datasets")
     panels = _PANELS["fig_corner_centres"]
@@ -295,6 +316,13 @@ def fig_actuation(datasets: Datasets, axle: str = "front") -> Figure:
     ``datasets``: corner frames after ``add_gradients`` (``mr_spring``, ``wheel_rate`` ...);
     ``coilover_length`` and ``toggle_margin`` appear when the frame has them
     (``states_to_frame`` columns merged in).
+
+    Args:
+        datasets: Sequence of ``(label, DataFrame)``; one curve per dataset (SI columns).
+        axle: ``"front"`` or ``"rear"``; only used in the title.
+
+    Returns:
+        Matplotlib figure.
     """
     _check(datasets, "datasets")
     panels = _PANELS["fig_actuation"]
@@ -405,6 +433,15 @@ def fig_steering(
     point spacing of the frame). With ``c_factor`` [m/rev] the last panel shows the
     differential steering ratio (handwheel / mean road wheel), otherwise the steer gain
     [deg/mm].
+
+    Args:
+        datasets: Sequence of ``(label, DataFrame)`` of vehicle rack-sweep frames (SI).
+        wheelbase: Wheelbase [m] used when a frame has no ``wheelbase`` column.
+        track: Front track [m]; default the contact-point spacing of the frame.
+        c_factor: Rack travel per handwheel revolution [m/rev]; selects the steering-ratio panel.
+
+    Returns:
+        Matplotlib figure.
     """
     _check(datasets, "datasets")
     derived: list[tuple[str, pd.DataFrame]] = [
@@ -489,6 +526,13 @@ def fig_heave_pitch(datasets_heave: Datasets, datasets_pitch: Datasets) -> Figur
 
     ``datasets_heave`` / ``datasets_pitch``: vehicle frames of a heave / pitch sweep (either
     may be empty, not both). Panel line styles as in :func:`fig_roll`.
+
+    Args:
+        datasets_heave: Sequence of ``(label, DataFrame)`` of heave-sweep frames (SI).
+        datasets_pitch: Sequence of ``(label, DataFrame)`` of pitch-sweep frames (SI).
+
+    Returns:
+        Matplotlib figure.
     """
     _check(datasets_heave, "datasets_heave", allow_empty=True)
     _check(datasets_pitch, "datasets_pitch", allow_empty=True)
@@ -522,6 +566,13 @@ def fig_summary_table(summary: object, title: str = "Vehicle summary") -> Figure
 
     ``summary`` is a ``VehicleSummary`` (or any dataclass) or its ``to_dict()`` mapping
     (nested ``front`` / ``rear``). Missing fields are left out, nan values show as "-".
+
+    Args:
+        summary: ``VehicleSummary``, other dataclass, or its ``to_dict()`` mapping.
+        title: Figure title.
+
+    Returns:
+        Matplotlib figure containing the table.
     """
     if not (isinstance(summary, Mapping) or is_dataclass(summary)):
         raise TypeError("summary must be a dataclass or a mapping")
@@ -591,7 +642,14 @@ def save_figure(
     formats: Sequence[str] = ("png", "svg"),
     dpi: int = 200,
 ) -> list[Path]:
-    """Save ``fig`` as ``<path stem>.<fmt>`` for every format; returns the written paths."""
+    """Save ``fig`` as ``<path stem>.<fmt>`` for every format; returns the written paths.
+
+    Args:
+        fig: Matplotlib figure.
+        path: Target path; any suffix is replaced by each format's extension.
+        formats: Image formats, e.g. ``("png", "svg")``.
+        dpi: Raster resolution in dots per inch.
+    """
     base = Path(path)
     base.parent.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []

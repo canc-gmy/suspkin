@@ -64,18 +64,14 @@ def run_standard_studies(
 ) -> StudyResults:
     """Run the standard studies of ``vehicle``.
 
-    Parameters
-    ----------
-    travel : float
-        Corner bump/droop range +-``travel`` [m] for the FL and RL corners.
-    rack : float, optional
-        Rack sweep +-``rack`` [m]; default the full rack travel of the front axle.
-    roll_deg, pitch_deg : float
-        Body roll / pitch range +-value [deg].
-    heave : float
-        Body heave range +-``heave`` [m].
-    steps : int
-        Points per sweep (>= 3; odd values include the static pose).
+    Args:
+        travel (float): Corner bump/droop range +-``travel`` [m] for the FL and RL corners.
+        rack (float, optional): Rack sweep +-``rack`` [m]; default the full rack travel of the front
+            axle.
+        roll_deg (float): Body roll / pitch range +-value [deg].
+        pitch_deg (float): Body roll / pitch range +-value [deg].
+        heave (float): Body heave range +-``heave`` [m].
+        steps (int): Points per sweep (>= 3; odd values include the static pose).
     """
     if steps < 3:
         raise ValueError("steps must be >= 3")
@@ -83,6 +79,7 @@ def run_standard_studies(
     tr = np.linspace(-travel, travel, steps)
 
     def corner_frame(cid: str) -> pd.DataFrame:
+        # Travel sweep of one corner as a metrics table with gradients.
         c = corners[cid]  # type: ignore[index]
         return add_gradients(states_to_frame(sweep_corner(c, tr), c, metrics=True))
 

@@ -80,7 +80,16 @@ class VehicleScene:
 
 
 def ground_quad(scene: VehicleScene, lo: Vec, hi: Vec) -> Vec:
-    """Corners (4, 3) of the ground plane above the xy rectangle ``lo``..``hi``."""
+    """Corners (4, 3) of the ground plane above the xy rectangle ``lo``..``hi``.
+
+    Args:
+        scene: Vehicle scene (gives the possibly tilted ground plane).
+        lo: Lower corner ``(3,)`` [m]; only x and y are used.
+        hi: Upper corner ``(3,)`` [m]; only x and y are used.
+
+    Returns:
+        Array ``(4, 3)`` of corner coordinates [m], z on the ground plane.
+    """
     n, p0 = scene.ground_normal, scene.ground_point
     xy = np.array([[lo[0], lo[1]], [hi[0], lo[1]], [hi[0], hi[1]], [lo[0], hi[1]]])
     z = p0[2] - (n[0] * (xy[:, 0] - p0[0]) + n[1] * (xy[:, 1] - p0[1])) / n[2]
@@ -171,20 +180,18 @@ def _add_corner(
 def vehicle_segments(vehicle: Vehicle, state: VehicleState | None = None) -> VehicleScene:
     """Build the drawable scene of a vehicle, static or at a solved pose.
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-    state : VehicleState, optional
-        Solved pose. Moved points come from each ``CornerState`` and the ARB from
-        ``ArbState``; the wheel circle uses ``spin_axis`` and the ground plane is
-        tilted by ``state.ground_normal`` through the contact points. Without it the
-        static hardpoints and the plane z = 0 are used. The body frame is fixed.
+    Args:
+        vehicle (Vehicle):
+        state (VehicleState, optional): Solved pose. Moved points come from each ``CornerState`` and
+            the ARB from
+            ``ArbState``; the wheel circle uses ``spin_axis`` and the ground plane is
+            tilted by ``state.ground_normal`` through the contact points. Without it the
+            static hardpoints and the plane z = 0 are used. The body frame is fixed.
 
-    Returns
-    -------
-    VehicleScene
-        ``segments`` maps each group of ``GROUP_COLORS`` (except ``"wheel"``) to a list
-        of ``(p0, p1)`` pairs; wheel circles are polylines in ``wheels``.
+    Returns:
+        VehicleScene: ``segments`` maps each group of ``GROUP_COLORS`` (except ``"wheel"``) to a
+            list
+            of ``(p0, p1)`` pairs; wheel circles are polylines in ``wheels``.
     """
     corners = build_corners(vehicle)
     acc: dict[str, object] = {
@@ -253,7 +260,15 @@ def draw_scene(
     show_labels: bool = False,
     title: str = "",
 ) -> None:
-    """Draw a scene into 3D axes with limits from ``bounds`` (default: the scene's own)."""
+    """Draw a scene into 3D axes with limits from ``bounds`` (default: the scene's own).
+
+    Args:
+        ax: 3D matplotlib axes (modified in place).
+        scene: Vehicle scene with points and links in m.
+        bounds: ``(lo, hi)`` axis limits [m]; ``None`` uses the scene's own.
+        show_labels: Annotate hardpoint names.
+        title: Axes title.
+    """
     for group, items in scene.segments.items():
         for a, b in items:
             ax.plot(
@@ -313,19 +328,15 @@ def plot_vehicle_3d(
     The body frame stays fixed; with ``state`` the links, wheels, rockers, coilovers and
     ARBs are drawn at their solved positions and the ground plane is tilted/shifted.
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-    ax : Axes3D, optional
-        Existing 3D axes to draw into; a new figure is created if omitted.
-    state : VehicleState, optional
-        Solved pose from ``solve_vehicle``; static geometry if omitted.
-    show_labels : bool
-        Annotate hardpoints with their names.
+    Args:
+        vehicle (Vehicle):
+        ax (Axes3D, optional): Existing 3D axes to draw into; a new figure is created if omitted.
+        state (VehicleState, optional): Solved pose from ``solve_vehicle``; static geometry if
+            omitted.
+        show_labels (bool): Annotate hardpoints with their names.
 
-    Returns
-    -------
-    matplotlib.figure.Figure
+    Returns:
+        matplotlib.figure.Figure:
     """
     if ax is None:
         fig = Figure(figsize=(9, 6))

@@ -53,7 +53,15 @@ def is_snapshot_file(path: Path) -> bool:
 
 
 def build_snapshot(manager: DatasetManager, *, include_scene: bool = True) -> dict[str, Any]:
-    """Everything the frontend reads from a snapshot (JSON-safe)."""
+    """Everything the frontend reads from a snapshot (JSON-safe).
+
+    Args:
+        manager: Dataset manager holding the open revisions.
+        include_scene: Also embed the 3D scene of each revision.
+
+    Returns:
+        JSON-safe dict with datasets, tables, summaries and optional scenes.
+    """
     datasets = manager.list()
     tables = {
         d.id: {
@@ -109,7 +117,17 @@ def export_dataset_snapshot(
     include_scene: bool = True,
     template: Path | None = None,
 ) -> int:
-    """Write the open datasets of ``manager`` as a snapshot page; returns the size in bytes."""
+    """Write the open datasets of ``manager`` as a snapshot page; returns the size in bytes.
+
+    Args:
+        manager: Dataset manager holding the open revisions.
+        out_html: Output ``.html`` path.
+        include_scene: Also embed the 3D scene of each revision.
+        template: Frontend HTML template; ``None`` uses the built one.
+
+    Returns:
+        Size of the written file in bytes.
+    """
     tpl = template if template is not None else DEFAULT_SINGLE_DIR / "index.html"
     if not tpl.is_file():
         raise FileNotFoundError(
@@ -148,6 +166,13 @@ def export_snapshot(
     """Open ``paths`` (inside ``workspace``) and write a self-contained snapshot page.
 
     Returns the size of ``out_html`` in bytes. Only the given paths are opened.
+
+    Args:
+        paths: Bundles, run folders or vehicle YAML files to open.
+        out_html: Output ``.html`` path.
+        workspace: Root folder; every path must lie inside it.
+        include_scene: Also embed the 3D scene of each revision.
+        template: Frontend HTML template; ``None`` uses the built one.
     """
     manager = DatasetManager(Path(workspace))
     for p in paths:

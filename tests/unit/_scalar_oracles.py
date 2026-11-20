@@ -2,7 +2,7 @@
 
 These were the per-state reference implementations in ``suspkin.metrics.corner``; the
 package computes the same columns with the vectorised ``metrics.arrays`` and
-``kinematics.batch``. Sign conventions: see DESIGN_PLAN sections 5.1, 5.2 and 5.5.
+``kinematics.batch``. Sign conventions: see docs/concepts/conventions.md.
 All return SI floats (m, rad, N, N/m); metrics relative to a static pose take it explicitly.
 """
 

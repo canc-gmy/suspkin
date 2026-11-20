@@ -10,7 +10,12 @@ from suspkin.geometry import Vehicle, VehicleConfigError, load_vehicle
 
 
 def fail(msg: str, code: int = 1) -> NoReturn:
-    """Print ``msg`` to stderr and exit with ``code``."""
+    """Print ``msg`` to stderr and exit with ``code``.
+
+    Args:
+        msg: Message for stderr.
+        code: Process exit code.
+    """
     typer.echo(msg, err=True)
     raise typer.Exit(code=code)
 

@@ -202,6 +202,19 @@ def masked_loss(
     ``z`` is ``(B, C*R*T)``, ``mask`` ``(B, R*T)`` bool, ``w`` ``(B,)``. Masked entries of
     ``z`` never influence the value or the gradients. With ``pod_components`` the
     regression output holds POD coefficients that are decoded first.
+
+    Args:
+        reg: Regression output (standardised curves or POD coefficients).
+        logits: Validity logits ``(B, R*T)``.
+        z: Standardised target curves ``(B, C*R*T)``.
+        mask: Valid grid nodes ``(B, R*T)``, bool.
+        w: Sample weights ``(B,)``.
+        lam_feas: Weight of the validity BCE term.
+        pod_components: POD basis used to decode ``reg``; ``None`` if not used.
+        n_channels: Number of channels ``C``.
+
+    Returns:
+        Scalar loss.
     """
     pred = reg @ pod_components if pod_components is not None else reg
     b = z.shape[0]
@@ -413,6 +426,18 @@ def train(
     instead of building them. With ``init`` the patience counts epochs without a new best
     score of this run (the score of ``init`` is not the reference), so a slow start still
     gets its ``patience`` epochs.
+
+    Args:
+        ds: Axle dataset (train and validation splits).
+        mcfg: Network architecture.
+        tcfg: Training settings.
+        init: Model to fine-tune; see above.
+        report: Callback ``(epoch, val_score)``.
+        extra_val: Second scoring set; see above.
+        cache: Prebuilt splits for fine-tuning; see above.
+
+    Returns:
+        The trained model (best validation weights).
     """
     torch.manual_seed(tcfg.seed)
     # Process-wide switch (not restored): deterministic kernels where available, warn otherwise.
@@ -550,7 +575,18 @@ def predict_physical(
     device: torch.device | str = "cpu",
     batch_size: int = 4096,
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Curves ``(B, C, R, T)`` in physical units and validity probabilities ``(B, R, T)``."""
+    """Curves ``(B, C, R, T)`` in physical units and validity probabilities ``(B, R, T)``.
+
+    Args:
+        model: Trained model.
+        X: Designs ``(B, d)`` in the axle unit cube.
+        net: Prebuilt network to reuse; ``None`` builds it from ``model``.
+        device: Torch device.
+        batch_size: Designs per forward pass.
+
+    Returns:
+        ``(curves, valid)``: curves ``(B, C, R, T)`` and probabilities ``(B, R, T)``.
+    """
     dev = torch.device(device)
     net = net if net is not None else model.build_network(dev)
     c, r, t = model.curve_shape
@@ -619,6 +655,16 @@ def evaluate(
     """Masked RMSE per channel (physical units) and ``mean(RMSE/tol)`` on a split.
 
     ``split=None`` uses the whole dataset. Worst-sample indices refer to the subset.
+
+    Args:
+        model: Trained model.
+        ds: Dataset to score.
+        split: Split code to use (default validation); ``None`` uses all rows.
+        device: Torch device.
+        n_worst: Number of worst samples to report.
+
+    Returns:
+        Per-channel RMSE and the aggregate score.
     """
     sub = ds if split is None else ds.subset(int(split))
     if sub.channels != model.channels:

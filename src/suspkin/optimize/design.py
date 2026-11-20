@@ -77,6 +77,7 @@ class _Slot:
 
     @property
     def n(self) -> int:
+        """Number of axes (scalar variables) in this block."""
         return len(self.axes)
 
 

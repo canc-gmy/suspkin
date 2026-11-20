@@ -160,6 +160,16 @@ def build_report(
     ``include_3d`` also the static 3D view and a GIF of the roll sweep of
     ``vehicle_for_3d``, default the first design), ``report.html`` (self-contained,
     images embedded) and ``report.md`` (links to the figure files).
+
+    Args:
+        results: Design label to study results (SI tables), see :mod:`suspkin.report.studies`.
+        out_dir: Report folder (created if missing).
+        formats: Static image formats for the figures (e.g. ``"png"``, ``"svg"``).
+        include_3d: Also write the static 3D view and the roll-sweep GIF.
+        vehicle_for_3d: Vehicle drawn in 3D; default the first design's vehicle.
+
+    Returns:
+        Path: Path of ``report.html``.
     """
     if not results:
         raise ValueError("results must contain at least one (label, StudyResults) pair")

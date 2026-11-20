@@ -86,6 +86,13 @@ def assign_split(seed: int, rows: ArrayLike) -> NDArray[np.uint8]:
 
     A splitmix64 hash of ``(seed, row)`` gives a uniform number per row; the result does not
     depend on the other rows or on the dataset size.
+
+    Args:
+        seed: Dataset seed.
+        rows: LHS row indices ``(n,)``.
+
+    Returns:
+        ``uint8`` codes ``(n,)``: train, validation or test.
     """
     r = np.asarray(rows, dtype=np.int64).astype(np.uint64)
     golden = 0x9E3779B97F4A7C15
@@ -126,7 +133,16 @@ def _design_space_hash(space: DesignSpace, aspace: AxleSpace) -> str:
 
 
 def bytes_per_sample(d: int, channels: int, grid: AxleGrid) -> int:
-    """Uncompressed bytes of one sample in a shard (``Y`` float32, the rest as stored)."""
+    """Uncompressed bytes of one sample in a shard (``Y`` float32, the rest as stored).
+
+    Args:
+        d: Number of design variables.
+        channels: Number of channels.
+        grid: Travel and rack grid.
+
+    Returns:
+        Size in bytes.
+    """
     n_r, n_t = grid.shape
     # Y + mask + X + row + weight + feasible + split + source ('<U3' = 12 bytes)
     return channels * n_r * n_t * 4 + n_r * n_t + d * 8 + 8 + 8 + 1 + 1 + 12
@@ -273,6 +289,14 @@ def check_dataset_matches(study_path: str | Path, out_dir: str | Path, axle: Axl
     Compares the grid, design-space and vehicle hashes of ``out_dir/dataset/<axle>/meta.json``
     with the study, and its channel list with the current registry; the message names the
     first differing item.
+
+    Args:
+        study_path: Study YAML.
+        out_dir: Surrogate output folder containing ``dataset/``.
+        axle: Axle to check.
+
+    Raises:
+        DatasetError: The dataset was built for another study (message names the item).
     """
     now = _current_hashes(study_path, axle)
     adir = _meta_dir(out_dir, axle)
@@ -291,6 +315,14 @@ def check_model_matches(study_path: str | Path, model_dir: str | Path, axle: Axl
 
     Compares the hashes stored in the model meta (copied from its dataset) and the model
     channels with the current study and registry; the message names the differing item.
+
+    Args:
+        study_path: Study YAML.
+        model_dir: Folder of the trained model.
+        axle: Axle to check.
+
+    Raises:
+        DatasetError: The model was trained for another study (message names the item).
     """
     mdir = Path(model_dir)
     info = json.loads((mdir / "model.json").read_text(encoding="utf-8"))
@@ -338,22 +370,16 @@ def sample_axle(
     rest is computed; the result equals an uninterrupted run. Without ``resume`` a non-empty
     dataset directory is refused.
 
-    Parameters
-    ----------
-    n
-        Number of LHS rows (default: ``surrogate.dataset.n_initial``).
-    workers
-        ``None`` or 1: in process; an integer or ``"auto"``: spawn process pool.
-    echo
-        Receives progress lines (expected size, one line per shard).
+    Args:
+        n: Number of LHS rows (default: ``surrogate.dataset.n_initial``).
+        workers: ``None`` or 1: in process; an integer or ``"auto"``: spawn process pool.
+        echo: Receives progress lines (expected size, one line per shard).
 
-    Raises
-    ------
-    StudyConfigError
-        Study without ``surrogate`` block, asymmetric variable, or no variable on the axle
-        (:class:`NoAxleVariablesError`).
-    DatasetError
-        Existing directory refused, or resume with a changed study.
+    Raises:
+        StudyConfigError: Study without ``surrogate`` block, asymmetric variable, or no variable on
+            the axle
+            (:class:`NoAxleVariablesError`).
+        DatasetError: Existing directory refused, or resume with a changed study.
     """
     t0 = time.perf_counter()
     say = echo or (lambda _msg: None)
@@ -479,6 +505,17 @@ def append_rows(
     """Append extra (for example active-learning) rows as a new shard; returns its path.
 
     Rows get ``row = -1`` and split train. ``X`` is ``(m, d)`` in the axle unit cube.
+
+    Args:
+        out_dir: Surrogate output folder containing ``dataset/``.
+        axle: Axle of the rows.
+        X: Designs ``(m, d)`` in the axle unit cube.
+        samples: ``m`` FOM corner samples matching ``X``.
+        source: Label stored per row (for example ``al_3``).
+        weight: Scalar or ``(m,)`` sample weights.
+
+    Returns:
+        Path of the new shard.
     """
     adir = _meta_dir(out_dir, axle)
     meta = _read_meta(adir)
@@ -514,10 +551,12 @@ def append_rows(
 def load_dataset(out_dir: str | Path, axle: Axle) -> AxleDataset:
     """Concatenate all shards of an axle (in shard order) into an :class:`AxleDataset`.
 
-    Raises
-    ------
-    DatasetError
-        Missing directory, no shards, or shards that do not match ``meta.json``.
+    Args:
+        out_dir: Surrogate output folder containing ``dataset/``.
+        axle: Axle to load.
+
+    Raises:
+        DatasetError: Missing directory, no shards, or shards that do not match ``meta.json``.
     """
     adir = _meta_dir(out_dir, axle)
     meta = _read_meta(adir)

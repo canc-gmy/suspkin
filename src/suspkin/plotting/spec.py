@@ -332,6 +332,13 @@ def derived_columns(study: str, df: pd.DataFrame) -> pd.DataFrame:
     Only the ``rack`` study has any (``d_left``, ``d_right``, ``outer``, ``ackermann``,
     ``ratio``, see the module docstring); other studies are returned unchanged. The maths
     is that of ``plotting.figures`` (``_steering_frame``).
+
+    Args:
+        study: Study name (``"rack"``, ``"roll"``, ...).
+        df: Result table of that study (SI).
+
+    Returns:
+        Copy of ``df`` with the derived columns added.
     """
     if study != "rack" or len(df) == 0:
         return df

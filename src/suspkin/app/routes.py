@@ -169,7 +169,12 @@ def regions_out(ds: Dataset) -> list[RegionOut]:
 
 
 def scene_hardpoints(vehicle: Vehicle, state: Any = None) -> dict[str, list[float]]:
-    """Posed hardpoint positions (SI) by ``"<corner>:<point>"``, e.g. ``FL:uca_outer``."""
+    """Posed hardpoint positions (SI) by ``"<corner>:<point>"``, e.g. ``FL:uca_outer``.
+
+    Args:
+        vehicle: Vehicle model (SI).
+        state: Solved vehicle pose; ``None`` draws the static pose.
+    """
     from suspkin.plotting.geometry3d import vehicle_segments
 
     scene = vehicle_segments(vehicle, state)
@@ -194,22 +199,27 @@ def make_router(manager: DatasetManager) -> APIRouter:
     """Build the ``/api/v1`` router bound to ``manager``."""
     r = APIRouter(prefix="/api/v1")
 
+    # Liveness plus workspace, version and dataset-count information.
     @r.get("/health", response_model=HealthOut)
     def health() -> HealthOut:
         return health_out(manager)
 
+    # Figure catalogue (names, fields, units) shared with the frontend.
     @r.get("/figures", response_model=dict[str, Any])
     def figures() -> dict[str, Any]:
         return spec_json()
 
+    # All open dataset revisions.
     @r.get("/datasets", response_model=list[DatasetOut])
     def list_datasets() -> list[DatasetOut]:
         return [_dataset_out(d) for d in manager.list()]
 
+    # Open a bundle, run folder or vehicle YAML from the workspace (SI).
     @r.post("/datasets", response_model=list[DatasetOut])
     def open_dataset(req: OpenRequest) -> list[DatasetOut]:
         return [_dataset_out(d) for d in manager.open(req.path)]
 
+    # Rename, recolour or change the resolution of a revision.
     @r.patch("/datasets/{dataset_id}", response_model=DatasetOut)
     def patch_dataset(dataset_id: str, patch: DatasetPatch) -> DatasetOut:
         ds = manager.get(dataset_id)
@@ -236,10 +246,12 @@ def make_router(manager: DatasetManager) -> APIRouter:
         path, size = manager.save(dataset_id, req.path, overwrite=req.overwrite)
         return SaveOut(path=path, size=size)
 
+    # Close a revision (404 if unknown).
     @r.delete("/datasets/{dataset_id}", status_code=204)
     def delete_dataset(dataset_id: str) -> None:
         manager.close(dataset_id)
 
+    # One result table of a revision as column arrays (404 if the study is absent).
     @r.get("/datasets/{dataset_id}/tables/{study}", response_model=TableOut)
     def table(dataset_id: str, study: str) -> TableOut:
         ds = manager.get(dataset_id)
@@ -248,6 +260,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
             raise HTTPException(404, f"dataset {ds.label!r} has no study {study!r}")
         return TableOut(columns={str(c): _column(df[c]) for c in df.columns})
 
+    # Vehicle summary dict of a revision (SI).
     @r.get("/datasets/{dataset_id}/summary", response_model=dict[str, Any])
     def summary(dataset_id: str) -> dict[str, Any]:
         return manager.get(dataset_id).summary
@@ -295,6 +308,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
         except StudyConfigError as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    # Optimization history of an open run.
     @r.get("/runs/{run_id}/history", response_model=HistoryOut)
     def history(run_id: str) -> HistoryOut:
         return history_out(manager.run(run_id))
@@ -324,6 +338,7 @@ def make_router(manager: DatasetManager) -> APIRouter:
         size = export_dataset_snapshot(manager, target)
         return ExportOut(path=manager.rel(target), size=size)
 
+    # List one workspace directory (relative path, never outside the workspace).
     @r.get("/browse", response_model=BrowseOut)
     def browse(dir: str = "") -> BrowseOut:
         rel, entries = manager.browse(dir)

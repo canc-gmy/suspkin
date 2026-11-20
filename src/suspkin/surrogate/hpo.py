@@ -40,7 +40,15 @@ class HpoResult:
 
 
 def configs_from_params(p: dict[str, Any], base: TrainConfig) -> tuple[MLPConfig, TrainConfig]:
-    """Build the configs of a trial from its parameter dict."""
+    """Build the configs of a trial from its parameter dict.
+
+    Args:
+        p: Hyper-parameters of a trial (see :func:`suggest`).
+        base: Training settings that the trial does not vary.
+
+    Returns:
+        ``(MLPConfig, TrainConfig)`` of the trial.
+    """
     pod = p["output"] == "pod"
     mcfg = MLPConfig(
         n_layers=int(p["n_layers"]),
@@ -63,7 +71,10 @@ def configs_from_params(p: dict[str, Any], base: TrainConfig) -> tuple[MLPConfig
 
 
 def suggest(trial: optuna.Trial) -> dict[str, Any]:
-    """Sample the search space of plan section 13.8."""
+    """Sample one hyper-parameter set from the Optuna search space.
+
+    See ``docs/concepts/surrogate.md`` for the ranges.
+    """
     p: dict[str, Any] = {
         "n_layers": trial.suggest_int("n_layers", 2, 8),
         "width": trial.suggest_int("width", 64, 1024, log=True),
@@ -89,6 +100,15 @@ def trial_budget(
     The cap is ``min(trial_max_epochs, base.max_epochs)`` (``None``: ``base.max_epochs``), the
     patience ``min(base.patience, max(10, cap // 10))``; ``subsample`` is ``None`` when it
     is unset or not smaller than ``n_train``.
+
+    Args:
+        base: Full training settings.
+        trial_max_epochs: Epoch cap of a trial; ``None`` keeps ``base.max_epochs``.
+        n_train: Number of train rows available.
+        subsample: Train rows per trial; ``None`` for all.
+
+    Returns:
+        Dict with ``max_epochs``, ``patience`` and ``n_train`` (``None`` for all rows).
     """
     cap = base.max_epochs if trial_max_epochs is None else min(trial_max_epochs, base.max_epochs)
     cap = max(int(cap), 1)
@@ -101,7 +121,16 @@ def trial_budget(
 
 
 def subsample_train(ds: AxleDataset, n: int | None, seed: int) -> AxleDataset:
-    """Keep ``n`` random train rows (seeded, same rows every call); val/test stay complete."""
+    """Keep ``n`` random train rows (seeded, same rows every call); val/test stay complete.
+
+    Args:
+        ds: Axle dataset.
+        n: Train rows to keep; ``None`` keeps all.
+        seed: Random seed of the row choice.
+
+    Returns:
+        The reduced dataset.
+    """
     is_train = ds.split == SPLIT_TRAIN
     if n is None or n >= int(is_train.sum()):
         return ds
@@ -168,6 +197,20 @@ def search(
     The best configuration is then retrained on the full train split with ``base``.
     Resuming with a different budget raises :class:`DatasetError`; trials left RUNNING by
     a killed process are marked FAIL.
+
+    Args:
+        ds: Training dataset of the axle.
+        out_dir: Axle folder holding ``optuna.db`` and the output ``model/``.
+        n_trials: Number of Optuna trials to run in total.
+        timeout_s: Wall-time limit of the search [s]; ``None`` for none.
+        seed: Sampler seed.
+        device: ``"auto"``, ``"cpu"`` or ``"cuda"``.
+        base: Training settings that trials do not vary; ``None`` for defaults.
+        trial_max_epochs: Epoch cap of a trial; ``None`` keeps ``base.max_epochs``.
+        subsample: Train rows per trial; ``None`` for all.
+
+    Returns:
+        Outcome of the search and the final retrain.
     """
     t_start = time.monotonic()
     out = Path(out_dir)
@@ -261,10 +304,19 @@ def retrain_best(
     (``retrain_only`` is true and ``search_seconds`` null unless ``extra`` is given, which
     :func:`search` does).
 
-    Raises
-    ------
-    DatasetError
-        No ``optuna.db`` / study in ``out_dir``, or no completed trial.
+    Args:
+        ds: Training dataset of the axle.
+        out_dir: Axle folder holding ``optuna.db``.
+        device: ``"auto"``, ``"cpu"`` or ``"cuda"``.
+        base: Training settings; ``None`` for defaults.
+        extra: Extra fields stored in ``hpo_result.json``.
+        t_start: ``time.perf_counter()`` value at the start of the search, for the timings.
+
+    Returns:
+        Outcome of the retrain.
+
+    Raises:
+        DatasetError: No ``optuna.db`` / study in ``out_dir``, or no completed trial.
     """
     t_start = time.monotonic() if t_start is None else t_start
     out = Path(out_dir)
@@ -352,6 +404,21 @@ def search_axles(
 
     ``parallel=None`` runs the axles in parallel spawn processes on CUDA and sequentially
     on the CPU (two processes would compete for the same cores); a bool forces the mode.
+
+    Args:
+        datasets: Dataset per axle name.
+        root: Models folder; each axle uses ``root/<axle>``.
+        n_trials: Number of Optuna trials per axle.
+        timeout_s: Wall-time limit per axle [s]; ``None`` for none.
+        seed: Sampler seed.
+        device: ``"auto"``, ``"cpu"`` or ``"cuda"``.
+        base: Training settings that trials do not vary.
+        parallel: Force parallel or sequential axles; see above.
+        trial_max_epochs: Epoch cap of a trial.
+        subsample: Train rows per trial.
+
+    Returns:
+        Outcome per axle name.
     """
     if parallel is None:
         parallel = resolve_device(device).type == "cuda"

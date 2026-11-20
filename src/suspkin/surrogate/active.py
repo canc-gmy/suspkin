@@ -1,6 +1,6 @@
 """Active-learning optimizer: surrogate search in a trust region, FOM verification, fine-tuning.
 
-Experimental (see ``docs/guides/stability.md``), design in ``docs/DESIGN_PLAN.md`` section 13.9.
+Experimental (see ``docs/guides/stability.md``); background in ``docs/concepts/surrogate.md``.
 Each iteration ``k``:
 
 1. runs the study's driver on a :class:`~suspkin.surrogate.problem.SurrogateProblem` restricted
@@ -360,11 +360,27 @@ def run_active_learning(
     rows included, unlike the v0.8 resume); a resume refuses a study whose constraints or
     objectives changed, instead of dropping the cache.
 
-    Raises
-    ------
-    StudyConfigError, RunError, DatasetError
-        Invalid study or arguments, missing or mismatching dataset / models, changed study
-        on resume.
+    Args:
+        study_path: Study YAML with objectives, an ``optimizer`` block and ``surrogate`` settings.
+        surrogate_root: Folder with the datasets and models.
+        out_dir: Run folder; ``None`` creates a timestamped one.
+        resume: Continue an existing run folder.
+        workers: Overrides the study's worker count.
+        evaluations: Overrides the FOM evaluation budget.
+        time: Overrides the time budget [s].
+        method: Overrides the optimizer method.
+        device: Training device.
+        report: Also write the before/after report.
+        echo: Optional line printer.
+        finetune: Fine-tune the networks; see above.
+        predictors: Injected axle predictors; see above.
+
+    Returns:
+        Summary of the run.
+
+    Raises:
+        StudyConfigError, RunError, DatasetError: Invalid study or arguments, missing or
+            mismatching dataset / models, or a changed study on resume.
     """
     say: Echo = echo or (lambda _m: None)
     study_path = Path(study_path)

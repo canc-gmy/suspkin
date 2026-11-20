@@ -56,7 +56,15 @@ def _shape_derivs(uvw: F64) -> tuple[F64, F64]:
 
 
 def hex_map(vertices: ArrayLike, uvw: ArrayLike) -> F64:
-    """Trilinear map from the unit cube ``uvw`` (``(..., 3)``) to the hexahedron."""
+    """Trilinear map from the unit cube ``uvw`` (``(..., 3)``) to the hexahedron.
+
+    Args:
+        vertices: Hexahedron corners [m], shape ``(8, 3)``.
+        uvw: Unit-cube coordinates, shape ``(..., 3)``.
+
+    Returns:
+        ndarray: Points [m], shape ``(..., 3)``.
+    """
     v = _vertices(vertices)
     n, _ = _shape_derivs(np.asarray(uvw, dtype=np.float64))
     out: F64 = n @ v
@@ -64,7 +72,17 @@ def hex_map(vertices: ArrayLike, uvw: ArrayLike) -> F64:
 
 
 def hex_jacobian(vertices: ArrayLike, uvw: ArrayLike) -> F64:
-    """Jacobian ``dp/d(u,v,w)`` of :func:`hex_map`, shape ``(..., 3, 3)`` (columns = u, v, w)."""
+    """Jacobian ``dp/d(u,v,w)`` of :func:`hex_map`, shape ``(..., 3, 3)`` (columns = u, v, w).
+
+    ``vertices`` is ``(8, 3)`` [m]; ``uvw`` is ``(..., 3)`` (dimensionless); entries are [m].
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        uvw: Unit-cube coordinates ``(..., 3)`` (dimensionless).
+
+    Returns:
+        Jacobian ``(..., 3, 3)`` [m].
+    """
     v = _vertices(vertices)
     _, d = _shape_derivs(np.asarray(uvw, dtype=np.float64))
     out: F64 = np.einsum("...ik,ij->...jk", d, v)
@@ -83,12 +101,22 @@ def check_hexahedron(vertices: ArrayLike) -> None:
 def hex_inverse(
     vertices: ArrayLike, points: ArrayLike, tol: float = 1e-10, max_iter: int = 50
 ) -> F64:
-    """Invert :func:`hex_map` by Newton iteration; ``points`` is ``(..., 3)``.
+    """Invert :func:`hex_map` by Newton iteration; ``points`` is ``(..., 3)`` [m].
 
-    Raises
-    ------
-    ValueError
-        If Newton does not converge or the point lies outside the hexahedron.
+    ``vertices`` is ``(8, 3)`` [m]; ``tol`` is the unit-cube step tolerance, ``max_iter`` the
+    Newton iteration cap. Returns ``uvw`` of shape ``(..., 3)``.
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        points: Query points ``(..., 3)`` [m].
+        tol: Convergence tolerance on the unit-cube coordinates.
+        max_iter: Newton iteration cap.
+
+    Returns:
+        Unit-cube coordinates ``(..., 3)``.
+
+    Raises:
+        ValueError: If Newton does not converge or the point lies outside the hexahedron.
     """
     v = _vertices(vertices)
     p = np.asarray(points, dtype=np.float64)
@@ -118,6 +146,12 @@ def hex_locate(
 
     Returns ``(uvw, inside)``: ``uvw`` is clipped to ``[0, 1]``; ``inside`` is True where
     Newton converged to a point within ``tol`` (relative to the cube) of the unit cube.
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        points: Query points ``(..., 3)`` [m].
+        tol: Tolerance relative to the unit cube.
+        max_iter: Newton iteration cap.
     """
     v = _vertices(vertices)
     p = np.asarray(points, dtype=np.float64)
@@ -142,7 +176,16 @@ def hex_locate(
 
 
 def hex_contains(vertices: ArrayLike, points: ArrayLike, tol: float = 1e-9) -> NDArray[np.bool_]:
-    """Mask of ``points`` (``(..., 3)``) inside or on the boundary of the hexahedron."""
+    """Mask of ``points`` (``(..., 3)``) inside or on the boundary of the hexahedron.
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        points: Query points ``(..., 3)`` [m].
+        tol: Tolerance relative to the unit cube.
+
+    Returns:
+        Boolean array ``(...)``.
+    """
     return hex_locate(vertices, points, tol)[1]
 
 
@@ -152,7 +195,18 @@ def hex_contains(vertices: ArrayLike, points: ArrayLike, tol: float = 1e-9) -> N
 
 
 def sd_box(points: ArrayLike, lo: ArrayLike, hi: ArrayLike) -> F64:
-    """Signed distance to the axis-aligned box ``[lo, hi]``."""
+    """Signed distance [m] (negative inside) of ``points`` ``(..., 3)`` to the box ``[lo, hi]``.
+
+    ``lo`` and ``hi`` are ``(3,)`` corner coordinates [m].
+
+    Args:
+        points: Query points ``(..., 3)`` [m].
+        lo: Lower corner ``(3,)`` [m].
+        hi: Upper corner ``(3,)`` [m].
+
+    Returns:
+        Signed distance ``(...)`` [m].
+    """
     p = np.asarray(points, dtype=np.float64)
     lo_a, hi_a = np.asarray(lo, dtype=np.float64), np.asarray(hi, dtype=np.float64)
     c, h = 0.5 * (lo_a + hi_a), 0.5 * (hi_a - lo_a)
@@ -162,14 +216,36 @@ def sd_box(points: ArrayLike, lo: ArrayLike, hi: ArrayLike) -> F64:
 
 
 def sd_sphere(points: ArrayLike, center: ArrayLike, radius: float) -> F64:
-    """Signed distance to a sphere."""
+    """Signed distance [m] (negative inside) of ``points`` ``(..., 3)`` to a sphere.
+
+    ``center`` is ``(3,)`` [m]; ``radius`` in m.
+
+    Args:
+        points: Query points ``(..., 3)`` [m].
+        center: Sphere center ``(3,)`` [m].
+        radius: Sphere radius [m].
+
+    Returns:
+        Signed distance ``(...)`` [m].
+    """
     p = np.asarray(points, dtype=np.float64)
     out: F64 = np.linalg.norm(p - np.asarray(center, dtype=np.float64), axis=-1) - radius
     return out
 
 
 def sd_cylinder(points: ArrayLike, p0: ArrayLike, p1: ArrayLike, radius: float) -> F64:
-    """Signed distance to the finite (capped) cylinder with axis endpoints ``p0``, ``p1``."""
+    """Signed distance [m] (negative inside) of ``points`` ``(..., 3)`` to the capped cylinder with
+    axis endpoints ``p0``, ``p1`` (each ``(3,)``, [m]) and ``radius`` [m].
+
+    Args:
+        points: Query points ``(..., 3)`` [m].
+        p0: First axis endpoint ``(3,)`` [m].
+        p1: Second axis endpoint ``(3,)`` [m].
+        radius: Cylinder radius [m].
+
+    Returns:
+        Signed distance ``(...)`` [m].
+    """
     p = np.asarray(points, dtype=np.float64)
     a = np.asarray(p0, dtype=np.float64)
     axis = np.asarray(p1, dtype=np.float64) - a
@@ -228,7 +304,12 @@ def _hex_volume(v: F64) -> float:
 
 
 def is_convex_hexahedron(vertices: ArrayLike, rtol: float = 1e-6) -> bool:
-    """True if the hexahedron equals its convex hull (all vertices extreme, planar faces)."""
+    """True if the hexahedron equals its convex hull (all vertices extreme, planar faces).
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        rtol: Relative tolerance on planarity and extremality.
+    """
     v = _vertices(vertices)
     try:
         hull = ConvexHull(v)
@@ -272,6 +353,13 @@ def sd_hexahedron(points: ArrayLike, vertices: ArrayLike) -> F64:
 
     Inside: minus the distance to the nearest face plane. Outside: exact distance to the
     boundary triangles of the convex hull.
+
+    Args:
+        points: Query points ``(..., 3)`` [m].
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+
+    Returns:
+        Signed distance ``(...)`` [m].
     """
     p = np.asarray(points, dtype=np.float64)
     hull, tri = _hull_tri(vertices)
@@ -295,7 +383,16 @@ def sd_hexahedron(points: ArrayLike, vertices: ArrayLike) -> F64:
 
 
 def node_range(lo: ArrayLike, hi: ArrayLike, res: float) -> tuple[F64, F64]:
-    """Integer index range ``(kmin, kmax)`` of the grid nodes inside ``[lo, hi]`` (floats)."""
+    """Integer index range ``(kmin, kmax)`` of the grid nodes inside ``[lo, hi]`` (floats).
+
+    Args:
+        lo: Lower bounds ``(k,)`` [m].
+        hi: Upper bounds ``(k,)`` [m].
+        res: Grid resolution [m].
+
+    Returns:
+        ``(kmin, kmax)``, each ``(k,)``; ``kmin > kmax`` means no node on that axis.
+    """
     lo_a, hi_a = np.asarray(lo, dtype=np.float64), np.asarray(hi, dtype=np.float64)
     return np.ceil(lo_a / res - _EPS), np.floor(hi_a / res + _EPS)
 
@@ -303,10 +400,17 @@ def node_range(lo: ArrayLike, hi: ArrayLike, res: float) -> tuple[F64, F64]:
 def snap_interval(p: ArrayLike, lo: ArrayLike, hi: ArrayLike, res: float) -> F64:
     """Nearest grid node of ``p`` (``(..., k)``) inside ``[lo, hi]`` per axis.
 
-    Raises
-    ------
-    ValueError
-        If an axis has no grid node inside its bounds.
+    Args:
+        p: Points ``(..., k)`` [m].
+        lo: Lower bounds ``(k,)`` [m].
+        hi: Upper bounds ``(k,)`` [m].
+        res: Grid resolution [m].
+
+    Returns:
+        Snapped points ``(..., k)`` [m].
+
+    Raises:
+        ValueError: If an axis has no grid node inside its bounds.
     """
     kmin, kmax = node_range(lo, hi, res)
     if np.any(kmin > kmax):
@@ -332,10 +436,16 @@ def snap_hexahedron(p: ArrayLike, vertices: ArrayLike, res: float) -> F64:
     The rounded point is kept when it lies inside; otherwise the closest (to ``p``) inside
     node among the neighbours is taken, in cubes of growing radius.
 
-    Raises
-    ------
-    ValueError
-        If the hexahedron contains no grid node near ``p``.
+    Args:
+        p: Points ``(..., 3)`` [m].
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        res: Grid resolution [m].
+
+    Returns:
+        Snapped points ``(..., 3)`` [m].
+
+    Raises:
+        ValueError: If the hexahedron contains no grid node near ``p``.
     """
     pa = np.asarray(p, dtype=np.float64)
     pts = pa.reshape(-1, 3)
@@ -371,7 +481,12 @@ def snap_hexahedron(p: ArrayLike, vertices: ArrayLike, res: float) -> F64:
 
 
 def has_grid_node(vertices: ArrayLike, res: float) -> bool:
-    """True if the hexahedron contains at least one grid node (huge regions count as yes)."""
+    """True if the hexahedron contains at least one grid node (huge regions count as yes).
+
+    Args:
+        vertices: Hexahedron corners ``(8, 3)`` [m].
+        res: Grid resolution [m].
+    """
     v = np.asarray(vertices, dtype=np.float64)
     k0 = np.rint(v.mean(axis=0) / res)
     for n in (2, 6):

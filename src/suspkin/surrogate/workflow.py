@@ -113,6 +113,15 @@ def retrain_surrogate(
 
     Uses the same dataset check and training settings as :func:`train_surrogate`, then
     refreshes ``models/hpo_report.md`` for every axle that has a study.
+
+    Args:
+        study_path: Study YAML with a ``surrogate`` block.
+        root: Surrogate output folder.
+        axle: Axle to retrain.
+        device: ``"auto"``, ``"cpu"`` or ``"cuda"``; ``None`` uses the study setting.
+
+    Returns:
+        Outcome of the retrain.
     """
     root = Path(root)
     spec, datasets = _load_checked(study_path, root, [axle])
@@ -143,14 +152,23 @@ def train_surrogate(
     (count), ``timeout`` (seconds) and ``device`` override them. Models land in
     ``root/models/<axle>/model``.
 
-    Raises
-    ------
-    StudyConfigError
-        Study without ``surrogate`` block.
-    DatasetError
-        Missing dataset, or one that does not match the study (grid, design space, vehicle).
-    RuntimeError
-        ``device="cuda"`` without CUDA, or no trial completed.
+    Args:
+        study_path: Study YAML with a ``surrogate`` block.
+        root: Surrogate output folder holding the datasets.
+        axles: Axles to train.
+        n_trials: Overrides the number of trials.
+        timeout: Overrides the time limit [s].
+        device: Overrides the device.
+        echo: Optional line printer.
+
+    Returns:
+        Outcome per axle name.
+
+    Raises:
+        StudyConfigError: Study without ``surrogate`` block.
+        DatasetError: Missing dataset, or one that does not match the study (grid, design space,
+            vehicle).
+        RuntimeError: ``device="cuda"`` without CUDA, or no trial completed.
     """
     say = echo or (lambda _m: None)
     root = Path(root)
@@ -308,14 +326,20 @@ def validate_surrogate(
     Writes ``root/validation/<axle>/`` (see the module docstring). The RMSE table is in
     display units (mm, deg) against the tolerance of the channel registry.
 
-    Raises
-    ------
-    StudyConfigError
-        Study without ``surrogate`` block.
-    DatasetError
-        Dataset or model missing, mismatching the study, or an empty test split.
-    RuntimeError
-        ``device="cuda"`` without CUDA.
+    Args:
+        study_path: Study YAML with a ``surrogate`` block.
+        root: Surrogate output folder.
+        axles: Axles to validate.
+        device: Overrides the device.
+        echo: Optional line printer.
+
+    Returns:
+        Test-split report per axle name.
+
+    Raises:
+        StudyConfigError: Study without ``surrogate`` block.
+        DatasetError: Dataset or model missing, mismatching the study, or an empty test split.
+        RuntimeError: ``device="cuda"`` without CUDA.
     """
     say = echo or (lambda _m: None)
     root = Path(root)

@@ -456,25 +456,21 @@ def run_optimization(
 ) -> RunResult:
     """Run the optimisation of a study and write the run folder.
 
-    Parameters
-    ----------
-    study_path
-        Study YAML with objectives and an ``optimizer`` block.
-    out_dir
-        Run folder; default ``results/opt/<study stem>_<YYYYmmdd-HHMMSS>``. ``resume=True``
-        needs an explicit folder that contains a ``history.csv``.
-    workers, evaluations, time, method
-        Overrides of the study's optimizer block (``time`` in seconds).
-    report
-        Also write the before/after report.
-    echo
-        Optional line printer for the start line and periodic progress.
+    Args:
+        study_path: Study YAML with objectives and an ``optimizer`` block.
+        out_dir: Run folder; default ``results/opt/<study stem>_<YYYYmmdd-HHMMSS>``. ``resume=True``
+            needs an explicit folder that contains a ``history.csv``.
+        workers: Overrides of the study's optimizer block (``time`` in seconds).
+        evaluations: Overrides of the study's optimizer block (``time`` in seconds).
+        time: Overrides of the study's optimizer block (``time`` in seconds).
+        method: Overrides of the study's optimizer block (``time`` in seconds).
+        report: Also write the before/after report.
+        echo: Optional line printer for the start line and periodic progress.
 
-    Raises
-    ------
-    StudyConfigError, RunError
-        Invalid study, or invalid arguments (e.g. resume without history, method override
-        incompatible with the mode).
+    Raises:
+        StudyConfigError, RunError: Invalid study, or invalid arguments (e.g. resume without
+            history, method override
+            incompatible with the mode).
     """
     study_path = Path(study_path)
     started = datetime.now().astimezone()

@@ -4,7 +4,7 @@ Report on the first full training of the v1.1 surrogate on the benchmark study
 `configs/studies/fs_reference_surrogate.yaml`, 18-19 Nov 2026. It lists the numbers
 of each run, the three problems found on the way and the open points. See the
 [surrogate guide](../guides/surrogate.md) for how the workflow is used and
-[the design plan](../DESIGN_PLAN.md) (decisions S15, S16, S17, section 13) for the design.
+[the surrogate concept page](../concepts/surrogate.md) and [ADR 0007](../adr/0007-surrogate-model.md) for the design.
 
 All scores are on the **validation split**. The test split has not been used yet.
 

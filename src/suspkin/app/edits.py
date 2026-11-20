@@ -50,11 +50,13 @@ def _ref(e: HardpointEdit) -> str:
 def apply_hardpoint_edits(vehicle: Vehicle, edits: Sequence[HardpointEdit]) -> Vehicle:
     """Return a new vehicle with ``edits`` applied in order (SI, vehicle frame).
 
-    Raises
-    ------
-    HardpointEditError
-        Unknown point, an edit without coordinates, or a geometry that fails validation. The
-        message names the edited points.
+    Args:
+        vehicle: Source vehicle (not modified).
+        edits: Hardpoint coordinate overrides in m, applied in order.
+
+    Raises:
+        HardpointEditError: Unknown point, an edit without coordinates, or a geometry that fails
+            validation. The message names the edited points.
     """
     if not edits:
         raise HardpointEditError("no edits given")

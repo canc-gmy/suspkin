@@ -1,56 +1,32 @@
 # Optimize (experimental)
 
+Study specification, design space, evaluation, drivers, result pool and outputs for geometry optimisation. Background and derivations: [Optimization](../concepts/optimization.md).
+
 !!! warning "Experimental"
-    `suspkin.optimize` may change in minor releases. The study YAML schema 1 is stable; see
-    [Stability and versioning](../guides/stability.md) and the [Study YAML](../guides/study-yaml.md)
-    guide.
+    This package may change in minor releases. See [Stability and versioning](../guides/stability.md).
 
-## Study specification
+::: suspkin.optimize.spec.variables
 
-::: suspkin.optimize.spec
-    options:
-      members:
-        - load_study
-        - Study
-        - StudyConfigError
+::: suspkin.optimize.spec.criteria
 
-## Design space
+::: suspkin.optimize.spec.study
+
+::: suspkin.optimize.spec.surrogate
 
 ::: suspkin.optimize.design
-    options:
-      members:
-        - DesignSpace
-        - InfeasibleDesign
 
-## Evaluation
+::: suspkin.optimize.regions
 
 ::: suspkin.optimize.evaluate
-    options:
-      members:
-        - evaluate
-        - Evaluation
-        - ConstraintResult
-        - ObjectiveResult
-
-## Problem and history
 
 ::: suspkin.optimize.problem
-    options:
-      members:
-        - Problem
-        - BudgetExhausted
-
-::: suspkin.optimize.history
-    options:
-      members:
-        - HistoryWriter
-        - EvalCache
-        - read_history
-
-## Drivers
 
 ::: suspkin.optimize.drivers
-    options:
-      members:
-        - run_optimization
-        - RunResult
+
+::: suspkin.optimize.pool
+
+::: suspkin.optimize.history
+
+::: suspkin.optimize.outputs
+
+::: suspkin.optimize.registry

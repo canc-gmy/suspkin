@@ -19,7 +19,13 @@ def resolve_workers(workers: int | str) -> int:
 
 
 def make_pool(workers: int, init: Callable[..., None], initargs: tuple[Any, ...]) -> Executor:
-    """Spawn-context process pool whose workers run ``init(*initargs)`` once."""
+    """Spawn-context process pool whose workers run ``init(*initargs)`` once.
+
+    Args:
+        workers: Number of worker processes (>= 1).
+        init: Initializer called once in each worker (must be picklable).
+        initargs: Arguments passed to ``init``.
+    """
     return ProcessPoolExecutor(
         max_workers=workers,
         mp_context=mp.get_context("spawn"),

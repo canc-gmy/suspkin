@@ -72,7 +72,18 @@ def side_linestyle(index: int) -> str:
 
 
 def figure_size(preset: str = "a4_width", rows: int | None = None) -> tuple[float, float]:
-    """Figure size in inches for a named preset; ``rows`` scales the height (2.3 in/row)."""
+    """Figure size in inches for a named preset; ``rows`` scales the height (2.3 in/row).
+
+    Args:
+        preset: Key of ``FIGURE_PRESETS``.
+        rows: Number of panel rows; ``None`` keeps the preset height.
+
+    Returns:
+        ``(width, height)`` in inches.
+
+    Raises:
+        ValueError: Unknown preset.
+    """
     if preset not in FIGURE_PRESETS:
         raise ValueError(f"unknown preset {preset!r}; expected one of {sorted(FIGURE_PRESETS)}")
     w, h = FIGURE_PRESETS[preset]
@@ -80,7 +91,15 @@ def figure_size(preset: str = "a4_width", rows: int | None = None) -> tuple[floa
 
 
 def axis_label(name: str, unit: str = "") -> str:
-    """``"name [unit]"`` (or just ``name`` for a dimensionless quantity)."""
+    """``"name [unit]"`` (or just ``name`` for a dimensionless quantity).
+
+    Args:
+        name: Quantity name.
+        unit: Display unit; empty for dimensionless.
+
+    Returns:
+        Axis label text.
+    """
     return f"{name} [{unit}]" if unit else name
 
 
@@ -88,6 +107,11 @@ def zero_lines(ax: Axes, x: bool = True, y: bool = True) -> None:
     """Thin reference lines through the static position (x = 0, y = 0).
 
     The lines carry ``gid="zero"`` so that tests and callers can tell them from data.
+
+    Args:
+        ax: Axes to draw on.
+        x: Draw the vertical line at x = 0.
+        y: Draw the horizontal line at y = 0.
     """
     kw: dict[str, Any] = {"color": "#8c8c8c", "lw": 0.7, "zorder": 0.5, "gid": "zero"}
     if y:

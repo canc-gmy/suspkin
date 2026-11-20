@@ -144,17 +144,14 @@ def plot_study_3d(
     dashed); ``inside`` regions are green dotted, ``outside`` (keep-out) regions red.
     Variable points are marked for ``x`` (baseline when ``x`` is None).
 
-    Parameters
-    ----------
-    space : DesignSpace
-    x : array_like, optional
-        Normalised design vector; the baseline vehicle is drawn if omitted.
-    ax : Axes3D, optional
-        Existing 3D axes; a new figure is created if omitted.
+    Args:
+        space (DesignSpace):
+        x (array_like, optional): Normalised design vector; the baseline vehicle is drawn if
+            omitted.
+        ax (Axes3D, optional): Existing 3D axes; a new figure is created if omitted.
 
-    Returns
-    -------
-    matplotlib.figure.Figure
+    Returns:
+        matplotlib.figure.Figure:
     """
     from suspkin.optimize.spec.criteria import InsideConstraint, OutsideConstraint
     from suspkin.optimize.spec.variables import parse_point_ref

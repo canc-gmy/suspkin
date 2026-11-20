@@ -72,18 +72,17 @@ def _eval_worker(x: F64) -> tuple[Evaluation, float]:
 class Problem:
     """Evaluate batches of designs with caching, history logging and budget accounting.
 
-    Parameters
-    ----------
-    study_path
-        Study YAML.
-    run_dir
-        Run folder; the history goes to ``run_dir/history.csv``.
-    resume
-        Load an existing history into the cache and continue ``eval_id`` numbering.
-        The budget counts only new evaluations.
-    workers, evaluations, time
-        Overrides of the study's ``optimizer.workers`` / ``budget.evaluations`` /
-        ``budget.time`` (seconds).
+    Args:
+        study_path: Study YAML.
+        run_dir: Run folder; the history goes to ``run_dir/history.csv``.
+        resume: Load an existing history into the cache and continue ``eval_id`` numbering.
+            The budget counts only new evaluations.
+        workers: Overrides of the study's ``optimizer.workers`` / ``budget.evaluations`` /
+            ``budget.time`` (seconds).
+        evaluations: Overrides of the study's ``optimizer.workers`` / ``budget.evaluations`` /
+            ``budget.time`` (seconds).
+        time: Overrides of the study's ``optimizer.workers`` / ``budget.evaluations`` /
+            ``budget.time`` (seconds).
     """
 
     def __init__(
@@ -250,9 +249,8 @@ class Problem:
 
         The base point and the ``n`` perturbed points form one parallel batch.
 
-        Returns
-        -------
-        f_total_grad (n,), G_jac (m, n), F_jac (k, n), (F0, G0, f_total0)
+        Returns:
+            f_total_grad (n,), G_jac (m, n), F_jac (k, n), (F0, G0, f_total0):
         """
         h = FD_STEP if step is None else float(step)
         x0 = np.asarray(x, dtype=np.float64)

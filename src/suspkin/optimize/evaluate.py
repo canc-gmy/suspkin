@@ -32,8 +32,9 @@ Semantics per constraint type:
   Without ``over`` the static point is used: the left point, or the right point if the region
   lies at ``y < 0``. With ``over`` the point comes from the states of that corner sweep (as
   solved, i.e. left or right corner coordinates) and the worst state counts.
-* ``distance``: ``|a - b|``; with ``over`` the worst over the sweep (a point of another axle
-  stays static, left side or the sweep side).
+* ``distance``: ``|a - b|``; with ``over`` the worst over the sweep states of that corner
+  sweep (both points are taken on the sweep's axle; study validation rejects an ``over`` sweep
+  on another axle than the points).
 * ``relation``: ``lhs op rhs + offset`` on static left-side coordinates; ``g = (rhs + offset
   - lhs) / s`` for ``>=`` and the negative for ``<=``; value is ``lhs``.
 * ``joint_angle``: worst ``joint_angle`` over the sweep states (``axis`` override honoured).
@@ -751,6 +752,16 @@ def evaluate(
     evaluator passes a context whose sweeps come from the networks. ``infeasible=True``
     (internal) reports a design already known to give an invalid vehicle without decoding it
     again.
+
+    Args:
+        space: Design space (study, baseline vehicle, variable layout).
+        x: Normalised design vector, shape ``(space.n,)``.
+        vehicle: Vehicle to evaluate directly (alternative to ``x``).
+        ctx: Internal sweep context override.
+        infeasible: Internal flag, see above.
+
+    Returns:
+        Evaluation: Constraint values, normalised ``g``, objectives and status.
     """
     if x is not None and vehicle is not None:
         raise ValueError("give either x or vehicle, not both")
@@ -800,7 +811,12 @@ def evaluate(
 
 
 def failed_evaluation(space: DesignSpace, detail: str) -> Evaluation:
-    """All-failed evaluation (``unsolved``, ``G_FAIL`` / ``F_FAIL``) carrying ``detail``."""
+    """All-failed evaluation (``unsolved``, ``G_FAIL`` / ``F_FAIL``) carrying ``detail``.
+
+    Args:
+        space: Design space (gives the constraint and objective lists).
+        detail: Failure message stored on every term.
+    """
     study = space.study
     ctx = _Ctx(dict(study.sweeps), space.baseline)
     results = tuple(

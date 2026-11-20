@@ -27,11 +27,25 @@ from suspkin.units import Dim, normalize_dim, parse_quantity
 
 
 class Frozen(BaseModel):
+    """Base of all spec models: immutable and rejecting unknown keys."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
 def parse_scalar(v: Any, dim: Dim, factor: float = 1.0) -> float:
-    """Number or unit string -> SI; ``factor`` scales bare numbers (``units: mm``)."""
+    """Number or unit string -> SI; ``factor`` scales bare numbers (``units: mm``).
+
+    Args:
+        v: Number or quantity string such as ``"12 mm"``.
+        dim: Expected physical dimension (see :mod:`suspkin.units`).
+        factor: SI multiplier for bare numbers (from a ``units:`` key).
+
+    Returns:
+        Value in SI units.
+
+    Raises:
+        ValueError: ``v`` cannot be parsed for ``dim``.
+    """
     if isinstance(v, str):
         return parse_quantity(v, dim)
     if isinstance(v, bool) or not isinstance(v, int | float):
@@ -114,6 +128,11 @@ def parse_coord_ref(ref: str) -> tuple[Literal["front", "rear"], str, int]:
 
 
 def check_point_ref(ref: str) -> str:
+    """Validate a ``front.<hardpoint>`` / ``rear.<hardpoint>`` reference and return it unchanged.
+
+    Raises:
+        ValueError: If ``ref`` is not a known axle/hardpoint name.
+    """
     parse_point_ref(ref)
     return ref
 
@@ -130,6 +149,19 @@ def _seq(v: Any, n: int, what: str) -> list[Any]:
 
 
 def parse_pair(v: Any, dim: Dim, factor: float = 1.0) -> list[float]:
+    """Parse a two-element ``[lo, hi]`` range to SI floats.
+
+    Args:
+        v: List or tuple of two numbers or unit strings.
+        dim: Physical dimension of the entries (see :mod:`suspkin.units`).
+        factor: SI multiplier applied to bare numbers (from a ``units:`` key).
+
+    Returns:
+        ``[lo, hi]`` in SI units.
+
+    Raises:
+        ValueError: If ``v`` is not a two-element list or an entry fails to parse.
+    """
     return [parse_scalar(x, dim, factor) for x in _seq(v, 2, "range")]
 
 
@@ -421,7 +453,15 @@ def sweep_input_dim(sweep: CornerSweep | VehicleSweep) -> Dim:
 
 
 def sweep_range(sweep: CornerSweep | VehicleSweep, vehicle: Vehicle | None = None) -> Pair | None:
-    """SI range of a sweep; ``None`` for ``range: full`` without a vehicle."""
+    """SI range of a sweep; ``None`` for ``range: full`` without a vehicle.
+
+    Args:
+        sweep: Corner or vehicle sweep.
+        vehicle: Needed to resolve ``range: full`` (rack travel); optional otherwise.
+
+    Returns:
+        ``(lo, hi)`` in SI units, or ``None`` when ``range: full`` cannot be resolved.
+    """
     if isinstance(sweep, CornerSweep):
         return sweep.travel
     if sweep.range != "full":
@@ -431,7 +471,15 @@ def sweep_range(sweep: CornerSweep | VehicleSweep, vehicle: Vehicle | None = Non
 
 
 def sweep_metric_dim(sweep: CornerSweep | VehicleSweep, metric: str) -> Dim:
-    """Dimension of ``metric`` in the result table of ``sweep``."""
+    """Dimension of ``metric`` in the result table of ``sweep``.
+
+    Args:
+        sweep: Corner or vehicle sweep.
+        metric: Column name of the sweep's result table.
+
+    Returns:
+        Physical dimension of that column (SI).
+    """
     return (
         corner_metric_dim(metric) if isinstance(sweep, CornerSweep) else vehicle_metric_dim(metric)
     )

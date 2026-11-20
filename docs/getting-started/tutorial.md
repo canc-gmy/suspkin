@@ -363,7 +363,7 @@ What the objects are:
 | `sk.run_standard_studies`, `sk.build_report` | studies, report folder | what `report` does |
 
 The stable function list is `suspkin.__all__` ([Stability](../guides/stability.md));
-the [Python API reference](../reference/api.md) has the signatures. The five scripts in
+the [Python API reference](../reference/index.md) has the signatures. The five scripts in
 `examples/` are worked, runnable versions of this ([Examples](../guides/examples.md)).
 
 ## 7. Change one hardpoint and compare

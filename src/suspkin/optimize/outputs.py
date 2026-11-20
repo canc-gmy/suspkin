@@ -66,7 +66,12 @@ def best_row(history: pd.DataFrame) -> int:
 
 
 def pareto_rows(history: pd.DataFrame, study: Study) -> np.ndarray[Any, np.dtype[np.intp]]:
-    """Row positions of the feasible non-dominated, x-unique designs (objective columns ``f_*``)."""
+    """Row positions of the feasible non-dominated, x-unique designs (objective columns ``f_*``).
+
+    Args:
+        history: History table with ``f_*`` objective columns and ``feasible``/``status``.
+        study: Study (gives the objective names).
+    """
     cols = [f"f_{n}" for n in objective_names(study)]
     xcols = [c for c in history.columns if c.startswith("x_")]
     feas = np.flatnonzero(_ok_feasible(history))
@@ -149,7 +154,21 @@ def write_outputs(
 ) -> Path | None:
     """Write ``best.yaml``, Pareto files, ``result.json``, ``meta.json``, figures and report.
 
-    ``pareto_idx`` is None outside Pareto mode. Returns the path of ``report.html`` (or None).
+    Args:
+        out_dir: Run folder (exists).
+        study: Study specification and its design space.
+        space: Study specification and its design space.
+        history: Full evaluation history table (SI).
+        baseline: Evaluations of the starting design and of the selected best design.
+        best_eval: Evaluations of the starting design and of the selected best design.
+        best_x: Normalised design vector of the best design, shape ``(space.n,)``.
+        best_eval_id: ``eval_id`` of the best row in ``history`` (``None`` if not in the table).
+        pareto_idx: Row positions of the Pareto set; ``None`` outside Pareto mode.
+        meta: Content of ``meta.json`` (see :func:`make_meta`).
+        report: Also build the before/after report.
+
+    Returns:
+        Path or None: Path of ``report.html``, or ``None`` when no report was written.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     v0 = space.baseline
@@ -246,7 +265,13 @@ def _point_study_at_vehicle(text: str) -> str:
 
 
 def copy_inputs(study_path: Path, vehicle_path: Path, out_dir: Path) -> None:
-    """Copy the study and vehicle into the run folder; the study then points at ``vehicle.yaml``."""
+    """Copy the study and vehicle into the run folder; the study then points at ``vehicle.yaml``.
+
+    Args:
+        study_path: Source files.
+        vehicle_path: Source files.
+        out_dir: Run folder receiving ``study.yaml`` and ``vehicle.yaml``.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     dst_study, dst_vehicle = out_dir / "study.yaml", out_dir / "vehicle.yaml"
     text = _point_study_at_vehicle(study_path.read_text(encoding="utf-8"))
@@ -257,7 +282,19 @@ def copy_inputs(study_path: Path, vehicle_path: Path, out_dir: Path) -> None:
 
 
 def study_hash(study: Study) -> str:
-    """SHA-256 of the canonical JSON of the constraint and objective definitions."""
+    """SHA-256 hex digest of the study's constraints and objectives only.
+
+    The payload is the sorted-key JSON of ``constraints`` and ``objectives`` (each dumped with
+    ``model_dump(mode="json")``). Variables, sweeps, regions, the optimizer block, the surrogate
+    block and the vehicle file are NOT hashed, so resuming a run does not detect changes to
+    them; only an edit of a constraint or objective invalidates the hash.
+
+    Args:
+        study: Parsed study specification.
+
+    Returns:
+        64-character lowercase hexadecimal digest.
+    """
     payload = {
         "constraints": [c.model_dump(mode="json") for c in study.constraints],
         "objectives": [o.model_dump(mode="json") for o in study.objectives],
@@ -288,7 +325,20 @@ def make_meta(
     workers: int,
     resumed: bool,
 ) -> dict[str, Any]:
-    """Assemble ``meta.json`` content."""
+    """Assemble ``meta.json`` content.
+
+    Args:
+        study_path: Study YAML path (stored as a string).
+        seed: Optimizer settings actually used.
+        method: Optimizer settings actually used.
+        mode: Optimizer settings actually used.
+        started: Run start and end timestamps (stored as ISO strings; the duration is derived).
+        ended: Run start and end timestamps (stored as ISO strings; the duration is derived).
+        n_evals: Evaluations done in this invocation and in the whole run including resumed ones.
+        n_total: Evaluations done in this invocation and in the whole run including resumed ones.
+        workers: Number of worker processes.
+        resumed: Whether the run continued an earlier history.
+    """
     return {
         "suspkin_version": suspkin.__version__,
         "git_hash": git_hash(study_path.resolve().parent),

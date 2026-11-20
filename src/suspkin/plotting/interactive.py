@@ -38,24 +38,19 @@ def interactive_view(
 ) -> Path:
     """Write a self-contained interactive plotly HTML of the vehicle (static or solved pose).
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-    state : VehicleState, optional
-        Solved pose; static geometry if omitted. Body frame fixed, ground moves.
-    path : str or Path
-        Output HTML file.
-    inline : bool
-        Embed plotly.js in the file (offline use, ~4 MB). Default loads it from the CDN.
+    Args:
+        vehicle (Vehicle):
+        state (VehicleState, optional): Solved pose; static geometry if omitted. Body frame fixed,
+            ground moves.
+        path (str or Path): Output HTML file.
+        inline (bool): Embed plotly.js in the file (offline use, ~4 MB). Default loads it from the
+            CDN.
 
-    Returns
-    -------
-    Path
+    Returns:
+        Path:
 
-    Raises
-    ------
-    ImportError
-        If plotly (the ``viz`` extra) is not installed.
+    Raises:
+        ImportError: If plotly (the ``viz`` extra) is not installed.
     """
     fig = interactive_figure(vehicle, state)
     out = Path(path)
@@ -66,20 +61,16 @@ def interactive_view(
 def interactive_figure(vehicle: Vehicle, state: VehicleState | None = None) -> Any:
     """Plotly ``Figure`` of the vehicle (static or solved pose), not written anywhere.
 
-    Parameters
-    ----------
-    vehicle : Vehicle
-    state : VehicleState, optional
-        Solved pose; static geometry if omitted. Body frame fixed, ground moves.
+    Args:
+        vehicle (Vehicle):
+        state (VehicleState, optional): Solved pose; static geometry if omitted. Body frame fixed,
+            ground moves.
 
-    Returns
-    -------
-    plotly.graph_objects.Figure
+    Returns:
+        plotly.graph_objects.Figure:
 
-    Raises
-    ------
-    ImportError
-        If plotly (the ``viz`` extra) is not installed.
+    Raises:
+        ImportError: If plotly (the ``viz`` extra) is not installed.
     """
     go = _import_plotly()
     scene = vehicle_segments(vehicle, state)

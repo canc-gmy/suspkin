@@ -115,6 +115,19 @@ def save_bundle(
     "rename old aside, rename new into place, delete old": on Windows (no atomic directory
     replace) a crash between the two renames leaves the old bundle in a ``.<name>.old-*``
     sibling folder.
+
+    Args:
+        results: Study tables (SI) to store, see :mod:`suspkin.report.studies`.
+        out_dir: Bundle folder.
+        label: Display name stored in the manifest.
+        source: See above.
+        params: See above.
+        overwrite: See above.
+        created: See above.
+
+    Raises:
+        BundleError: If ``out_dir`` is a non-empty folder and ``overwrite`` is false or it is not a
+            bundle.
     """
     out = Path(out_dir)
     if out.exists():
@@ -200,12 +213,11 @@ def _read_json(path: Path, what: str) -> Any:
 def load_bundle(path: str | Path) -> Bundle:
     """Read a bundle folder.
 
-    Raises
-    ------
-    BundleError
-        If ``path`` is not a bundle, its schema is not :data:`BUNDLE_SCHEMA`, or one of its
-        files (``manifest.json``, ``vehicle.yaml``, ``summary.json``, a table CSV) is
-        missing or malformed; the message includes the offending path.
+    Raises:
+        BundleError: If ``path`` is not a bundle, its schema is not :data:`BUNDLE_SCHEMA`, or one of
+            its
+            files (``manifest.json``, ``vehicle.yaml``, ``summary.json``, a table CSV) is
+            missing or malformed; the message includes the offending path.
     """
     root = Path(path)
     if not is_bundle(root):

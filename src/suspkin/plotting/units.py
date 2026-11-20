@@ -46,7 +46,15 @@ SUMMARY_ROWS: tuple[tuple[str, tuple[str, ...], float, str, str], ...] = (
 
 
 def format_value(fmt: str, value: float) -> str:
-    """``fmt.format(value)`` without a negative zero ("-0.0" becomes "0.0")."""
+    """``fmt.format(value)`` without a negative zero ("-0.0" becomes "0.0").
+
+    Args:
+        fmt: ``str.format`` pattern such as ``"{:.2f}"``.
+        value: Number to format.
+
+    Returns:
+        The formatted text.
+    """
     text = fmt.format(value)
     if "-" in text and not any(c in "123456789" for c in text):
         return (

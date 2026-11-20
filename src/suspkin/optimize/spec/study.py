@@ -225,7 +225,15 @@ def _check_sweep_refs(study: Study) -> None:
 
 
 def variable_resolution(study: Study, var: Variable) -> float | None:
-    """Grid resolution (m) of a variable: its own override, else the study's (``None``: none)."""
+    """Grid resolution (m) of a variable: its own override, else the study's (``None``: none).
+
+    Args:
+        study: Parsed study (carries the global ``grid`` resolution).
+        var: Design variable.
+
+    Returns:
+        Grid resolution [m], or ``None`` for a continuous variable.
+    """
     return var.resolution if "resolution" in var.model_fields_set else study.resolution
 
 
@@ -241,7 +249,15 @@ def _base_point(vehicle: Vehicle, var: Variable) -> tuple[float, float, float]:
 
 
 def check_grid(study: Study, vehicle: Vehicle) -> None:
-    """Every gridded variable must have at least one grid node inside its domain."""
+    """Every gridded variable must have at least one grid node inside its domain.
+
+    Args:
+        study: Parsed study.
+        vehicle: Baseline vehicle supplying the domains.
+
+    Raises:
+        ValueError: A gridded variable has no grid node inside its domain.
+    """
     for var in study.variables:
         res = variable_resolution(study, var)
         if res is None:
@@ -327,7 +343,16 @@ def _check_ranges(study: Study, vehicle: Vehicle | None) -> None:
 
 
 def check_against_vehicle(study: Study, vehicle: Vehicle) -> None:
-    """Checks that need the vehicle: points exist, ``range: full`` ranges, rack present."""
+    """Checks that need the vehicle: points exist, ``range: full`` ranges, rack present.
+
+    Args:
+        study: Parsed study.
+        vehicle: Baseline vehicle the study refers to.
+
+    Raises:
+        ValueError: A referenced point is undefined, ``range: full`` has no rack or a steering
+            sweep is used on a vehicle without steering.
+    """
     refs: list[str] = [v.point for v in study.variables]
     for c in study.constraints:
         if isinstance(c, InsideConstraint | OutsideConstraint):
@@ -352,10 +377,9 @@ def check_against_vehicle(study: Study, vehicle: Vehicle) -> None:
 def load_study(path: str | Path) -> tuple[Study, Vehicle]:
     """Load a study YAML and the vehicle it points to (path relative to the study file).
 
-    Raises
-    ------
-    StudyConfigError
-        On I/O, YAML, validation or cross-validation errors; the message includes the path.
+    Raises:
+        StudyConfigError: On I/O, YAML, validation or cross-validation errors; the message includes
+            the path.
     """
     p = Path(path)
     try:

@@ -2,7 +2,8 @@
 
 Designs: the baseline of ``configs/studies/fs_reference_optimize.yaml`` and 8 seeded random
 designs from its DesignSpace; grid +-30 mm travel (41 points) and the full rack travel
-(21 points). Tolerances follow DESIGN_PLAN section 13.5; the other fields get loose bounds
+(21 points). Tolerances follow docs/concepts/surrogate.md (vehicle layer); the other
+fields get loose bounds
 (roughly 10-100x the error measured when the layer was written) that only guard against
 a broken formula, not against interpolation noise.
 """
