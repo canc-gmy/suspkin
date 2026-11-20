@@ -10,6 +10,7 @@ missing files fail the comparison.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -61,11 +62,37 @@ _B64 = re.compile(r"(data:[\w/+.-]+;base64,)[A-Za-z0-9+/=]+")
 _PATH_TAIL = re.compile(r"(<TMP>|<REPO>)([\w./\\-]*)")
 _SCRIPT = re.compile(r"(<script[^>]*>)(.*?)(</script>)", re.DOTALL)
 _BIG = 100_000
+_SNAP_PREFIX = "window.__SUSPKIN_SNAPSHOT__="
+_SNAP_SCRIPT = re.compile(r"<script>" + re.escape(_SNAP_PREFIX) + r"(.*?)</script>", re.DOTALL)
+_ID10 = re.compile(r'"([0-9a-f]{10})"')
+# health.workspace is the working-directory name for ``app-export`` (checkout dir differs per host)
+_WORKSPACE = re.compile(r'("workspace":")(?!<TMP>)[^"]*(")')
+
+
+def _snapshot_script(body: str) -> str:
+    """Keep a snapshot payload in full, with the path-hashed dataset / run ids tokenised."""
+    ids: dict[str, str] = {}
+
+    def tok(m: re.Match[str]) -> str:
+        return '"' + ids.setdefault(m.group(1), f"<ID{len(ids) + 1}>") + '"'
+
+    return _WORKSPACE.sub(lambda m: m.group(1) + "<WORKSPACE>" + m.group(2), _ID10.sub(tok, body))
+
+
+def _norm_tails(text: str) -> str:
+    """Normalise path tails after ``<TMP>`` / ``<REPO>``: backslashes and ``//`` become ``/``."""
+
+    def fix(m: re.Match[str]) -> str:
+        return m.group(1) + re.sub(r"/+", "/", m.group(2).replace("\\", "/"))
+
+    return _PATH_TAIL.sub(fix, text)
 
 
 def _big_script(m: re.Match[str]) -> str:
     if len(m.group(2)) < _BIG:
         return m.group(0)
+    if m.group(2).startswith(_SNAP_PREFIX):
+        return m.group(1) + _snapshot_script(m.group(2)) + m.group(3)
     digest = hashlib.sha256(m.group(2).encode("utf-8")).hexdigest()[:16]
     return f"{m.group(1)}<LARGE-SCRIPT sha256={digest} len={len(m.group(2))}>{m.group(3)}"
 
@@ -87,7 +114,7 @@ def scrub(text: str, *, tmp: Path) -> str:
         repo.append(s)
     for s in sorted(set(repo), key=len, reverse=True):
         text = text.replace(s, "<REPO>")
-    text = _PATH_TAIL.sub(lambda m: m.group(1) + m.group(2).replace("\\", "/"), text)
+    text = _norm_tails(text)
     text = _B64.sub(r"\1<B64>", text)
     text = _SCRIPT.sub(_big_script, text)
     text = _DEC_SECONDS.sub("<DUR>", text)
@@ -112,8 +139,25 @@ def _cmp_scalar(new: Any, old: Any, key: str, where: str) -> None:
         assert new == old, f"{where}:{key}: {new!r} != {old!r}"
 
 
+def _decode_typed(obj: Any) -> Any:
+    """Replace Plotly typed arrays ``{"dtype", "bdata"[, "shape"]}`` by decoded value lists."""
+    if isinstance(obj, dict):
+        if "bdata" in obj and "dtype" in obj and isinstance(obj["bdata"], str):
+            dt = np.dtype(obj["dtype"]).newbyteorder("<")
+            arr = np.frombuffer(base64.b64decode(obj["bdata"]), dtype=dt)
+            out: dict[str, Any] = {"dtype": str(dt), "values": arr.astype(float).tolist()}
+            if "shape" in obj:
+                out["shape"] = obj["shape"]
+            return out
+        return {k: _decode_typed(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_decode_typed(v) for v in obj]
+    return obj
+
+
 def _cmp_tree(new_text: str, old_text: str, loader: Any, where: str) -> None:
-    new, old = flatten(loader(new_text)), flatten(loader(old_text))
+    new = flatten(_decode_typed(loader(new_text)))
+    old = flatten(_decode_typed(loader(old_text)))
     added, removed = sorted(set(new) - set(old)), sorted(set(old) - set(new))
     assert not (added or removed), f"{where}: keys added={added[:10]} removed={removed[:10]}"
     for k, v in old.items():
@@ -168,7 +212,18 @@ def _compare_text(rel: str, new_text: str, old_text: str, *, relaxed: bool = Fal
     elif suffix in {".yaml", ".yml"}:
         _cmp_tree(new_text, old_text, yaml.safe_load, rel)
     else:
-        _cmp_text_numeric(new_text, old_text, rel)
+        _cmp_html(new_text, old_text, rel)
+
+
+def _cmp_html(new_text: str, old_text: str, where: str) -> None:
+    """Text compare; an embedded snapshot payload is compared as a JSON tree (tolerance)."""
+    new_m, old_m = _SNAP_SCRIPT.search(new_text), _SNAP_SCRIPT.search(old_text)
+    assert (new_m is None) == (old_m is None), f"{where}: snapshot payload presence differs"
+    if new_m is not None and old_m is not None:
+        _cmp_tree(new_m.group(1), old_m.group(1), json.loads, f"{where}:payload")
+        new_text = new_text[: new_m.start(1)] + new_text[new_m.end(1) :]
+        old_text = old_text[: old_m.start(1)] + old_text[old_m.end(1) :]
+    _cmp_text_numeric(new_text, old_text, where)
 
 
 def _collect(out: Path) -> list[Path]:
@@ -219,7 +274,7 @@ def snapshot_dir(
         f"removed={sorted(stored - set(texts))}"
     )
     for rel, new_text in texts.items():
-        old_text = (dest / rel).read_text(encoding="utf-8")
+        old_text = _norm_tails((dest / rel).read_text(encoding="utf-8"))
         if rel.startswith("files/"):
             _compare_text(f"{name}/{rel}", new_text, old_text, relaxed=relaxed)
         elif relaxed and rel == "stdout.txt":

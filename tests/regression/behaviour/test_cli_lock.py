@@ -124,8 +124,15 @@ OPTIMIZE_RELAXED = bool(os.environ.get("CI")) or sys.platform != "win32"
 @pytest.fixture(autouse=True)
 def _no_numba(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SUSPKIN_NO_NUMBA", "1")
+    # Pinned help rendering. The snapshots were recorded on a legacy Windows console, where
+    # Rich draws square boxes and is one column narrower than COLUMNS. Force that mode on every
+    # platform (it only affects Rich's own width / box choice) and clear colour / width env.
     monkeypatch.setenv("COLUMNS", "100")
+    monkeypatch.setenv("TERM", "xterm")
     monkeypatch.setenv("NO_COLOR", "1")
+    for var in ("GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS", "LINES", "TERMINAL_WIDTH"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr("rich.console.detect_legacy_windows", lambda: True)
     monkeypatch.setenv("MPLBACKEND", "Agg")
     _numba.reset()
 
