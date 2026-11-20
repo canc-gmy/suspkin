@@ -66,6 +66,17 @@ class Recorder:
         return body
 
 
+class _Patched:
+    """Minimal response stand-in carrying an edited JSON body."""
+
+    def __init__(self, status_code: int, body: Any) -> None:
+        self.status_code = status_code
+        self._body = body
+
+    def json(self) -> Any:
+        return self._body
+
+
 def _make_run(root: Path) -> None:
     run = root / "run1"
     run.mkdir()
@@ -206,9 +217,21 @@ def test_app_lock(tmp_path: Path, update_lock: bool, monkeypatch: pytest.MonkeyP
     rec("summary_unknown_404", c.get(f"{API}/datasets/zzz/summary"))
 
     rec("export_bad_name_400", c.post(f"{API}/export", json={"out": "snap.txt"}))
-    rec("export", c.post(f"{API}/export", json={"out": "snap.html"}))
-    rec("export_exists_409", c.post(f"{API}/export", json={"out": "snap.html"}))
-    rec("export_overwrite", c.post(f"{API}/export", json={"out": "snap.html", "overwrite": True}))
+    # the exported page's byte size depends on the machine (workspace path, ids, float
+    # encoding); check it against the written file, then lock a token. snap.html itself
+    # is compared in full below.
+    for label, extra in (
+        ("export", {}),
+        ("export_exists_409", {}),
+        ("export_overwrite", {"overwrite": True}),
+    ):
+        resp = c.post(f"{API}/export", json={"out": "snap.html", **extra})
+        if resp.status_code == 200:
+            body = resp.json()
+            assert body["size"] == (ws / "snap.html").stat().st_size
+            body["size"] = "<SIZE>"
+            resp = _Patched(resp.status_code, body)
+        rec(label, resp)
     shutil.copyfile(ws / "snap.html", out / "snap.html")
 
     for i, d in enumerate(c.get(f"{API}/datasets").json()):
