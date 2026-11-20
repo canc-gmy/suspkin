@@ -18,7 +18,7 @@ specification, `Problem`, drivers).
 
 ## 1. Purpose and position in the pipeline
 
-One FOM evaluation of the reference study costs about 240 ms (two axles, all sweeps). A global
+One FOM evaluation of the reference study costs about 240 ms (a figure measured earlier, quoted from ADR 0007 and the guide, not re-measured here; two axles, all sweeps). A global
 search over all hardpoints of both axles (90 design parameters in the benchmark study) needs
 tens of thousands of evaluations, hours of compute. The kinematics are smooth functions of the
 hardpoints, so a network can learn them.
@@ -252,7 +252,7 @@ DIR/dataset/<axle>/shard_00000.npz  row, X, Y, mask, feasible, split, source, we
 1. Load the study, build `DesignSpace`, `AxleSpace`, the grid and the channel list. `n` defaults
    to `surrogate.dataset.n_initial`. Zero axle variables raise `NoAxleVariablesError`.
 2. Build the meta dict: axle, channels, parameter names, grids, `grid_hash`, `design_space_hash`
-   (variables, hardpoints and right-hand overrides of this axle; the grid *resolution* is excluded),
+   (variables, hardpoints and right-hand overrides of this axle; each variable's hardpoint `resolution`, the quantisation step, is excluded; the surrogate grid is covered by `grid_hash`),
    `vehicle_hash` (SHA-256 of the vehicle JSON), `seed`, `n_initial`, `shard_size`, resolved
    `lhs_optimization`.
 3. Refuse a non-empty directory unless `resume`; with `resume`, `check_dataset_matches` and a
@@ -335,8 +335,7 @@ h_0 = x,\qquad h_{l} = \operatorname{Drop}\!\big(\operatorname{Norm}(\sigma(W_l 
 \;[\,+\,h_{l-1}\text{ if residual and widths equal}\,],
 $$
 
-for $l=1\dots L$ (the first block maps $d\to$ `width`, so it never has a skip; the others do when
-`residual`), then
+for $l=1\dots L$ (the skip exists only when the block's input and output widths are equal and `residual` is set: the first block maps $d\to$ `width`, so it has none unless $d=$ `width`, which is the case for no benchmark axle, $d=45$; the others do), then
 
 $$
 \text{reg} = W_r h_L + b_r\in\mathbb{R}^{n_{out}},\qquad
@@ -360,7 +359,7 @@ about the design (assemblability). The sigmoid of the validity logits is $p_{val
 `TrainConfig(lr=1e-3, weight_decay=1e-5, batch_size=512, max_epochs=200, patience=30,
 warmup_epochs=5, lam_feas=0.1, seed=0, device="auto", finetune_lr_factor=0.1,
 num_threads=None)`. `resolve_device("auto")` returns CUDA when available (the `surrogate` extra
-resolves to the CUDA 12.4 wheels on Windows, which also run on CPU-only machines), else CPU; `"cuda"`
+resolves to the CUDA 12.4 wheels on Windows, which also run on CPU-only machines, and to the CPU wheels on Linux), else CPU; `"cuda"`
 without a device raises `RuntimeError`. `train()` sets `torch.manual_seed(seed)` and
 `torch.use_deterministic_algorithms(True, warn_only=True)` (process-wide, not restored);
 `CUBLAS_WORKSPACE_CONFIG` is set at import.
@@ -422,7 +421,8 @@ active-learning rows) makes the early-stopping score $\tfrac12(\text{val}+\text{
 update cannot ignore the new points. With `init`, patience counts epochs without a new best of
 **this run** (`run_best`), so a slow start still gets its patience. `FinetuneCache` keeps the
 validation split, a fixed set of replayed train rows and the growing active-learning rows as
-tensors on the device, avoiding per-iteration re-assembly.
+tensors, avoiding per-iteration re-assembly. They live on the device if they fit (less than 35 %
+of the free CUDA memory, `_MAX_RESIDENT_FRACTION`), else in pinned host memory.
 
 ### `TrainedModel`, prediction, persistence
 
@@ -475,7 +475,7 @@ and only the final training needs repeating.
 is CUDA), else sequentially (two processes would compete for CPU cores).
 
 `suspkin.surrogate.report.write_hpo_report(models_dir, axles)` (no torch) reads `optuna.db`
-**read-only** (SQLite `mode=ro`, safe while a search runs) and writes `hpo_report.md`: dataset and
+**read-only** (SQLite `mode=ro`, safe while a search runs) and writes `models_dir/hpo_report.md` (`DIR/models/hpo_report.md`): dataset and
 budget table, trial counts, best trial, top-10 table with worst channels, pruned trials, final
 model score and its five worst channels.
 
@@ -487,7 +487,7 @@ benchmark study (`optuna.db`, `trials.csv`, `hpo_result.json`, `model/` and `hpo
 | | front | rear |
 |---|---|---|
 | Rows train / val / test | 15 957 / 2 058 / 1 985 | same |
-| Trials | 28 (10 complete, 18 pruned; stopped by the 90 min timeout) | 60 (14 complete, 46 pruned) |
+| Trials | 28 (10 complete, 18 pruned; search wall time 1 h 30 m 57 s, so presumably stopped by the 90 min timeout of the study YAML: the committed `hpo_result.json` and report record no timeout for this axle) | 60 (14 complete, 46 pruned) |
 | Best architecture | 7 layers, width 639, silu, residual, `raw` | 6 layers, width 943, silu, residual, `raw` |
 | Final validation score | 0.864 | 0.473 |
 | Median / max channel ratio | 0.42 / 4.52 | 0.27 / 3.56 |
@@ -586,7 +586,7 @@ nodes $i-1\dots i+2$ that enter $y_i,y_{i+1},m_i,m_{i+1}$). A query outside $[x_
 $10^{-9}$ tolerance) or touching a masked node (NaN `y`) gives **NaN, never an extrapolation**. A grid with a
 single node (`x.size == 1`) returns the value only at that node. `travel_curves(batch, names,
 rack=0)` first masks invalid nodes to NaN, then selects the rack row (or interpolates along the rack
-if it is not a node) and returns a `Hermite` over the travel axis. Queries may be shared `(N,)`
+if it is not a node; if it is not a node and the grid has a single rack node, as on the rear axle, the result is NaN) and returns a `Hermite` over the travel axis. Queries may be shared `(N,)`
 or per design `(B, N)`.
 
 ## 11. The vehicle layer
@@ -655,8 +655,9 @@ $$
 $$
 
 with $\varsigma=+1$ left, $-1$ right, and the contact point $\mathbf c$ in the body frame.
-The curves used (`_POSE_FULL`) are camber, toe, `contact_patch_dy`, `contact_patch_dx`,
-`wheel_center_recession` and `fv_swing_angle`; the iteration uses the first four.
+The iteration reads the curves `_POSE_CORE` = camber, toe, `contact_patch_dy` and
+`wheel_center_recession`; only after convergence `_POSE_FULL` adds `contact_patch_dx` and
+`fv_swing_angle` (used for the contact point and the roll-centre line).
 
 ### Roll centre
 
@@ -664,8 +665,7 @@ The front-view roll centre is the intersection of two lines, one per wheel: thro
 point $(c_y,c_z)$ with direction $(\mp\cos a,\ \sin a)$ ($a$ = the `fv_swing_angle` line angle,
 inboard direction $-y$ for the left, $+y$ for the right). With unit normals $(-d_z, d_y)$ the
 2x2 system is solved by Cramer's rule. Parallel lines give NaN unless they are coincident (then
-$y=0$). The height above ground is $\mathbf n\cdot(\mathbf x_{mid}-\mathbf p_v)$ with $x_{mid}$ the mean contact $x$,
-plus $p_{v,z}+h$. Because the instant centre itself is not a channel, a line whose swing angle was
+$y=0$). The height above ground is $\mathbf n\cdot\big((x_{mid},y_{rc},z_{rc})-\mathbf p_v\big)+p_{v,z}+h$ with $x_{mid}$ the mean contact $x$. Because the instant centre itself is not a channel, a line whose swing angle was
 taken at the vertical contact patch differs slightly under roll (error of the order patch
 shift / FVSA).
 
@@ -700,9 +700,10 @@ $p$ fitted to $y(\phi)$ (from the pseudo-inverse of the scaled Vandermonde matri
   $\phi=m_s a_y (h_s-h_{ra})/D$ and `roll_gradient` (per g) is $M/D$. The lateral load
   transfer of an axle is $LT=K\phi/t+m_{s,axle}\,a_y\,z_{rc}/t+m_u a_y h_u/t$ with
   $m_{s,f}=m_s(L-a)/L$, $m_{s,r}=m_s a/L$ ($a=-x_s$), and `tlltd_front` $=LT_f/(LT_f+LT_r)$.
-- **Anti-dive / anti-lift / anti-squat**: $\tan(\text{swing angle})\times\text{share}\times\frac{L}{h_{cg}}\times100$ using the static `sv_swing_angle`
-  (contact patch) or `sv_wc_angle` (wheel centre, per `brakes` inboard/outboard), the brake bias and
-  the drive split.
+- **Anti-dive / anti-lift / anti-squat**: $\tan(\text{swing angle})\times\text{share}\times\frac{L}{h_{cg}}\times100$ using the static side-view swing angles. Anti-dive (front) and
+  anti-lift (rear) use `sv_swing_angle` (contact patch) when `brakes == "outboard"` and
+  `sv_wc_angle` (wheel centre) when the brakes are inboard, with the brake bias; anti-squat (rear)
+  and `anti_lift_front_accel` always use `sv_wc_angle`, with the drive split.
 - **Pitch centre**: intersection of the static side-view lines of the front and rear contact patches.
 - **Steering** (`_steering`): the travel-0 row of the front `steer_angle` curve versus rack at 41 rack
   samples, inner and outer wheel angle, lock side and maximum angles, Ackermann percentage at 5, 10,
@@ -727,7 +728,7 @@ elastic ARB, ...) raise `UnsupportedColumnError`.
 `vehicle_frame` (summary fields and `sweep.<kind>.<column>`; heave $\pm20$ mm, roll $\pm0.035$ rad,
 pitch $\pm0.02$ rad, rack $\pm30$ mm). It measures the layer's own error (interpolation, Hermite
 slopes, polynomial fit) separately from the network error. ADR 0007 reports it far below the
-tolerances (roll-centre height about $10^{-13}$ mm).
+tolerances (roll-centre height about $10^{-13}$ mm; a historical figure from that ADR, not re-run here).
 
 ## 12. `SurrogateProblem` and the training workflow
 
@@ -741,7 +742,7 @@ uses an injected predictor, or `BaselineAxle` if the axle has no variable. All c
 batch are evaluated together by `SurrogateEvaluator`. The history `source` is always `"surrogate"`.
 
 **Constraint margin.** Every constraint that evaluated (`pass`/`fail`) reports $g+\delta$
-(`_shifted`, $\delta=$ `margin`, default 0.05), so a surrogate-feasible design has a predicted
+(`_shifted`, $\delta=$ `margin`; the constructor default is 0, and the active-learning loop passes `ActiveLearningSpec.margin`, default 0.05), so a surrogate-feasible design has a predicted
 $g\le-\delta$. Unsolved and infeasible constraints keep `G_FAIL`; the raw values are stored in `raw_g`.
 This is a safety margin against network error: the optimiser must find designs that pass with
 room to spare.
@@ -834,8 +835,8 @@ $f_{FOM}$ the verified value of $x^\ast$:
 $$
 \rho=\begin{cases}
 \dfrac{f_b-f_{FOM}}{f_b-f_{NN}} & \text{feasible best, feasible FOM, predicted gain}>0\\
-\text{NaN} & \text{no predicted gain (the caller shrinks)}\\
-0 & \text{FOM finds }x^\ast\text{ infeasible}
+\text{NaN} & \text{no predicted gain (tested first; the caller shrinks)}\\
+0 & \text{FOM finds }x^\ast\text{ infeasible (tested after the NaN case)}
 \end{cases}
 $$
 
@@ -845,15 +846,14 @@ the verified front, else 0.
 
 **Radius** (`update_radius`): $\rho$ NaN or $<0.25$: $r\leftarrow\max(r/2,r_{min})$; $\rho>0.75$ **and** the step
 reached the boundary (`hits_boundary`, with half a grid step of slack on a hardpoint grid): $r\leftarrow\min(2r,r_{max})$;
-else unchanged. The minimum radius is raised to one hardpoint grid step per variable
-(`grid_step_z`), since a smaller box cannot contain a different design.
+else unchanged. The minimum radius is raised to the largest per-variable hardpoint grid step
+(`np.max(grid_step_z)`), since a smaller box cannot contain a different design.
 
 **Stopping** (`StopState`, `advance_stop`, `stop_reason`): with $p=$ `stop.patience`,
 `agree` counts consecutive iterations with $|f_{NN}-f_{FOM}|/f_{scale}<\varepsilon_f$ and equal feasibility
 ($f_{scale}=\max(|f_{baseline}|,1)$); `stale` counts iterations without improvement, where
 improved means: a newly feasible best, or a feasible best whose `f` decreased by more than
-$0.1\,\varepsilon_f f_{scale}$, or, while infeasible, a `max_g` decrease; `at_min` counts iterations with the radius at its minimum
-and no improvement. Order of checks: `agreement` ($\ge p$), `stagnation`, `radius_min`, `max_iterations`,
+$0.1\,\varepsilon_f f_{scale}$, or, while infeasible, a `max_g` decrease; `at_min` counts iterations whose next radius $r_{next}\le r_{min}$ without improvement. Order of checks: `agreement` ($\ge p$), `stagnation`, `radius_min`, `max_iterations`,
 `fom_budget` (rows in the history, baseline and resumed rows included), `time_budget`. Other
 reasons from the loop: `no_candidates`, `error`.
 
@@ -945,7 +945,7 @@ pod = PodBasis.fit(Z, 5)
 Output (8 rows, 45 parameters):
 
 ```text
-front X (8, 45) Y (8, 29, 21, 41) mask (8, 21, 41) split [7 1 0] sources {'lhs'}
+front X (8, 45) Y (8, 29, 21, 41) mask (8, 21, 41) split [7 1] sources {'lhs'}
 row 0 equals the baseline: True
 Z (8, 29, 21, 41) float32; camber mean -0.01535 rad, std 0.02529 rad
 POD k 5, explained [0.7061 0.1053 0.0813 0.0474 0.0344], total 0.9744, D 24969
@@ -953,7 +953,7 @@ reconstruction rms in standardised units: 0.1599
 ```
 
 Five modes of eight samples keep 97.4 % of the variance of this tiny set (the rank is at most 8).
-The split `[7 1 0]` is the hash rule of section 5 for rows 0..7.
+`np.bincount(ds.split, minlength=3)` gave `[7 1 0]`: 7 train, 1 val, 0 test, by the hash rule of section 5 for rows 0..7.
 
 ### Oracle evaluation versus the FOM
 
@@ -992,7 +992,8 @@ oracle-surrogate f_total 11.35039636584316   FOM f_total 11.350351418784   feasi
 ```
 
 Constraints that depend on the exact rebuilt corner (camber, joint angle, roll centre) agree to
-$10^{-9}$ or better; the ones built from finite differences of interpolated curves (motion ratio,
+$10^{-9}$ or better (`toe_band_f` $4.6\cdot10^{-7}$ and `tlltd_front` $1.2\cdot10^{-5}$ are
+slightly looser); the ones built from finite differences of interpolated curves (motion ratio,
 `mr_front` $5\cdot10^{-4}$, reach with a coilover stroke $2\cdot10^{-3}$) show the Hermite error, which is the layer's
 floor. (The 0.9 s of the `predict` stage in `ev.timers` is the oracle running the FOM extraction itself;
 the `layer`, `rebuild` and `evaluator` stages took 0.004 s, 0.002 s and 0.003 s for this one design.)
@@ -1012,7 +1013,7 @@ rear baseline Y (1, 28, 1, 41) p_valid min 1.0 ratio mean 0.157 max 2.36 toggle_
 
 At the baseline the network is within 0.16 tolerance on average (worst: `toggle_margin`, 2.4 tolerances),
 well below its validation mean of 0.47, because the baseline is the centre of the training distribution (row 0 is
-always in the data). A forward pass for one design takes about 1.6 ms on CPU (first call).
+always in the data). A forward pass for one design took about 1.6 ms on CPU in this one-off measurement (a reviewer measured 1.6 ms on a warmed call; not a benchmark).
 
 ## 16. Where it is tested
 
