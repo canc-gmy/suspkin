@@ -1,139 +1,109 @@
 # Surrogate optimisation (experimental)
 
-The v1.1 surrogate replaces the full-order model (FOM) inside the optimiser with two small neural
-networks, so that **all hardpoints of both axles** can be optimised together. It is experimental:
-the Python package `suspkin.surrogate` is not in `suspkin.__all__` and its API may change in minor
-releases. The `surrogate:` study block and the commands below are additions to study schema 1
-([Stability and versioning](stability.md)).
+The neural surrogate replaces the exact kinematic model (the "full-order model", FOM) inside the
+optimiser with two small neural networks, so that **all hardpoints of both axles** can be
+optimised together. This guide is the workflow: sample, train, validate, optimise, read the
+results. The principle, the channels, the network, the vehicle layer and the active-learning rules
+are explained in [Neural surrogate and active learning](../concepts/surrogate.md).
 
-## When to use it
-
-Optimising every hardpoint at once (the reference benchmark has 90 variables) needs far more
-evaluations than the FOM can afford. One FOM evaluation of the reference study takes about 240 ms
-per design; one surrogate evaluation takes about 2.5 to 2.9 ms per design at batch 1024.
-
-The surrogate pays off when you need very many evaluations, or when you reuse the trained
-networks. It has fixed costs that plain `suspkin optimize` does not have:
-
-| Cost | Measured |
-|---|---|
-| Sampling the dataset (front, 41 x 21 grid) | 14.8 samples/s, about 23 min for 20 000 samples |
-| Dataset size | about 100 kB per sample (float32) |
-| Architecture search and training | `hpo.n_trials` trials per axle, up to `hpo.timeout` (default 4 h); each trial is capped by `hpo.max_epochs` and `hpo.subsample`, then the best configuration is retrained in full |
-| Training, GPU smoke test (GTX 1650) | 4.4 s per epoch, 1.33 GB (20 000 samples, 21 x 41 grid) |
-
-For a handful of variables, plain `suspkin optimize` is simpler and needs no training.
-The benchmark that compares both approaches at equal cost
-([benchmark script](#benchmark-script)) has not been run yet, so there is no measured claim
-that the surrogate matches direct optimisation.
+It is **experimental**: `suspkin.surrogate` is not in `suspkin.__all__` and its Python API may
+change in minor releases. The `surrogate:` study block and the commands below are additions to
+study schema 1 ([Stability](stability.md)).
 
 !!! note "Every reported design is FOM-verified"
-    The networks only propose designs. `best.yaml` and the history are always FOM results.
+    The networks only propose designs. `best.yaml`, `history.csv` and the Pareto designs of a
+    surrogate run are always results of the exact solver, never network predictions.
 
-## How it works
+## 1. When to use it
+
+Optimising every hardpoint at once (the benchmark study has 90 variables) needs far more
+evaluations than the FOM can afford. These numbers were measured by the developers on one
+machine (GTX 1650) and are indicative:
+
+| Quantity | Measured |
+|---|---|
+| One FOM evaluation of the reference study | about 240 ms per design |
+| One surrogate evaluation (batch 1024) | about 2.5 to 2.9 ms per design |
+| Sampling the front dataset (grid 41 x 21) | 14.8 samples/s, about 25 min for 20 000 samples (rear: about 2 min) |
+| Dataset size | about 101 kB per front sample, about 5 kB per rear sample (the rear grid has no rack axis) |
+| Final training, front, 600 epochs | about 51 min (rear about 10 min) on the GTX 1650 |
+
+The surrogate pays off when you need very many evaluations, or when you can reuse trained
+networks (and their dataset) for several studies on the same car. It has fixed costs that plain
+`suspkin optimize` does not have: sampling, an architecture search and training. For a handful
+of variables, plain `suspkin optimize` is simpler and needs no training. A benchmark comparing
+both at equal cost is scripted (section 9) but its results are not recorded in the repository,
+so there is no measured claim here that the surrogate matches direct optimisation.
+
+## 2. How it works, in five steps
 
 ```mermaid
 flowchart LR
-    A[Study YAML<br/>surrogate block] --> B[LHS sampling<br/>per axle]
-    B --> C[Sharded dataset<br/>dataset/AXLE]
-    C --> D[Optuna search +<br/>training of 2 MLPs]
-    D --> E[Networks<br/>curves + validity]
-    E --> F[Analytic vehicle layer<br/>anti-dive, roll centre, TLLTD ...]
-    F --> G[Optimise on the surrogate<br/>inside a trust region]
-    G --> H[FOM verifies the candidate]
-    H --> I[Fine-tune on the residual]
-    I --> E
-    H --> J[Best FOM-verified design]
+    A["study YAML<br/>surrogate block"] --> B["LHS sampling<br/>per axle"]
+    B --> C["FOM solves the left corner<br/>on a travel x rack grid"]
+    C --> D["train two networks<br/>(curves + validity)"]
+    D --> E["analytic vehicle layer<br/>anti-dive, roll centre, TLLTD ..."]
+    E --> F["optimise on the networks<br/>inside a trust region"]
+    F --> G["FOM verifies the candidate"]
+    G --> H["fine-tune on the residual"]
+    H --> D
+    G --> I["best FOM-verified design"]
 ```
 
-1. **Sampling.** A Latin hypercube in the unit cube of each axle's design variables; row 0 is the
-   baseline. Each sample solves only the left corner of one axle (about half the cost of a full
-   design). Infeasible samples are kept and flagged, because the validity output needs them.
-2. **Two independent networks.** The front network predicts corner curves on a
-   wheel-travel x rack grid; the rear network on a wheel-travel grid. The grid comes from
-   `surrogate.grid`. The train / validation / test split is 80 / 10 / 10, fixed per row; the test
-   split is never used for training or model selection. The architecture (layers, width,
-   activation, residual connections, dropout, POD output, learning rate ...) is searched with
-   Optuna (TPE sampler, Hyperband pruner); the objective is the mean over channels of RMSE divided
-   by the channel tolerance.
-3. **Analytic vehicle layer.** Vehicle-level quantities (anti-dive, anti-lift, anti-squat, roll
-   centre, roll stiffness, TLLTD, roll gradient, Ackermann, ...) are **never predicted**. They are
-   computed from the predicted curves with the same formulas as the FOM. Camber gain, bump steer
-   and motion ratios are finite differences of the predicted curves.
-4. **Optimisation on the surrogate.** The study's `optimizer` block (method, mode, seed) runs on
-   the networks with a budget of `active_learning.surrogate_evaluations`, inside a trust region
-   around the best FOM-verified design and with a margin on the constraints.
-5. **Active learning.** Each iteration: the FOM evaluates the predicted optimum (and
-   `infill.perturb` perturbations of it), the new curves are appended to the dataset, and the
-   networks are fine-tuned from their current weights. The trust-region radius halves when the
-   prediction was poor and doubles when it was good and the step reached the box boundary. The
-   loop stops on agreement, stagnation, minimum radius, or an iteration, FOM or time budget.
+1. **Sampling.** A Latin hypercube in the unit cube of each axle's design variables (row 0 is
+   the baseline). Each sample solves one corner of one axle over a grid of wheel travel (and rack
+   for the front). Infeasible samples are kept and flagged.
+2. **Two networks.** The front network predicts corner curves on a travel x rack grid, the
+   rear network on a travel grid. Split 80 / 10 / 10 into train, validation and test; the test
+   split is never used for training or model selection. The architecture is searched with Optuna.
+3. **Analytic vehicle layer.** Vehicle quantities (anti-dive, roll centre, roll stiffness,
+   TLLTD, roll gradient, Ackermann ...) are **never predicted**: they are computed from the
+   predicted curves with the same formulas as the FOM.
+4. **Optimisation on the networks.** The study's `optimizer` block runs on the networks inside a
+   trust region around the best FOM-verified design, with a safety margin on constraints.
+5. **Active learning.** Each iteration the FOM verifies the predicted optimum (and a few
+   perturbations), the new curves are added to the dataset, and the networks are fine-tuned. The
+   trust region halves when the prediction was poor and doubles when it was good and the step
+   reached the boundary. The loop stops on agreement, stagnation, minimum radius, or a budget.
 
 ### Producible designs (hardpoint grid)
 
-The study's `resolution` (default 0.5 mm, see the [study YAML guide](study-yaml.md)) applies to
-every design the optimisers choose. The training dataset stays continuous (Latin hypercube, not
-snapped), so existing datasets and models remain valid; the resolution is not part of the
-dataset or model hashes. At optimisation time:
+The study's `resolution` (default 0.5 mm, see the [Study YAML guide](study-yaml.md)) applies to
+every design the optimisers choose, so the result can be manufactured. The training dataset stays
+continuous (not snapped), so datasets and models do not depend on the resolution. At
+optimisation time the network input is the snapped design, the FOM verifies the snapped design,
+and `best.yaml` and the Pareto designs are on the grid. The trust-region radius cannot shrink
+below one grid step of the coarsest variable.
 
-- The network input is the snapped design re-encoded to the unit cube (decode, snap, encode), so
-  a prediction belongs to a producible design. Two search points that snap to the same design
-  share one prediction.
-- The FOM verifies the snapped candidate. Infill points that snap to an already verified design
-  are dropped; when no new grid design is left, the loop stops with `no_candidates`.
-- The trust-region radius cannot shrink below one grid step of the coarsest variable (in unit-cube
-  units); the effective minimum is `max(trust_region.min, step)`.
-- The reported best design, the Pareto designs and `best.yaml` are on the grid. The `baseline` row
-  of the history is the baseline snapped to the grid; the baseline reference of the report is the
-  unsnapped vehicle.
-
-### Channels and validity
-
-Each network predicts, per grid point, 29 channels on the front and 28 on the rear (the steer angle
-is front only):
-
-| Group | Channels |
-|---|---|
-| Alignment, wheel position | camber, toe, steer angle (front), caster, KPI, scrub radius, mechanical trail, half-track change, contact-patch dx and dy, wheel-centre recession |
-| Centres | front-view swing angle, side-view swing angle, side-view wheel-centre angle |
-| Actuation | coilover length, rocker angle, pushrod angle, toggle margin |
-| Joints | misalignment angle of each rod end and ball joint |
-| Solver coordinates | `theta_uca`, `theta_lca`, `psi`, which rebuild the exact corner states |
-
-Swing angles are stored as the angle of the **line** from the reference point (contact patch or wheel centre) to the instant centre, wrapped modulo 180 degrees to (-90, 90] degrees (0 = horizontal line, tolerance 0.05 deg). Direction is deliberately dropped: with nearly parallel arms the instant centre jumps from in front of to behind the reference point and the direction flips by 180 degrees, a step function of the design that a network cannot fit, while the line angle stays small and smooth. Roll centre, pitch centre and anti-dive / anti-squat / anti-lift need only the line (tan has period 180 degrees). Instant centres themselves go to infinity for parallel arms; the angle stays bounded. A **validity mask** per grid point marks where the
-corner was kinematically solved and finite; a second network head predicts it. A query outside the
-grid, or touching a masked node, gives NaN for the affected outputs, never an extrapolation.
-Travel 0 and rack 0 must be grid nodes.
-
-## Install
+## 3. Install
 
 ```bash
-python -m uv sync --extra surrogate
+uv sync --extra surrogate
 ```
 
-The extra adds `torch` (2.5 to 2.6) and `optuna`. A plain `uv sync` installs neither. On Windows the
-CUDA 12.4 build of torch is installed (about 2.5 GB download); on Linux the CPU build. Intel Macs
-have no torch build in the pinned range, so the extra is not supported there.
+The extra adds `torch` (2.5 to 2.6) and `optuna`; a plain `uv sync` installs neither. On Windows
+the CUDA 12.4 build of torch is installed (about 2.5 GB download); on Linux the CPU build; Intel
+Macs are not supported ([Install](../getting-started/install.md)). `surrogate sample` needs
+neither torch nor optuna.
 
-Device selection, from the study (`training.device`) or `--device`:
+Device selection, from `training.device` in the study or `--device`:
 
 | Value | Behaviour |
 |---|---|
 | `auto` | CUDA if available, else CPU (default) |
-| `cpu` | Always CPU |
-| `cuda` | CUDA; an error if no CUDA device exists |
-
-Check CUDA:
+| `cpu` | always CPU |
+| `cuda` | CUDA; error (exit 2) if no CUDA device exists |
 
 ```bash
-python -m uv run python -c "import torch; print(torch.cuda.is_available())"
+uv run python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 CPU and CUDA runs are not bit-identical; with the same seed a run repeats on the same device.
 
-## The `surrogate:` block
+## 4. The `surrogate:` block
 
-From `configs/studies/fs_reference_surrogate.yaml` (90 variables, every hardpoint of both axles):
+From `configs/studies/fs_reference_surrogate.yaml` (90 variables, every hardpoint of both axles).
+The block, as committed:
 
 ```yaml
 surrogate:
@@ -141,261 +111,352 @@ surrogate:
     travel: {min: -30 mm, max: 30 mm, points: 41}   # both axles
     rack: {min: -30 mm, max: 30 mm, points: 21}     # front only
   dataset: {n_initial: 20000, seed: 1, lhs_optimization: auto}
-  training: {device: auto}
+  training: {device: auto, max_epochs: 600, patience: 600}
   hpo: {n_trials: 60, timeout: 90 min, parallel: auto, max_epochs: 300, subsample: 5000}
   active_learning:
     max_iterations: 50
     fom_evaluations: 2000          # FOM budget of the whole run, baseline included
     surrogate_evaluations: 20000   # budget of each inner search on the networks
     infill: {top: 0, perturb: 4}   # extra candidates besides the predicted optimum
-    finetune: {epochs: 60, weight: 5.0, replay: 2048, patience: 30, trigger: 1.0}
+    finetune: {epochs: 60, weight: 5.0}
     margin: 0.05                   # constraint margin on normalised g
     trust_region: {initial: 0.2, min: 0.01, max: 0.5}
     stop: {eps_f: 0.01, patience: 5}
 ```
 
+The full set of keys with their defaults (omitted keys take the default):
+
 | Key | Default | Meaning |
 |---|---|---|
-| `grid.travel`, `grid.rack` | required | Output grid; must contain 0. Omit `rack` to fix the rack at 0 |
+| `grid.travel`, `grid.rack` | required (`rack` optional) | Output grid, uniform, must contain 0. Omit `rack` to fix the rack at 0 |
 | `dataset.n_initial` | 20000 | LHS samples per axle |
-| `dataset.seed`, `dataset.shard_size` | 1, 500 | Seed of LHS and split; rows per shard |
+| `dataset.seed`, `dataset.shard_size` | 1, 500 | Seed of LHS and split; rows per shard file |
 | `dataset.lhs_optimization` | `auto` | `random-cd` up to 5000 samples, none above |
 | `training.device` | `auto` | `auto`, `cpu` or `cuda` |
-| `training.max_epochs`, `training.patience` | 2000, 100 | Epoch cap, early stopping |
+| `training.max_epochs`, `training.patience` | 2000, 100 | Epoch cap and early stopping of the **final** training |
+| `training.num_threads`, `training.finetune_lr_factor` | none, 0.1 | CPU threads; learning-rate factor when fine-tuning |
 | `hpo.n_trials`, `hpo.timeout` | 100, `4 h` | Optuna budget per axle |
 | `hpo.parallel` | `auto` | Axles in parallel on CUDA, sequential on CPU |
-| `hpo.max_epochs`, `hpo.subsample` | 300, all rows | Epoch cap and training rows of each search trial (`null` epochs: `training.max_epochs`); the final retrain is not reduced |
+| `hpo.max_epochs`, `hpo.subsample` | 300, all rows | Epoch cap and training rows of each search trial; the final retrain is not reduced |
 | `active_learning.max_iterations` | 50 | Iteration cap |
-| `active_learning.fom_evaluations`, `.time` | 2000, none | FOM and wall-time budgets |
-| `active_learning.surrogate_evaluations` | 20000 | Inner search budget |
-| `active_learning.infill` | `top` 0, `perturb` 4 | Extra candidates per iteration |
-| `active_learning.finetune` | 60, 5.0, 2048, 30 | `epochs` (cap), `weight` of new rows, `replay` of earlier rows, `patience` (epochs without a new best); scheduling keys `trigger`, `skip_after`, `skip_for`, `stall_override` and `on_cpu` (`skip` default, or `run`) below |
-| `active_learning.margin` | 0.05 | Safety margin on constraints |
-| `active_learning.trust_region` | 0.2, 0.01, 0.5 | `initial`, `min`, `max` radius in the unit cube |
-| `active_learning.stop` | 0.01, 5 | `eps_f` agreement, `patience` iterations |
+| `active_learning.fom_evaluations`, `.time` | 2000, none | FOM and wall-time budgets of the whole run |
+| `active_learning.surrogate_evaluations` | 20000 | Budget of each inner search on the networks |
+| `active_learning.infill` | `top` 0, `perturb` 4 | Extra candidates per iteration besides the predicted optimum |
+| `active_learning.finetune` | see below | Fine-tuning schedule |
+| `active_learning.margin` | 0.05 | Safety margin on normalised constraints `g` |
+| `active_learning.trust_region` | `initial` 0.2, `min` 0.01, `max` 0.5 | Radius in the unit cube |
+| `active_learning.stop` | `eps_f` 0.01, `patience` 5 | Agreement tolerance (relative) and consecutive iterations |
 
-The exhaustive table, including `training.num_threads` and `training.finetune_lr_factor`, is in the
-[Study YAML guide](study-yaml.md#surrogate-experimental).
+`active_learning.finetune` keys: `epochs` 60 (cap), `weight` 5.0 (weight of new rows), `replay`
+2048 (earlier rows replayed), `patience` 30, `trigger` 1.0, `skip_after` 2, `skip_for` 2,
+`stall_override` 3.0, `on_cpu` `skip` (or `run`). Units in the block are SI numbers or strings
+with units (`"30 mm"`, `"90 min"`). The exhaustive field list with validation rules is in the
+[Study YAML guide](study-yaml.md) and in the
+[concept page](../concepts/surrogate.md#3-study-block-surrogate-and-optimizespecsurrogate).
 
-## Step by step
+!!! warning "Same study for every command"
+    A dataset and a model store hashes of the vehicle baseline, the design space and the grid.
+    Change the vehicle, the variables or the grid and you must sample and train again; the
+    commands refuse a mismatch with a message saying which input differs.
 
-Run all commands from the repository root. `DIR` is the surrogate root; every command takes the
-same one.
+## 5. Step by step
+
+Run all commands from the repository root. `ROOT` is the surrogate folder; every command takes
+the same one. Prefix with `uv run` (or `python -m uv run`).
 
 ```bash
 # 1. Sample the dataset (resumable)
-python -m uv run suspkin surrogate sample configs/studies/fs_reference_surrogate.yaml --root results/sur --workers auto
+suspkin surrogate sample configs/studies/fs_reference_surrogate.yaml --root results/sur --workers auto
 
-# 2. Architecture search and training
-python -m uv run suspkin surrogate train configs/studies/fs_reference_surrogate.yaml --root results/sur --device auto
+# 2. Architecture search and training (needs the surrogate extra)
+suspkin surrogate train configs/studies/fs_reference_surrogate.yaml --root results/sur --device auto
 
 # 3. Test-split error per channel
-python -m uv run suspkin surrogate validate configs/studies/fs_reference_surrogate.yaml --root results/sur
+suspkin surrogate validate configs/studies/fs_reference_surrogate.yaml --root results/sur
 
 # 4. Optimise with active learning
-python -m uv run suspkin optimize configs/studies/fs_reference_surrogate.yaml --surrogate results/sur --out results/sur_run
+suspkin optimize configs/studies/fs_reference_surrogate.yaml --surrogate results/sur --out results/sur_run
 ```
 
-| Command | Useful options |
+| Command | Options |
 |---|---|
-| `surrogate sample` | `--axle front\|rear\|both`, `--n N`, `--workers N\|auto`, `--resume` |
-| `surrogate train` | `--axle`, `--trials N`, `--timeout "2 h"`, `--device` |
-| `surrogate validate` | `--axle`, `--device` |
-| `optimize --surrogate DIR` | `--device`, `--evaluations N` (FOM budget of the whole run folder), `--time` (this invocation), `--resume`, `--workers`, `--out RUN` |
+| `surrogate sample STUDY` | `--root DIR` (required), `--axle front\|rear\|both` (default both), `--n N` (samples per axle, default from the study), `--workers N\|auto`, `--resume` |
+| `surrogate train STUDY` | `--root DIR` (required), `--axle`, `--trials N`, `--timeout "2 h"`, `--device auto\|cpu\|cuda` |
+| `surrogate validate STUDY` | `--root DIR` (required), `--axle`, `--device` |
+| `optimize STUDY --surrogate DIR` | `--device`, `--evaluations N` (FOM budget of the whole run folder), `--time` (this invocation), `--resume` (needs `--out`), `--workers`, `--method`, `--no-report`, `--out RUN` |
 
-Notes:
+Exit codes: 0 ok, 2 study, argument or data error, 1 from `validate` when a channel is over
+tolerance and from `optimize` when no feasible design was found. Every option of every command is
+in the [Command line guide](cli.md).
 
-- `sample` refuses a non-empty dataset folder unless you pass `--resume`. It reports the feasible
-  fraction and warns below 30 % (the variable domains are probably too large).
-- `train` resumes its Optuna search from `optuna.db`; `--trials` and `--timeout` override
-  `hpo.*`.
-- `optimize --surrogate` needs `--out` to be given with `--resume`.
-- Options and exit codes of every command are in the [CLI guide](cli.md).
+### 5.1 Sample
 
-### Output layout
+A small run to see the output (40 samples per axle, one worker; this is the real output):
 
-```
-DIR/
-├── dataset/<axle>/     shard_00000.npz ...  meta.json  lhs.npy
-├── models/<axle>/
-│   ├── optuna.db, trials.csv      architecture search
-│   ├── model/                     current network (model.pt, model.json, norm.npz)
-│   ├── pre_al/                    network before the active-learning loop
-│   └── al_<k>/                    snapshot after iteration k
-└── validation/<axle>/  validation.csv worst.csv parity.csv worst_curves.csv summary.json figures/
-
-RUN/                    (optimize --surrogate DIR --out RUN)
-├── study.yaml, vehicle.yaml, meta.json
-├── history.csv         FOM history; sources baseline, al_<k>
-├── al.csv              one row per iteration
-├── al/iter_<k>/        surrogate_history.csv of the inner search
-├── figures/            al_progress, al_residual, al_radius
-└── best.yaml           best FOM-verified design (pareto/ in Pareto mode)
+```bash
+suspkin surrogate sample configs/studies/fs_reference_surrogate.yaml --root results/sur_demo --n 40 --workers 1
 ```
 
-Active learning appends its FOM rows to `DIR/dataset/` (source `al_<k>`) and writes fine-tuned
-models into `DIR/models/`; the model before the loop stays in `pre_al/`.
+```text
+front: 40 samples, about 4045080 bytes uncompressed (101127 per sample)
+front: rows 40/40
+front: 40 samples (40 new), feasible 100.0 %, 3.2 s
+rear: 40 samples, about 200920 bytes uncompressed (5023 per sample)
+rear: rows 40/40
+rear: 40 samples (40 new), feasible 100.0 %, 0.3 s
+```
 
-## Reading the results
+That is 12.5 front samples per second on one worker for this demo (the 14.8 samples/s of the
+benchmark was measured at 20 000 samples). Notes:
 
-**Validation** (`validation/<axle>/`). For each channel, `validate` gives the test RMSE in mm or
-deg, the channel tolerance, their **ratio** (RMSE / tolerance) and the validity accuracy. A ratio
-below 1 means the channel is within tolerance. Exit code 0 means every channel is within tolerance,
-1 that some channel is over. The tolerances are per channel (for example camber 0.02 deg, toe
-0.01 deg, coilover length 0.1 mm, swing angles 0.05 deg).
+- `sample` refuses a non-empty dataset folder (`... is not empty; use --resume or a new --out
+  directory`, exit 2) unless you pass `--resume`, which keeps the existing shards and computes
+  the rest; the result equals an uninterrupted run.
+- It reports the **feasible fraction** and warns when it is below 30 %: the variable domains
+  are probably too large (most random designs cannot assemble), so narrow them.
+- With `--axle both`, an axle with no variables in the study is skipped.
+
+### 5.2 Train
+
+`surrogate train` runs an Optuna architecture search per axle (`hpo.n_trials` trials, stopping at
+`hpo.timeout`), then retrains the best configuration on the full training split with
+`training.max_epochs` and `training.patience`. The search trials are cheap screenings: each trains
+on at most `hpo.subsample` rows for at most `hpo.max_epochs` epochs and is scored on the complete
+validation split, so scores are comparable with the final model. Resuming a search in a folder
+whose trials used another budget stops with an error: use a new `--root` or delete
+`models/<axle>/`. The search resumes from `optuna.db`; `--trials` and `--timeout` override
+`hpo.*`. Without a dataset it fails with `no dataset in ...; run surrogate sample first`.
+
+At the end, `models/hpo_report.md` is written: per axle the budget, trial states, the best and
+top-10 trials, pruning and the final model.
+
+### 5.3 Validate
+
+`surrogate validate` evaluates each axle's model on its **test** split and compares the error of
+each channel with the channel's engineering tolerance. This is a real run (rear axle, using the
+committed benchmark rear network and a fresh 40-sample dataset, so only 3 test rows: a format
+demonstration, not a quality statement):
+
+```bash
+suspkin surrogate validate configs/studies/fs_reference_surrogate.yaml --root results/sur_demo --axle rear --device cpu
+```
+
+```text
+device: cpu (requested cpu)
+rear: 3 test samples, score 0.339, validity accuracy 100.0 %
+  channel                          rmse        tol  unit    ratio  status
+  camber                       0.003046       0.02  deg      0.15  ok
+  toe                          0.001944       0.02  deg      0.10  ok
+  caster                         0.0084       0.05  deg      0.17  ok
+  ...
+  sv_swing_angle                0.03511       0.05  deg      0.70  ok
+  coilover_length               0.05026       0.05  mm       1.01  OVER
+  rocker_angle                  0.01633       0.05  deg      0.33  ok
+  pushrod_angle                 0.03074       0.05  deg      0.61  ok
+  toggle_margin                   0.141       0.05  deg      2.82  OVER
+  ...
+  theta_uca                    0.007266       0.01  deg      0.73  ok
+  theta_lca                    0.003303       0.01  deg      0.33  ok
+  psi                          0.001947       0.01  deg      0.19  ok
+<ROOT>/validation/rear
+error: 2 channel(s) over tolerance
+```
+
+(`...` marks rows left out here; the command prints all 28 rear channels.) The exit code was 1
+because two channels exceeded their tolerance. See section 7 for reading it.
+
+### 5.4 Optimise
+
+```bash
+suspkin optimize configs/studies/fs_reference_surrogate.yaml --surrogate results/sur --out results/sur_run
+```
+
+The loop prints one line per iteration (`iter k: r ..., f_nn ..., f_fom ..., rho ..., best ...,
+N FOM evals, T s`) and writes the run folder (section 6). `--evaluations N` is the FOM budget of
+the whole run folder, baseline included; `--time` limits this invocation; `--resume` continues a
+run in `--out`. Without CUDA, fine-tuning is skipped by default (section 8).
+
+## 6. Output layout
+
+```text
+ROOT/
+  dataset/<axle>/     shard_00000.npz ...  meta.json  lhs.npy
+  models/
+    hpo_report.md                  search report (written by `train`)
+    <axle>/
+      optuna.db, trials.csv, hpo_result.json     architecture search
+      model/                       current network (model.pt, model.json, norm.npz)
+      pre_al/                      network before the active-learning loop
+      al_<k>/                      snapshot after iteration k
+  validation/<axle>/  validation.csv worst.csv parity.csv worst_curves.csv summary.json figures/
+
+RUN/                  (optimize --surrogate ROOT --out RUN)
+  study.yaml, vehicle.yaml, meta.json, result.json
+  history.csv         FOM history; sources `baseline`, `al_<k>`
+  al.csv              one row per iteration
+  al/iter_<k>/        surrogate_history.csv of the inner search
+  figures/            al_progress, al_residual, al_radius (+ the usual optimiser figures)
+  best.yaml           best FOM-verified design (pareto/ and pareto.csv in pareto mode)
+```
+
+Active learning **appends** its FOM rows to `ROOT/dataset/` (source `al_<k>`) and writes the
+fine-tuned models into `ROOT/models/`; the model before the loop stays in `pre_al/`. So running
+the loop twice on the same `ROOT` starts from the fine-tuned models of the first run; keep a
+copy of `ROOT` if you want to repeat from the trained state.
+
+## 7. Reading the results
+
+### Validation
+
+For each channel `validate` gives the test **RMSE** in display units, the channel **tolerance**
+(engineering tolerance, not a fitted number), their **ratio** (RMSE / tolerance) and `ok` when
+the ratio is at most 1. The `score` in the header is the mean ratio over channels; "validity
+accuracy" is the fraction of grid nodes where the network's validity head agrees with the FOM
+(a node is valid when the corner assembled and all values are finite). Exit code 0 means every
+channel is within tolerance; 1 means at least one is over.
+
+Tolerances differ per channel. Examples (from `suspkin.surrogate.channels`): camber and toe
+0.02 deg, caster and KPI 0.05 deg, scrub radius, trail and contact-patch shifts 0.1 mm, swing
+angles 0.05 deg, `coilover_length` 0.05 mm, rocker and pushrod angle 0.05 deg, rod-end and ball
+joint angles 0.1 deg, solver coordinates `theta_uca`, `theta_lca`, `psi` 0.01 deg.
 
 | File or figure | Shows |
 |---|---|
-| `validation.csv`, `summary.json` | Per-channel RMSE, tolerance, ratio and pass / fail |
-| RMSE / tolerance bars | The ratio per channel; bars above 1 are over tolerance |
-| Parity scatter (`parity.csv`) | Predicted against FOM value on valid test points; points should lie on the diagonal |
-| Worst curves (`worst_curves.csv`) | FOM (solid) and predicted (dashed) curves of the worst test samples per channel |
-| `worst.csv` | The worst samples |
+| `validation.csv`, `summary.json` | per-channel RMSE, tolerance, ratio, pass or fail |
+| RMSE / tolerance bars | the ratio per channel; bars above 1 are over tolerance |
+| `parity.csv` (parity scatter) | predicted against FOM value on valid test points; points should lie on the diagonal |
+| `worst_curves.csv` | FOM (solid) and predicted (dashed) curves of the worst test samples per channel |
+| `worst.csv` | the worst samples |
 
-As of this guide no test RMSE per channel is recorded in the repository, so there is no reference
-value to compare with. Run `validate` on your own model before trusting it.
+What is normal: the mean score can be below 1 while single channels are above it. The benchmark
+models trained on 20 000 samples per axle reach a final validation score of 0.864 (front) and
+0.473 (rear), with `toggle_margin` and `coilover_length` (and `psi` on the front) still 2.6 to
+4.5 tolerances off: `toggle_margin` has a kink where the rocker passes its dead centre and
+`coilover_length` has a very tight tolerance (0.05 mm). These are validation scores
+([report](../reports/surrogate-training.md)). The surrogate still works for optimisation because
+the FOM verifies every candidate; large errors only slow the loop (the trust region shrinks)
+and, on tight constraints near zero margin, can flip a predicted pass to a real fail, which the
+FOM verification catches. If your model has many channels over tolerance, sample more, train
+longer or narrow the domains. Run `validate` on your own model before trusting it.
 
-**Active learning** (`RUN/figures/`, `RUN/al.csv`).
+### Active learning
 
-| Figure | Shows | Good looks like |
+`RUN/al.csv` has one row per iteration. Key columns: `radius`, `f_nn` (predicted), `f_fom`
+(verified), `rho` (trust ratio: realised over predicted gain; below 0.25 the radius halves, above
+0.75 and at the boundary it doubles), `best_f`, `n_fom`, `resid_front` / `resid_rear` (network
+error at the new verified point, mean RMSE / tolerance), `kept_init_<axle>` (fine-tuning kept the
+previous weights), `skipped_<axle>` and `skip_reason_<axle>`, `agree`, `improved`, `at_min`
+and timings `sec_*`.
+
+| Figure (`RUN/figures/`) | Shows | Good looks like |
 |---|---|---|
-| `al_progress` | Best FOM-verified f, and f of the infill optimum from the FOM and from the network, per iteration | Best f falls; network and FOM curves converge |
-| `al_residual` | Network error at the infill optimum before fine-tuning, as mean RMSE / tolerance, per axle (dashed line: tolerance = 1) | Falls towards the tolerance line as the model learns the region |
-| `al_radius` | Trust-region radius (log scale) | Shrinks around a good optimum; stuck at the minimum means the model cannot follow |
+| `al_progress` | best FOM-verified f, and f of the infill optimum from the FOM and from the network, per iteration | best f falls; the network and FOM curves converge |
+| `al_residual` | network error at the infill optimum before fine-tuning, as mean RMSE / tolerance per axle (dashed line: tolerance = 1) | falls towards the tolerance line as the model learns the region |
+| `al_radius` | trust-region radius (log scale) | shrinks around a good optimum; stuck at the minimum means the model cannot follow |
 
-`al.csv` also logs the trust ratio rho, feasibility, budgets, `kept_init_<axle>` (fine-tuning
-kept the previous weights; a warning is printed) and `skipped_<axle>` (no fine-tuning this
-iteration, see below). The stop reason is in `meta.json`: `agreement`,
-`stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget` or `no_candidates`.
+The **stop reason** is in `meta.json` (`active_learning`) and printed at the end:
+`agreement` (network and FOM agree on f and feasibility for `stop.patience` iterations),
+`stagnation`, `radius_min`, `max_iterations`, `fom_budget`, `time_budget`, `no_candidates` (all
+infill points were already verified designs) or `error`. The final report and `best.yaml` are
+the FOM-verified best; compare them with the baseline as with any optimisation
+([Optimisation](../concepts/optimization.md)).
 
-### Fine-tuning cost
+## 8. Fine-tuning cost and CPU runs
 
-Fine-tuning dominated an active-learning iteration (about 300 s of 600 s on the front and rear
-networks of the benchmark study, GTX 1650). The defaults keep it to roughly 10 to 60 s:
+Fine-tuning dominated an active-learning iteration in the first benchmark (about 315 s per
+iteration for both networks on the GTX 1650). The current defaults bring it to about 50 s
+(CHANGELOG 1.1.0), and 10 to 60 s per axle in general:
 
-- The replayed train rows (`replay`) and the validation split are normalised once and kept on the
-  device; only the new rows are appended each iteration. The replay subset is drawn once per run.
-- `epochs` caps a fine-tune and the learning-rate schedule is compressed to it; `patience` stops
-  it after that many epochs without a new best score of the run. The never-worse guarantee is
-  unchanged: if no epoch beats the starting weights they are kept.
-- `trigger`: an axle is fine-tuned only if the residual of the new verified point (`resid_<axle>`
-  in `al.csv`, mean RMSE / tolerance) exceeds it (default 1.0, one tolerance). The new rows are
-  still appended to the dataset and used by the next fine-tune. `trigger: 0` always fine-tunes.
+- Replayed train rows and the validation split are normalised once and kept on the device; only
+  new rows are appended.
+- `epochs` caps a fine-tune and compresses the learning-rate schedule to it; `patience` stops it
+  after that many epochs without a new best. A fine-tune never returns weights worse than it
+  started with.
+- `trigger`: an axle is fine-tuned only if the residual of the new verified point exceeds it
+  (default 1.0: one tolerance). New rows are still appended to the dataset. `trigger: 0` always
+  fine-tunes.
 - Stall rule: after `skip_after` (2) consecutive fine-tunes that kept the starting weights, the
-  axle is skipped for `skip_for` (2) iterations, unless its residual exceeds
-  `stall_override * trigger` (3). `skip_for: 0` turns the rule off.
+  axle is skipped for `skip_for` (2) iterations unless its residual exceeds
+  `stall_override * trigger`. `skip_for: 0` turns the rule off.
 
-### Fine-tuning on the CPU
+**On the CPU** a front fine-tune takes many minutes per iteration, which would remove the
+speed advantage. With `--device cpu`, or `auto` without CUDA, fine-tuning is therefore skipped by
+default: the run logs this once, the networks stay as trained, new verified rows are still
+appended and `al.csv` records `cpu` in `skip_reason_front` / `skip_reason_rear`. Set
+`active_learning.finetune.on_cpu: run` to fine-tune on the CPU anyway.
 
-On the CPU a fine-tune of the front network takes many minutes per iteration, which would throw
-away the speed advantage of the surrogate. With `--device cpu`, or `auto` on a machine without
-CUDA, fine-tuning is therefore skipped by default: the run logs this once at the start, the
-networks stay as trained, the new verified rows are still appended to the dataset, and `al.csv`
-records `cpu` in `skip_reason_front` / `skip_reason_rear` (`trigger` and `stall` skips are
-recorded there too). The trust region, rho, FOM verification and stop rules are unchanged. Set
-`active_learning.finetune.on_cpu: run` to fine-tune on the CPU anyway (the rules above then
-apply). On CUDA nothing changes.
+## 9. Sharing and reusing trained models
 
-## Sharing trained models
+The `models/` folder alone is enough to run `suspkin optimize STUDY --surrogate ROOT`: the models
+are checked against the study through the hashes stored in `model.json`, the loop runs as usual
+(FOM verification, trust region, stop rules, report), and fine-tuning is disabled for every axle
+without `ROOT/dataset/<axle>` (`skip_reason` `no_dataset` in `al.csv`). Fine-tuning,
+`surrogate validate` and `surrogate train` need the dataset. The dataset is large and stays local
+but can be regenerated with `suspkin surrogate sample` (same study, same seed).
 
-The `models/` folder alone is enough to run `suspkin optimize STUDY --surrogate ROOT`: the
-models are checked against the study through the hashes stored in `model.json`, the loop runs
-as usual (FOM verification, trust region, stop rules, report), and fine-tuning is disabled for
-every axle without `ROOT/dataset/<axle>` (`skip_reason` `no_dataset` in `al.csv`; the networks
-stay as trained). Fine-tuning, `surrogate validate` and `surrogate train` need the dataset. It is
-large and stays local, but can be regenerated with `suspkin surrogate sample` (same study, same
-seed).
-
-## Benchmark script
-
-`scripts/benchmark_surrogate.py` runs the whole comparison of the design plan on
-`configs/studies/fs_reference_surrogate.yaml` and writes a report:
+The repository ships the benchmark networks in
+`results/benchmark_surrogate/surrogate/models/{front,rear}/` for
+`configs/studies/fs_reference_surrogate.yaml`. The weights are stored with **Git LFS**: run
+`git lfs install` and `git lfs pull`, otherwise `model.pt` is a 133-byte pointer file and
+loading fails ([Install](../getting-started/install.md#git-lfs-for-the-committed-surrogate-models)).
+To use them:
 
 ```bash
-python -m uv run python scripts/benchmark_surrogate.py --device cuda --workers auto
-python -m uv run python scripts/benchmark_surrogate.py --dry-run
+suspkin optimize configs/studies/fs_reference_surrogate.yaml \
+    --surrogate results/benchmark_surrogate/surrogate --out results/sur_run
 ```
 
-| Stage | What it does |
+## 10. Helper scripts
+
+| Script | Purpose |
 |---|---|
-| `sample` | `surrogate sample` for both axles into `ROOT/dataset` |
-| `train` | `surrogate train` into `ROOT/models` |
-| `validate` | `surrogate validate` into `ROOT/validation` |
-| `al` | `optimize --surrogate` into `RUN/al` |
-| `de_same` | Direct DE with the same number of FOM evaluations as the AL run |
-| `de_total` | Direct DE with the FOM-equivalent cost of AL plus the dataset (one corner sample counts as one evaluation: an assumption) |
-| `report` | `RUN/benchmark.md` and `RUN/benchmark.json` |
+| `scripts/benchmark_surrogate.py` | the whole comparison on `configs/studies/fs_reference_surrogate.yaml`: stages `sample`, `train`, `validate`, `al`, `de_same` (direct DE with the same number of FOM evaluations as the AL run), `de_total` (direct DE at the FOM-equivalent cost of AL plus dataset) and `report` (`benchmark.md`, `benchmark.json`) |
+| `scripts/surrogate_hpo_report.py --root ROOT [--out FILE] [--axles front rear]` | regenerate `hpo_report.md` from an existing root, also while a search is running (the Optuna databases are read-only) |
+| `scripts/surrogate_retrain_best.py STUDY --root ROOT --axle front\|rear [--device D]` | retrain only the best configuration of an existing search, without new trials (for example after an interrupted final training); marks trials left `RUNNING` as failed |
+
+```bash
+uv run python scripts/benchmark_surrogate.py --dry-run          # print the plan and what is done
+uv run python scripts/benchmark_surrogate.py --device cuda --workers auto
+```
 
 Defaults: `--root results/benchmark_surrogate/surrogate`, `--run results/benchmark_surrogate/run`.
 The script is resumable: a stage whose output exists is skipped, `--force STAGE` (repeatable)
-redoes one, `--dry-run` prints the plan and what is done. Exit code 1 of `validate`, `al` and the
-DE runs is accepted as a result. The design plan estimates 4 to 6 h in total (sampling about
-30 min, architecture search 1.5 to 2 h, active learning 1 to 3 h, direct DE at the total cost about
-30 min).
+redoes one. Exit code 1 of `validate`, `al` and the DE runs is accepted as a result.
 
-## Limitations and caveats
+## 11. Limitations and common messages
 
 - **Experimental.** Not in `suspkin.__all__`; the API may change in minor releases.
-- **Bound to its inputs.** A model and its dataset store hashes of the vehicle baseline, the design
-  space and the grid, and the channel list. Change the vehicle, the variables or the grid and you
-  must sample and train again. `sample --resume`, `train`, `validate` and `optimize --surrogate`
-  refuse a mismatch.
+- **Bound to its inputs.** Vehicle, variables, grid and channel list are hashed; a mismatch is
+  refused (sample again, train again).
 - **Symmetric variables only.** A variable moves the left point and the right side mirrors it.
-  Asymmetric variables are deferred.
-- **Fixed grid.** The vehicle layer interpolates inside the grid and returns NaN outside it. Roll
-  and heave beyond the travel range are not covered.
+- **Fixed grid.** The vehicle layer interpolates inside the grid and returns NaN outside it.
+  Roll and heave beyond the travel range are not covered; travel 0 and rack 0 must be grid nodes.
 - **Rates are finite differences** of the grid curves; their accuracy is bounded by the grid
   spacing. Spring rates and ARB stiffness are not variables on this path.
-- **One ARB type per batch**; constraints that need a column the vehicle layer does not provide are
-  reported as unsolved, not approximated.
-- **Windows.** The pools use `spawn`: a Python script that calls the surrogate functions directly
-  needs an `if __name__ == "__main__":` guard. The CLI is safe.
-- **Mostly infeasible samples.** If `sample` warns about a feasible fraction below 30 %, narrow the
-  variable domains.
-
-Typical messages:
+- **One ARB type per batch.** Constraints that need a column the vehicle layer does not provide
+  are reported as unsolved, not approximated.
+- **Windows.** Worker pools use `spawn`: a Python script that calls the surrogate functions
+  directly needs an `if __name__ == "__main__":` guard. The CLI is safe.
+- **Torch missing.** The numpy-only modules still import; loading a network raises an
+  `ImportError`, which `optimize --surrogate` turns into exit code 2.
 
 | Message (shortened) | Fix |
 |---|---|
-| `study has no 'surrogate' block` | Add the block to the study |
-| `... is not empty; use --resume or a new --out directory` | Pass `--resume` or choose a new `--root` |
-| `dataset does not match the study (... differs)` | The vehicle, variables or grid changed: sample into a new root |
-| `model does not match the study` / `model was trained on another dataset` | Retrain with `surrogate train` |
-| `no trained model in ...; run surrogate train first` | Run `train` before `validate` or `optimize --surrogate` |
-| `the test split is empty; sample more points` | Increase `--n` or `dataset.n_initial` |
-| `--device cuda` without CUDA (exit 2) | Use `--device auto` or `cpu`, or fix the torch install |
-| `the constraints/objectives changed since the last run; start a new run` | Do not `--resume` a changed study; use a new `--out` |
-| `--resume needs an explicit run folder (--out)` | Pass `--out RUN` |
+| `study has no 'surrogate' block` | add the block to the study |
+| `... is not empty; use --resume or a new --out directory` | pass `--resume` or choose a new `--root` |
+| `no dataset in ...; run surrogate sample first` | sample before training |
+| `dataset does not match the study (... differs)` | the vehicle, variables or grid changed: sample into a new root |
+| `model does not match the study` / `model was trained on another dataset` | retrain with `surrogate train` |
+| `no trained model in ...; run surrogate train first` | run `train` before `validate` or `optimize --surrogate` |
+| `the test split is empty; sample more points` | increase `--n` or `dataset.n_initial` |
+| `--device cuda` without CUDA (exit 2) | use `--device auto` or `cpu`, or fix the torch install |
+| `the constraints/objectives changed since the last run; start a new run` | do not `--resume` a changed study; use a new `--out` |
+| `--resume needs an explicit run folder (--out)` | pass `--out RUN` |
+| a LFS pointer where `model.pt` should be | `git lfs pull` |
 
 ## See also
 
-- [Surrogate API reference](../reference/surrogate.md)
-- [Command line](cli.md) and [Study YAML](study-yaml.md)
-- [Design plan, section 13](../DESIGN_PLAN.md) and [Architecture, section 15](../ARCHITECTURE.md)
-- [Stability and versioning](stability.md)
-
-## Search report
-
-The search trials are a cheap screening: each one trains on at most `hpo.subsample` training
-rows for at most `hpo.max_epochs` epochs (patience `min(training.patience, max(10, cap // 10))`),
-and scores on the complete validation split, so trial scores are comparable with the final
-model. The best configuration is then retrained on the full train split with `training.max_epochs`
-and `training.patience`. Resuming a search in a folder whose trials used another budget stops
-with an error: use a new `--root` or delete `models/<axle>/`.
-
-At the end of `suspkin surrogate train`, `models/hpo_report.md` is written (one section per
-axle: budget, trial states, best and top 10 trials, pruning, final model). To regenerate it from
-an existing root, also while a search is still running (the databases are read-only):
-
-```bash
-python scripts/surrogate_hpo_report.py --root DIR [--out FILE]
-```
-
-To retrain only the best configuration of an existing search, without running new trials (for
-example when the final training of an axle was interrupted), run the script below. It marks
-trials left RUNNING as failed, saves `models/<axle>/model`, and refreshes `hpo_report.md`
-for every axle, where the axle is marked "retrain only":
-
-```bash
-python scripts/surrogate_retrain_best.py STUDY.yaml --root DIR --axle rear [--device cuda]
-```
+- [Neural surrogate and active learning](../concepts/surrogate.md): the theory and the code.
+- [Surrogate training report (Nov 2026)](../reports/surrogate-training.md): the benchmark run.
+- [Command line](cli.md), [Study YAML](study-yaml.md), [Optimisation](../concepts/optimization.md).
+- [Stability and versioning](stability.md).
