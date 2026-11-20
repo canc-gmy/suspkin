@@ -6,8 +6,7 @@ Commands live in group modules; registration order here fixes the ``--help`` ord
 import typer
 
 from suspkin import __version__
-from suspkin.cli import app as _app_cmds
-from suspkin.cli import study, surrogate, vehicle
+from suspkin.cli import study, surrogate, vehicle, webapp
 
 app = typer.Typer(help="suspkin - suspension kinematics toolkit.", no_args_is_help=True)
 
@@ -32,8 +31,8 @@ app.command()(vehicle.vsweep)
 app.command()(vehicle.report)
 app.command()(study.check)
 app.command()(study.optimize)
-app.command("app")(_app_cmds.app_cmd)
-app.command("app-export")(_app_cmds.app_export_cmd)
+app.command("app")(webapp.app_cmd)
+app.command("app-export")(webapp.app_export_cmd)
 
 surrogate_app = typer.Typer(help="Neural-network surrogate (experimental).", no_args_is_help=True)
 app.add_typer(surrogate_app, name="surrogate")
