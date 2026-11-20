@@ -270,7 +270,7 @@ def summary(
     from suspkin.geometry import build_corners
     from suspkin.kinematics import KinematicsError, sweep_corner
     from suspkin.metrics import add_gradients, metrics_frame, static_summary
-    from suspkin.plotting.figures import format_value
+    from suspkin.plotting.units import format_value
 
     try:
         vehicle = load_vehicle(vehicle_yaml)
@@ -302,50 +302,6 @@ def summary(
         typer.echo(str(json_out))
 
 
-# key -> (scale from SI, unit) for the vehicle summary display
-_DEG = 180.0 / 3.141592653589793
-_VS_UNITS: dict[str, tuple[float, str]] = {
-    "track": (1e3, "mm"),
-    "wheel_rate": (1e-3, "N/mm"),
-    "arb_wheel_rate_roll": (1e-3, "N/mm"),
-    "roll_stiffness_springs": (1 / _DEG, "N*m/deg"),
-    "roll_stiffness_arb": (1 / _DEG, "N*m/deg"),
-    "roll_stiffness_tyres": (1 / _DEG, "N*m/deg"),
-    "roll_stiffness": (1 / _DEG, "N*m/deg"),
-    "roll_stiffness_total": (1 / _DEG, "N*m/deg"),
-    "rc_height": (1e3, "mm"),
-    "roll_camber": (1.0, "deg/deg"),
-    "roll_steer": (1.0, "deg/deg"),
-    "rc_migration": (
-        1e3 / _DEG,
-        "mm/deg (+ = toward left of the car centreline, for left-up roll)",
-    ),
-    "rc_height_curvature": (1e3 / _DEG**2, "mm/deg^2"),
-    "wheelbase": (1e3, "mm"),
-    "sprung_mass": (1.0, "kg"),
-    "sprung_cg_height": (1e3, "mm"),
-    "roll_axis_height_at_cg": (1e3, "mm"),
-    "roll_gradient": (_DEG, "deg/g"),
-    "ay_ref": (1.0, "m/s^2"),
-    "load_transfer_front": (1.0, "N"),
-    "load_transfer_rear": (1.0, "N"),
-    "tlltd_front": (100.0, "%"),
-    "anti_dive_front": (1.0, "%"),
-    "anti_lift_rear": (1.0, "%"),
-    "anti_squat_rear": (1.0, "%"),
-    "anti_lift_front_accel": (1.0, "%"),
-    "pitch_centre_x": (1e3, "mm"),
-    "pitch_centre_z": (1e3, "mm"),
-    "max_steer_inner": (_DEG, "deg"),
-    "max_steer_outer": (_DEG, "deg"),
-    "ackermann_5deg": (1.0, "%"),
-    "ackermann_10deg": (1.0, "%"),
-    "ackermann_15deg": (1.0, "%"),
-    "steering_ratio": (1.0, "deg/deg (handwheel/road wheel)"),
-    "turning_radius": (1.0, "m"),
-}
-
-
 @app.command()
 def vehicle(
     vehicle_yaml: Annotated[Path, typer.Argument(help="Vehicle YAML file.")],
@@ -358,7 +314,7 @@ def vehicle(
 
     from suspkin.kinematics import KinematicsError
     from suspkin.metrics import vehicle_summary
-    from suspkin.plotting.figures import format_value
+    from suspkin.plotting.units import VEHICLE_CLI_UNITS, format_value
 
     try:
         veh = load_vehicle(vehicle_yaml)
@@ -378,7 +334,7 @@ def vehicle(
             rows.append((k, v))
     width = max(len(k) for k, _ in rows)
     for k, v in rows:
-        scale, unit = _VS_UNITS.get(k.split(".")[-1], (1.0, ""))
+        scale, unit = VEHICLE_CLI_UNITS.get(k.split(".")[-1], (1.0, ""))
         if v is None:
             typer.echo(f"{k:<{width}}  {'n/a':>12}  {unit}")
         else:
@@ -509,7 +465,7 @@ def report(
 
 def _cell(v: float, fmt: str = "{:.3f}") -> str:
     """Format a table number; ``nan`` (no limit, disabled) becomes ``-``."""
-    from suspkin.plotting.figures import format_value
+    from suspkin.plotting.units import format_value
 
     return "-" if v != v else format_value(fmt, float(v)).strip()
 

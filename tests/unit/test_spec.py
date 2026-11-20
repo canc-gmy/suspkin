@@ -21,6 +21,7 @@ from suspkin.plotting.spec import (
     derived_columns,
     spec_json,
 )
+from suspkin.plotting.units import SUMMARY_ROWS as _UNITS_ROWS
 from suspkin.report import StudyResults, run_standard_studies
 from suspkin.units import display_factor
 
@@ -66,7 +67,7 @@ def test_parity_with_figures() -> None:
     assert spec_cols == expected
     assert {p.title for fig in FIGURES for p in fig.panels} == {p.title for p in flat}
     assert {fig.group for fig in FIGURES} == set(FIGURE_SET) - {"summary_table"}
-    assert len(SUMMARY_ROWS) == len(f._SUMMARY_ROWS)
+    assert len(SUMMARY_ROWS) == len(_UNITS_ROWS)
 
 
 def test_factors_match_figures() -> None:

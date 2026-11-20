@@ -22,7 +22,7 @@ Structure decisions
 * Derived columns of the ``rack`` table: ``d_left``/``d_right`` (steer angle relative to
   the static pose), ``outer``, ``ackermann`` [%], ``ratio`` (steering ratio, needs the
   ``steer_c_factor`` column).
-* ``SummaryRow`` mirrors ``_SUMMARY_ROWS`` (path into the summary dict, display factor,
+* ``SummaryRow`` mirrors ``units.SUMMARY_ROWS`` (path into the summary dict, display factor,
   unit and ``decimals``; ``dim`` from the registry for information). A renderer shows
   ``value * factor`` with ``decimals`` fixed decimals; a null / non-finite value shows
   as ``"-"``; a value that rounds to zero is shown without a minus sign ("-0.0" -> "0.0").
@@ -68,6 +68,7 @@ from suspkin.optimize.registry import (
 )
 from suspkin.plotting import figures as _f
 from suspkin.plotting.style import PALETTE, SIDE_LINESTYLES
+from suspkin.plotting.units import SUMMARY_ROWS as _SUMMARY_ROWS
 from suspkin.units import Dim, display_factor, display_unit
 
 __all__ = [
@@ -313,7 +314,7 @@ def _build() -> tuple[FigureSpec, ...]:
 
 def _summary_rows() -> tuple[SummaryRow, ...]:
     rows = []
-    for label, path, factor, unit, fmt in _f._SUMMARY_ROWS:
+    for label, path, factor, unit, fmt in _SUMMARY_ROWS:
         rows.append(SummaryRow(label, path, summary_metric_dim(".".join(path)), factor, unit, fmt))
     for r in rows:
         _ = r.decimals  # validate the format strings at import time

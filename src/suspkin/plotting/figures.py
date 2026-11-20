@@ -39,6 +39,7 @@ from suspkin.plotting.style import (
     use_style,
     zero_lines,
 )
+from suspkin.plotting.units import SUMMARY_ROWS, format_value
 
 Datasets = Sequence[tuple[str, pd.DataFrame]]
 
@@ -504,52 +505,6 @@ def fig_heave_pitch(datasets_heave: Datasets, datasets_pitch: Datasets) -> Figur
 
 
 # ---------------------------------------------------------------------------- summary table
-# (label, path in the summary, factor from SI, unit, format)
-_SUMMARY_ROWS: tuple[tuple[str, tuple[str, ...], float, str, str], ...] = (
-    ("Wheelbase", ("wheelbase",), 1e3, "mm", "{:.0f}"),
-    ("Sprung mass", ("sprung_mass",), 1.0, "kg", "{:.1f}"),
-    ("Sprung CG height", ("sprung_cg_height",), 1e3, "mm", "{:.0f}"),
-    ("Roll-axis height at CG", ("roll_axis_height_at_cg",), 1e3, "mm", "{:.1f}"),
-    ("Front track", ("front", "track"), 1e3, "mm", "{:.0f}"),
-    ("Rear track", ("rear", "track"), 1e3, "mm", "{:.0f}"),
-    ("Front wheel rate", ("front", "wheel_rate"), 1e-3, "N/mm", "{:.2f}"),
-    ("Rear wheel rate", ("rear", "wheel_rate"), 1e-3, "N/mm", "{:.2f}"),
-    ("Front RC height", ("front", "rc_height"), 1e3, "mm", "{:.1f}"),
-    ("Rear RC height", ("rear", "rc_height"), 1e3, "mm", "{:.1f}"),
-    ("Front roll stiffness", ("front", "roll_stiffness"), math.pi / 180, "N m/deg", "{:.0f}"),
-    ("Rear roll stiffness", ("rear", "roll_stiffness"), math.pi / 180, "N m/deg", "{:.0f}"),
-    ("Total roll stiffness", ("roll_stiffness_total",), math.pi / 180, "N m/deg", "{:.0f}"),
-    ("Roll gradient", ("roll_gradient",), 180 / math.pi, "deg/g", "{:.2f}"),
-    ("Front TLLTD", ("tlltd_front",), 100.0, "%", "{:.1f}"),
-    ("Front roll camber", ("front", "roll_camber"), 1.0, "deg/deg", "{:.3f}"),
-    ("Rear roll camber", ("rear", "roll_camber"), 1.0, "deg/deg", "{:.3f}"),
-    ("Front roll steer", ("front", "roll_steer"), 1.0, "deg/deg", "{:.3f}"),
-    ("Rear roll steer", ("rear", "roll_steer"), 1.0, "deg/deg", "{:.3f}"),
-    ("Anti-dive (front)", ("anti_dive_front",), 1.0, "%", "{:.1f}"),
-    ("Anti-lift (rear)", ("anti_lift_rear",), 1.0, "%", "{:.1f}"),
-    ("Anti-squat (rear)", ("anti_squat_rear",), 1.0, "%", "{:.1f}"),
-    ("Pitch centre x", ("pitch_centre_x",), 1e3, "mm", "{:.0f}"),
-    ("Pitch centre z", ("pitch_centre_z",), 1e3, "mm", "{:.0f}"),
-    ("Max steer (inner)", ("max_steer_inner",), 180 / math.pi, "deg", "{:.1f}"),
-    ("Max steer (outer)", ("max_steer_outer",), 180 / math.pi, "deg", "{:.1f}"),
-    ("Ackermann @ 5 deg", ("ackermann_5deg",), 1.0, "%", "{:.0f}"),
-    ("Ackermann @ 10 deg", ("ackermann_10deg",), 1.0, "%", "{:.0f}"),
-    ("Ackermann @ 15 deg", ("ackermann_15deg",), 1.0, "%", "{:.0f}"),
-    ("Steering ratio", ("steering_ratio",), 1.0, "-", "{:.2f}"),
-    ("Turning radius", ("turning_radius",), 1.0, "m", "{:.2f}"),
-)
-
-
-def format_value(fmt: str, value: float) -> str:
-    """``fmt.format(value)`` without a negative zero ("-0.0" becomes "0.0")."""
-    text = fmt.format(value)
-    if "-" in text and not any(c in "123456789" for c in text):
-        return (
-            text.replace("-", " ", 1).strip() if text == text.strip() else text.replace("-", " ", 1)
-        )
-    return text
-
-
 def _lookup(summary: object, path: Sequence[str]) -> float | None:
     cur: Any = summary
     for key in path:
@@ -571,7 +526,7 @@ def fig_summary_table(summary: object, title: str = "Vehicle summary") -> Figure
     if not (isinstance(summary, Mapping) or is_dataclass(summary)):
         raise TypeError("summary must be a dataclass or a mapping")
     rows: list[list[str]] = []
-    for label, path, factor, unit, fmt in _SUMMARY_ROWS:
+    for label, path, factor, unit, fmt in SUMMARY_ROWS:
         v = _lookup(summary, path)
         if v is None:
             continue

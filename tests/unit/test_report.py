@@ -78,7 +78,7 @@ def test_build_report_3d(results: StudyResults, tmp_path: Path) -> None:
 
 
 def test_format_value_no_negative_zero() -> None:
-    from suspkin.plotting.figures import format_value
+    from suspkin.plotting.units import format_value
 
     assert format_value("{:.1f}", -0.0) == "0.0"
     assert format_value("{:.1f}", -0.04) == "0.0"

@@ -17,13 +17,8 @@ from matplotlib.figure import Figure
 
 from suspkin import __version__
 from suspkin.geometry import Vehicle
-from suspkin.plotting.figures import (
-    _SUMMARY_ROWS,
-    FIGURE_SET,
-    _lookup,
-    format_value,
-    save_figure,
-)
+from suspkin.plotting.figures import FIGURE_SET, _lookup, save_figure
+from suspkin.plotting.units import SUMMARY_ROWS, format_value
 from suspkin.report.bundle import json_safe, save_bundle
 from suspkin.report.studies import StudyResults
 
@@ -101,7 +96,7 @@ def _b64(data: bytes) -> str:
 
 def _summary_rows(designs: Designs) -> list[tuple[str, str, list[str]]]:
     rows: list[tuple[str, str, list[str]]] = []
-    for label, path, factor, unit, fmt in _SUMMARY_ROWS:
+    for label, path, factor, unit, fmt in SUMMARY_ROWS:
         vals = [_lookup(r.summary, path) for _, r in designs]
         if all(v is None for v in vals):
             continue
