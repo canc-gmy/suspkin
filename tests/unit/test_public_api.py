@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -91,3 +93,13 @@ def test_save_writes_schema_first_and_roundtrips(tmp_path: Path) -> None:
     assert next(iter(saved)) == "schema"
     assert saved["schema"] == 1
     assert load_vehicle(out) == v
+
+
+def test_light_import() -> None:
+    code = (
+        "import sys, suspkin, suspkin.cli; "
+        "heavy = [m for m in ('torch', 'optuna', 'fastapi', 'plotly', 'pymoo') "
+        "if m in sys.modules]; "
+        "assert not heavy, heavy"
+    )
+    subprocess.run([sys.executable, "-c", code], check=True)

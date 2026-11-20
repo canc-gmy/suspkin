@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Internal restructure: fewer, clearer modules and one implementation per piece of math. Python
+  import paths changed (e.g. `suspkin.geom_math` → `suspkin.geometry.vectors`, `suspkin.sweeps.*` →
+  `suspkin.sweeps`, `suspkin.cli` is now a package). CLI, YAML formats, web-app API and numerical
+  results are unchanged (locked by `tests/regression/behaviour`).
 - The kinematics solver is about 2 times faster end to end (`run_standard_studies` at 61 points:
   336 ms to 162 ms; vehicle sweeps 2.0 to 2.6 times faster). The ground-contact secant builds the
   corner point table only for the converged pose and is warm-started from the neighbouring pose.
@@ -24,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   failure, and for the whole process when numba is missing or broken. `SUSPKIN_NO_NUMBA=1`
   forces the pure-Python path. The kernels compile once per process; with the on-disk cache this
   costs about 0.8 s.
+
+### Removed
+
+- Unused helpers: `_deprecation.deprecated`, `units.mm_to_m`, `units.deg_to_rad`,
+  `units.format_quantity`, `intersect_line_plane`, `rotate_about_line`, `rotate_rocker_points`,
+  `bundle_to_results`, and `metric_registry.{corner,vehicle,summary}_metric_names`.
 
 ## [1.1.0] - 2026-11-19
 
