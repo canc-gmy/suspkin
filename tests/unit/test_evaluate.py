@@ -15,13 +15,13 @@ from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import joint_angles_frame, vehicle_summary
 from suspkin.optimize import DesignSpace, InfeasibleDesign, evaluate
 from suspkin.optimize.evaluate import G_FAIL, ConstraintResult, _scale
-from suspkin.optimize.spec import (
+from suspkin.optimize.spec import load_study
+from suspkin.optimize.spec.constraints import Constraint
+from suspkin.optimize.spec.variables import (
     BoxRegion,
-    Constraint,
     CylinderRegion,
     HexahedronRegion,
     SphereRegion,
-    load_study,
 )
 
 evaluate_mod = importlib.import_module("suspkin.optimize.evaluate")

@@ -12,7 +12,6 @@ from pydantic import (
     model_validator,
 )
 
-from suspkin._spec_base import _Frozen, _scalar
 from suspkin.optimize.regions import is_convex_hexahedron
 from suspkin.optimize.registry import (
     MetricNameError,
@@ -28,7 +27,9 @@ from suspkin.optimize.spec.variables import (
     Region,
     Vec3,
     _check_point_ref,
+    _Frozen,
     _pair,
+    _scalar,
     parse_coord_ref,
 )
 from suspkin.units import Dim, slope_dim

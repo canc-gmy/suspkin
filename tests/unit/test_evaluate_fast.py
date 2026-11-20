@@ -14,7 +14,8 @@ from hypothesis import strategies as st
 
 from suspkin.optimize import DesignSpace
 from suspkin.optimize.evaluate import evaluate
-from suspkin.optimize.spec import default_scale, load_study
+from suspkin.optimize.spec import load_study
+from suspkin.optimize.spec.variables import default_scale
 from suspkin.units import normalize_dim
 
 ev: Any = importlib.import_module("suspkin.optimize.evaluate")

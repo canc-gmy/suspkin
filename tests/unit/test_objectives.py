@@ -22,15 +22,12 @@ from suspkin.kinematics import KinematicsError
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
 from suspkin.optimize import F_FAIL, DesignSpace, InfeasibleDesign, ObjectiveResult, evaluate
-from suspkin.optimize.spec import (
+from suspkin.optimize.spec import Optimizer, Study, StudyConfigError, load_study
+from suspkin.optimize.spec.objectives import (
     CurveObjective,
     ExtremumObjective,
     LinearityObjective,
-    Optimizer,
-    Study,
-    StudyConfigError,
     TargetObjective,
-    load_study,
 )
 from suspkin.sweeps import states_to_frame
 from suspkin.units import parse_quantity

@@ -60,16 +60,13 @@ from suspkin.optimize.evaluate import (
     evaluate,
     failed_evaluation,
 )
-from suspkin.optimize.spec import (
-    CornerSweep,
+from suspkin.optimize.spec import StudyConfigError
+from suspkin.optimize.spec.constraints import (
     JointAngleConstraint,
     ReachConstraint,
-    StudyConfigError,
     SummaryConstraint,
-    VehicleSweep,
-    parse_point_ref,
-    sweep_range,
 )
+from suspkin.optimize.spec.variables import CornerSweep, VehicleSweep, parse_point_ref, sweep_range
 from suspkin.surrogate.channels import channels_for
 from suspkin.surrogate.extract import extract_corner
 from suspkin.surrogate.grid import AxleGrid

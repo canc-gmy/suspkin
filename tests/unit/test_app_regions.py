@@ -18,7 +18,8 @@ from suspkin.app.server import create_app
 from suspkin.app.snapshot import build_snapshot
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.outputs import copy_inputs
-from suspkin.optimize.spec import InsideConstraint, OutsideConstraint, load_study
+from suspkin.optimize.spec import load_study
+from suspkin.optimize.spec.constraints import InsideConstraint, OutsideConstraint
 from suspkin.plotting.regions import _domain_vertices
 from tests.unit.test_app_api import API, TestClient, _open
 

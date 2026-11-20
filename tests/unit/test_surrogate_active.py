@@ -14,13 +14,8 @@ import pytest
 
 from suspkin.optimize.drivers import RunError
 from suspkin.optimize.history import cache_key, read_history
-from suspkin.optimize.spec import (
-    ActiveLearningSpec,
-    Optimizer,
-    StudyConfigError,
-    TrustRegionSpec,
-    load_study,
-)
+from suspkin.optimize.spec import Optimizer, StudyConfigError, load_study
+from suspkin.optimize.spec.surrogate import ActiveLearningSpec, TrustRegionSpec
 from suspkin.plotting.surrogate import plot_al_progress, plot_al_radius, plot_al_residual
 from suspkin.surrogate.active import (
     AL_COLUMNS,

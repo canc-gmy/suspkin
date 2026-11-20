@@ -9,13 +9,14 @@ from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
 from pydantic import (
+    BaseModel,
     BeforeValidator,
+    ConfigDict,
     Field,
     field_validator,
     model_validator,
 )
 
-from suspkin._spec_base import _Frozen, _scalar
 from suspkin.geometry.model import HARDPOINT_NAMES, Vehicle
 from suspkin.optimize.regions import check_hexahedron
 from suspkin.optimize.registry import (
@@ -23,6 +24,20 @@ from suspkin.optimize.registry import (
     vehicle_metric_dim,
 )
 from suspkin.units import Dim, normalize_dim, parse_quantity
+
+
+class _Frozen(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+def _scalar(v: Any, dim: Dim, factor: float = 1.0) -> float:
+    """Number or unit string -> SI; ``factor`` scales bare numbers (``units: mm``)."""
+    if isinstance(v, str):
+        return parse_quantity(v, dim)
+    if isinstance(v, bool) or not isinstance(v, int | float):
+        raise ValueError(f"expected a number or a string with unit, got {v!r}")
+    return float(v) * factor
+
 
 Vec3 = tuple[float, float, float]
 Pair = tuple[float, float]

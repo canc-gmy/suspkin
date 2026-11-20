@@ -13,13 +13,9 @@ from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
 from suspkin.metrics.table import metrics_frame
 from suspkin.optimize import registry as reg
-from suspkin.optimize.spec import (
-    BandConstraint,
-    Study,
-    StudyConfigError,
-    load_study,
-    sweep_range,
-)
+from suspkin.optimize.spec import Study, StudyConfigError, load_study
+from suspkin.optimize.spec.constraints import BandConstraint
+from suspkin.optimize.spec.variables import sweep_range
 from suspkin.sweeps import states_to_frame, sweep_vehicle, vehicle_frame
 from tests.unit.helpers import fixture_vehicle
 
@@ -241,7 +237,7 @@ _GRID = {"travel": {"min": "-20 mm", "max": "20 mm", "points": 7}}
 
 
 def test_surrogate_training_hpo_defaults() -> None:
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     s = SurrogateSpec.model_validate({"grid": _GRID})
     assert (s.training.device, s.training.max_epochs, s.training.patience) == ("auto", 2000, 100)
@@ -251,7 +247,7 @@ def test_surrogate_training_hpo_defaults() -> None:
 
 
 def test_surrogate_hpo_trial_budget_keys() -> None:
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     s = SurrogateSpec.model_validate(
         {"grid": _GRID, "hpo": {"max_epochs": None, "subsample": 5000}}
@@ -260,7 +256,7 @@ def test_surrogate_hpo_trial_budget_keys() -> None:
 
 
 def test_surrogate_training_hpo_units_and_values() -> None:
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     s = SurrogateSpec.model_validate(
         {
@@ -297,14 +293,14 @@ def test_surrogate_training_hpo_units_and_values() -> None:
 def test_surrogate_training_hpo_rejected(block: dict[str, Any]) -> None:
     from pydantic import ValidationError
 
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     with pytest.raises(ValidationError):
         SurrogateSpec.model_validate({"grid": _GRID, **block})
 
 
 def test_active_learning_defaults_and_units() -> None:
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     al = SurrogateSpec.model_validate({"grid": _GRID}).active_learning
     assert (al.max_iterations, al.fom_evaluations, al.surrogate_evaluations) == (50, 2000, 20000)
@@ -359,7 +355,7 @@ def test_active_learning_defaults_and_units() -> None:
 def test_active_learning_rejected(block: dict[str, Any]) -> None:
     from pydantic import ValidationError
 
-    from suspkin.optimize.spec import SurrogateSpec
+    from suspkin.optimize.spec.surrogate import SurrogateSpec
 
     with pytest.raises(ValidationError):
         SurrogateSpec.model_validate({"grid": _GRID, "active_learning": block})

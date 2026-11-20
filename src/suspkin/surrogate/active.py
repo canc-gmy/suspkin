@@ -59,15 +59,8 @@ from suspkin.optimize.outputs import (
 )
 from suspkin.optimize.pool import resolve_workers
 from suspkin.optimize.problem import BudgetExhausted, Problem
-from suspkin.optimize.spec import (
-    ActiveLearningSpec,
-    FinetuneSpec,
-    Optimizer,
-    Study,
-    StudyConfigError,
-    TrustRegionSpec,
-    load_study,
-)
+from suspkin.optimize.spec import Optimizer, Study, StudyConfigError, load_study
+from suspkin.optimize.spec.surrogate import ActiveLearningSpec, FinetuneSpec, TrustRegionSpec
 from suspkin.plotting.optimization import knee_index
 from suspkin.surrogate.channels import CHANNELS, channels_for
 from suspkin.surrogate.data_types import SPLIT_TRAIN, SPLIT_VAL, Axle, AxleDataset

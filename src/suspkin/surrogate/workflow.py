@@ -20,7 +20,8 @@ import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
-from suspkin.optimize.spec import StudyConfigError, SurrogateSpec, load_study
+from suspkin.optimize.spec import StudyConfigError, load_study
+from suspkin.optimize.spec.surrogate import SurrogateSpec
 from suspkin.surrogate.data_types import SPLIT_TEST, Axle, AxleDataset
 from suspkin.surrogate.dataset import DatasetError, check_dataset_matches, load_dataset
 from suspkin.surrogate.hpo import HpoResult, retrain_best, search_axles

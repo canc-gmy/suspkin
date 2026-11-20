@@ -82,35 +82,39 @@ from suspkin.metrics.corner import body_rotations, joint_angle
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.regions import sd_box, sd_cylinder, sd_hexahedron, sd_sphere
 from suspkin.optimize.registry import summary_metric_dim
-from suspkin.optimize.spec import (
+from suspkin.optimize.spec.constraints import (
     BandConstraint,
-    BoxRegion,
     Constraint,
-    CornerSweep,
-    CurveObjective,
-    CylinderRegion,
     DistanceConstraint,
-    ExtremumObjective,
-    HexahedronRegion,
     InsideConstraint,
     JointAngleConstraint,
-    LinearityObjective,
-    Objective,
     OutsideConstraint,
     ReachConstraint,
     RelationConstraint,
     SlopeConstraint,
-    SphereRegion,
     SummaryConstraint,
-    TargetObjective,
     ValueConstraint,
-    VehicleSweep,
-    default_scale,
+)
+from suspkin.optimize.spec.objectives import (
+    CurveObjective,
+    ExtremumObjective,
+    LinearityObjective,
+    Objective,
+    TargetObjective,
     objective_dim,
     objective_scale,
+)
+from suspkin.optimize.spec.study import region_centroid
+from suspkin.optimize.spec.variables import (
+    BoxRegion,
+    CornerSweep,
+    CylinderRegion,
+    HexahedronRegion,
+    SphereRegion,
+    VehicleSweep,
+    default_scale,
     parse_coord_ref,
     parse_point_ref,
-    region_centroid,
     sweep_input_dim,
     sweep_metric_dim,
     sweep_range,

@@ -15,9 +15,9 @@ from pydantic import (
     model_validator,
 )
 
-from suspkin._spec_base import _Frozen
 from suspkin.geometry.io import VehicleConfigError, load_vehicle
 from suspkin.geometry.model import Vehicle
+from suspkin.optimize.regions import has_grid_node, node_range
 from suspkin.optimize.registry import (
     summary_metric_dim,
 )
@@ -43,6 +43,7 @@ from suspkin.optimize.spec.objectives import (
     objective_dim,
     objective_scale,
 )
+from suspkin.optimize.spec.surrogate import SurrogateSpec
 from suspkin.optimize.spec.variables import (
     _RANGE_TOL,
     DEFAULT_RESOLUTION,
@@ -55,6 +56,7 @@ from suspkin.optimize.spec.variables import (
     Sweep,
     Variable,
     VehicleSweep,
+    _Frozen,
     _parse_resolution,
     default_scale,
     parse_point_ref,
@@ -62,7 +64,6 @@ from suspkin.optimize.spec.variables import (
     sweep_metric_dim,
     sweep_range,
 )
-from suspkin.surrogate.spec import SurrogateSpec
 from suspkin.units import slope_dim
 
 # --------------------------------------------------------------------------------------
@@ -243,8 +244,6 @@ def _base_point(vehicle: Vehicle, var: Variable) -> tuple[float, float, float]:
 
 def check_grid(study: Study, vehicle: Vehicle) -> None:
     """Every gridded variable must have at least one grid node inside its domain."""
-    from suspkin.optimize.design import has_grid_node, node_range  # design imports this package
-
     for var in study.variables:
         res = variable_resolution(study, var)
         if res is None:

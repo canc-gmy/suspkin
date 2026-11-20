@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from suspkin.optimize.spec import FinetuneSpec
+from suspkin.optimize.spec.surrogate import FinetuneSpec
 from suspkin.surrogate.active import (
     AL_COLUMNS,
     FinetuneState,

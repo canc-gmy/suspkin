@@ -1,4 +1,4 @@
-"""Surrogate block of a study (``surrogate:`` in the study YAML)."""
+"""Surrogate block of a study (``surrogate:`` section of the study YAML)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic import (
     model_validator,
 )
 
-from suspkin._spec_base import _Frozen, _scalar
+from suspkin.optimize.spec.variables import _Frozen, _scalar
 
 
 class AxisGrid(_Frozen):

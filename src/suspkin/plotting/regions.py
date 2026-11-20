@@ -79,7 +79,12 @@ def _cylinder_lines(p0: ArrayLike, p1: ArrayLike, radius: float) -> list[F64]:
 
 
 def _region_lines(region: Any) -> list[F64]:
-    from suspkin.optimize.spec import BoxRegion, CylinderRegion, HexahedronRegion, SphereRegion
+    from suspkin.optimize.spec.variables import (
+        BoxRegion,
+        CylinderRegion,
+        HexahedronRegion,
+        SphereRegion,
+    )
 
     if isinstance(region, BoxRegion):
         return _hex_lines(_box_vertices(region.lo, region.hi))
@@ -106,7 +111,12 @@ def _is_right(var: Any) -> bool:
 
 def _domain_vertices(space: DesignSpace, var: Any) -> F64:
     """The 8 vertices of a variable's domain (right-side coordinates for ``side: right``)."""
-    from suspkin.optimize.spec import BoxRegion, HexahedronRegion, OffsetRegion, parse_point_ref
+    from suspkin.optimize.spec.variables import (
+        BoxRegion,
+        HexahedronRegion,
+        OffsetRegion,
+        parse_point_ref,
+    )
 
     d = var.domain
     if isinstance(d, HexahedronRegion):
@@ -146,7 +156,8 @@ def plot_study_3d(
     -------
     matplotlib.figure.Figure
     """
-    from suspkin.optimize.spec import InsideConstraint, OutsideConstraint, parse_point_ref
+    from suspkin.optimize.spec.constraints import InsideConstraint, OutsideConstraint
+    from suspkin.optimize.spec.variables import parse_point_ref
 
     variables = space.study.variables
     if x is None:

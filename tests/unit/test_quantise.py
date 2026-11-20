@@ -14,16 +14,19 @@ import pytest
 import yaml
 
 from suspkin.optimize import read_history, run_optimization
-from suspkin.optimize.design import (
-    DesignSpace,
+from suspkin.optimize.design import DesignSpace
+from suspkin.optimize.problem import Problem
+from suspkin.optimize.regions import (
     has_grid_node,
+    hex_contains,
+    hex_locate,
+    hex_map,
     node_range,
     snap_hexahedron,
     snap_interval,
 )
-from suspkin.optimize.problem import Problem
-from suspkin.optimize.regions import hex_contains, hex_locate, hex_map
-from suspkin.optimize.spec import DEFAULT_RESOLUTION, Study, StudyConfigError, load_study
+from suspkin.optimize.spec import Study, StudyConfigError, load_study
+from suspkin.optimize.spec.variables import DEFAULT_RESOLUTION
 from tests.unit.test_surrogate_sampling import STUDY, VEHICLE
 
 RES = 5e-4

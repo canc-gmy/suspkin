@@ -10,7 +10,6 @@ from pydantic import (
     model_validator,
 )
 
-from suspkin._spec_base import _Frozen, _scalar
 from suspkin.optimize.registry import (
     MetricNameError,
     corner_metric_dim,
@@ -23,7 +22,9 @@ from suspkin.optimize.spec.variables import (
     CornerSweep,
     Pair,
     VehicleSweep,
+    _Frozen,
     _pair,
+    _scalar,
     default_scale,
     sweep_input_dim,
     sweep_metric_dim,
