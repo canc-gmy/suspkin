@@ -40,7 +40,7 @@ flowchart LR
 | vehicle formulas | `suspkin.metrics.vehicle` | anti-features, roll stiffness, load transfer, Ackermann, pitch centre, `vehicle_summary` |
 | ARB | `suspkin.metrics.arb` | `arb_metrics`, `arb_rates` |
 | array IC kernels | `suspkin.kinematics.ic_arrays` | `ic_arrays`, `swing_angle`, `roll_line_arrays` |
-| batched twin | `suspkin.kinematics.batch.corner_columns`, `GRADIENTS` | the same columns for many designs at once (optimiser) |
+| batched twin | `suspkin.kinematics.batch.corner_columns`, `GRADIENTS` | the same 36 columns plus the travel gradients for many designs at once (optimiser); see section 16 |
 
 The vectorised arrays are the production path. Scalar per-state reference
 implementations of the same formulas live only in the test suite
@@ -258,7 +258,7 @@ $\text{steer} = \text{toe}$ on right corners, $-\text{toe}$ on left corners
 
 **Code.** `out["toe"]`. **Unit.** rad; deg. **Typical.** FL 0.000 deg, RL +0.100 deg
 (static toe-in). FL sweep table: toe $-0.00151$ rad at -20 mm and $-0.00143$ rad at +20
-mm (about -0.085 deg): a nearly symmetric, parabola-like curve whose slope at 0 is almost
+mm (-0.086 / -0.082 deg): a nearly symmetric, parabola-like curve whose slope at 0 is almost
 zero.
 
 ### Steer angle
@@ -294,8 +294,8 @@ trail.
 $$\text{caster} = \operatorname{atan2}(-u_x,\; u_z)$$
 
 **Code.** `out["caster"]`. **Unit.** rad; deg. **Typical.** FL 4.936 deg, RL 1.042 deg.
-The caster changes only 0.001 rad over $\pm 30$ mm of travel on FL (0.0861 -> 0.0862
-rad), see `caster_change` in [Gradients](#gradients).
+The caster changes only 0.00014 rad (about 0.008 deg) over $\pm 30$ mm of travel on FL
+(0.086099 -> 0.086238 rad), see `caster_change` in [Gradients](#gradients).
 
 ### Kingpin inclination
 
@@ -366,8 +366,9 @@ $$\mathbf r = \mathbf p_{wc} - \mathbf p_{lbj},\quad \hat{\mathbf u} = \mathbf u
 \text{spindle} = \left|\mathbf r - (\mathbf r\cdot\hat{\mathbf u})\hat{\mathbf u}\right|$$
 
 **Code.** `out["spindle_length"]`. **Unit.** m; mm. **Typical.** FL 33.38 mm, RL 24.00 mm
-(slightly less than `kingpin_offset_wc` because the axis is tilted; for a vertical axis
-they would be equal).
+(33.38 vs 33.50 mm on FL, 24.0006 vs 24.0000 mm on RL). `kingpin_offset_wc` is a y-only
+difference at height $z_{wc}$ while `spindle_length` is a perpendicular 3-D distance; they
+are equal only for a vertical axis with no x offset.
 
 ## 5. Wheel position
 
@@ -453,7 +454,7 @@ camber gain (short swing arm, large camber gain). Located by the plane method wi
 the cut $x = x_{cp}$. `nan` for IC at infinity. **Unit.** m; mm.
 **Typical.** FL $(-2671.8,\ 180.3)$ mm, RL $(-1890.1,\ 166.6)$ mm: for the left wheel the IC
 lies at negative y, i.e. **across the car centreline** (the arms converge on the opposite
-side). At +30 mm bump FL: $y = -1672.6$ mm, $z = -10.0$ mm (table, SI -1.67258, -0.01003).
+side). At +30 mm bump FL: $y = -1672.6$ mm, $z = +7.2$ mm (SI -1.67258 m, +0.007157 m).
 
 ### Side-view instant centre
 
@@ -561,7 +562,8 @@ rear `sv_wc_angle`. `anti_squat_rear`. **Typical.** 0.0 %.
 
 $\text{anti-lift}_{f,accel} = \tan\theta_{wc,f}\,\sigma_f\,L/h_{cg}\cdot 100$.
 `anti_lift_front_accel`. It is `None` (printed `n/a`, `nan` in figures) for rear-wheel
-drive (split 0), which is the reference car.
+drive (split 0), which is the reference car. It is not in `SUMMARY_ROWS`, so figures and
+reports do not show it; only `suspkin vehicle` prints it (`n/a` when `None`).
 
 **Signs.** Positive = anti-geometry in all four. The summary tables print `%`; the
 fractions are multiplied by 100 inside the formulas.
@@ -587,7 +589,7 @@ length; these metrics express them for design.
 `pushrod_angle_fv` $= \operatorname{atan2}(r_z,\ |r_y|)$ with $\mathbf r = \mathbf p_{pushrod,inner} - \mathbf p_{pushrod,outer}$. The first is the true elevation of the rod
 (positive when the inner end, at the rocker, is higher than the outer end); the second is
 the angle seen in the front view. A steep pushrod (near 90 deg) transmits wheel
-motion with little motion-ratio loss; a flat one has high compressive load in the rod.
+motion with little motion-ratio loss; a flat rod carries a high axial load (force $\propto 1/\sin$ of the elevation); the elevation also sets the motion ratio.
 **Unit.** rad; deg. **Typical.** FL 64.74 deg / 64.87 deg, RL 67.64 deg / 67.67 deg.
 
 ### Rocker rotation
@@ -671,7 +673,7 @@ The wheel rate in series with the vertical tyre stiffness $k_t$ (`tyre_stiffness
 
 $$K_r = \frac{K_w\,k_t}{K_w + k_t}$$
 
-(`suspkin.metrics.corner.ride_rate`). It is the stiffness the chassis sees on a
+(`suspkin.metrics.corner.ride_rate`). The wheel rate and the tyre stiffness act in series. It is the stiffness the chassis sees on a
 frictionless-wheel model, used for ride frequency
 $f = \tfrac{1}{2\pi}\sqrt{K_r/m_{corner}}$. **Unit.** N/m (display N/mm). **Typical.** FL
 static 25.69 N/mm (wheel rate 34.57 N/mm, tyre 100 N/mm); RL 29.05 N/mm.
@@ -891,7 +893,7 @@ gives -0.0175 deg/mm); `caster_change` 0.0001 deg/mm; `track_change_rate` 0.0550
 (toe-in positive, per the toe convention). It is the single most important tie-rod
 placement check: the tie rod must be at the right height and angle so that the toe
 curve stays flat. **Typical.** FL 0.0001 deg/mm at zero, but the toe curve is
-parabolic: $-0.0015$ rad (-0.087 deg) at $\pm 20$ mm, i.e. a toe-out in both bump and
+parabolic: $-0.00151$ rad (-0.086 deg) at -20 mm and $-0.00143$ rad (-0.082 deg) at +20 mm, i.e. a toe-out in both bump and
 droop (sweep table). The summary prints 0.0001 and 0.0003 deg/mm (FL, RL).
 
 ### Steer gain
@@ -899,10 +901,12 @@ droop (sweep table). The summary prints 0.0001 and 0.0003 deg/mm (FL, RL).
 `steer_gain` $= d(\text{steer\_angle})/d\,\text{rack}$ [rad/m]: road-wheel angle per metre
 of rack (inverse of the rack travel per degree). Only produced when sweeping rack
 (`suspkin sweep ... --rack-sweep`, `add_gradients(df, "rack")`). **Typical.** FL
-12.925 rad/m at zero rack (0.0129 rad per mm $=0.741$ deg/mm), rising to 13.15 rad/m at
-$\pm 20$ mm (table, `sweep_rack`). The overall steering ratio of the vehicle summary
+12.898 rad/m at zero rack (0.0129 rad per mm $=0.739$ deg/mm), rising to 13.15 rad/m at
+$\pm 15$ mm and 13.23 rad/m at the ends (`sweep_rack`, $\pm 20$ mm, 9 points). The
+value depends on the grid: a $\pm 30$ mm 7-point grid gives 12.925 at zero and 13.66 / 13.61
+at the ends. The overall steering ratio of the vehicle summary
 combines this with the pinion `c_factor`: $0.09$ m/rev gives
-$4.0^\circ$ handwheel per mm rack, so $4.0/0.741 \approx 5.4$ deg/deg.
+$4.0^\circ$ handwheel per mm rack, so $4.0/0.739 \approx 5.4$ deg/deg.
 
 ## 12. Steering (vehicle level)
 
@@ -926,8 +930,8 @@ geometry is near parallel steer (see Ackermann below).
 $$A = \frac{\delta_i - \delta_o}{\delta_{i,ideal} - \delta_o}\cdot 100\ [\%],\qquad
 \cot\delta_o - \cot\delta_{i,ideal} = \frac{t}{L}$$
 
-with $t$ = front track (the code uses the steering-axis spacing equal to the track) and
-$L$ the wheelbase; $\delta_{i,ideal} = \operatorname{atan2}(1,\ \cot\delta_o - t/L)$. 100 % =
+with $t$ = `vehicle.front_track` (wheel-centre track; the code takes the steering-axis spacing equal to it) and
+$L$ the wheelbase (the figure `plotting.figures._steering_frame` instead uses the static contact-patch spacing `FL_cp_y - FR_cp_y`, so the figure and the summary can differ slightly); $\delta_{i,ideal} = \operatorname{atan2}(1,\ \cot\delta_o - t/L)$. 100 % =
 true Ackermann, 0 % = parallel steer, negative = anti-Ackermann. `nan` if
 $|\delta_o| < 10^{-4}$ rad. `ackermann_5deg`, `ackermann_10deg`, `ackermann_15deg`: the
 value interpolated (`np.interp`, sorted by outer angle) at 5, 10, 15 deg of outer steer on
@@ -965,7 +969,7 @@ if there is one in the list, else `solve_corner(corner, 0.0)`.
 |---|---|---|---|
 | `tie_inner` | rod end | tie rod | chassis |
 | `tie_outer` | rod end | tie rod | upright |
-| `pushrod_outer` | rod end | pushrod | body named by `axle_cfg.pushrod_mount` (upright or lower arm) |
+| `pushrod_outer` | rod end | pushrod | body named by `axle_cfg.pushrod_mount` (upright, lower arm or upper arm; fs_reference uses the upper arm `uca`) |
 | `pushrod_inner` | rod end | pushrod | rocker |
 | `spring_chassis` | rod end | spring/damper | chassis |
 | `rocker_spring` | rod end | spring/damper | rocker |
@@ -1025,7 +1029,7 @@ Display units (`suspkin.plotting.units.SUMMARY_ROWS` for figures/reports,
 | `roll_axis_height_at_cg` | m | mm | 37.08 |
 | `front/rear.track` | m | mm | 1220 / 1180 |
 | `front/rear.wheel_rate` | N/m | N/mm | 34.57 / 40.95 |
-| `front/rear.arb_wheel_rate_roll` | N/m | N/mm | 32.29 / 21.96 |
+| `front/rear.arb_wheel_rate_roll` | N/m | N/mm | 32.29 / 21.96 (0 without an ARB) |
 | `front/rear.rc_height` | m | mm | 33.72 / 40.00 |
 | `front/rear.roll_stiffness_springs/_arb/_tyres/` | N m/rad | N m/deg | section 9 |
 | `front/rear.roll_stiffness` | N m/rad | N m/deg | 520.4 / 469.2 |
@@ -1066,11 +1070,27 @@ factor, unit, format); `plotting.units.format_value` avoids printing negative ze
 - **Kabsch** raises on a degenerate (collinear) body point set; rod-end angle raises on a
   zero-length link.
 
-## 16. Where it is tested
+## 16. The batched twin
+
+`suspkin.kinematics.batch.corner_columns` evaluates the same formulas as
+`corner_arrays` for all 36 columns, for many designs and states at once, plus the five
+`GRADIENTS["travel"]` columns and the six actuation-gradient columns (`mr_spring`,
+`mr_progression`, `wheel_load_spring`, `wheel_rate_linear`, `wheel_rate`, `ride_rate`).
+Differences: only `GRADIENTS["travel"]` is applied, so `steer_gain` is never produced;
+`rack` is hard-coded to 0; no `joint_*` columns (the surrogate computes those in
+`suspkin.surrogate.evaluate`); `rocker_rotation` is set to the solved `rocker_angle`
+(valid because the static solved rocker angle is 0 by construction); and it adds the
+solver columns `theta_uca`, `theta_lca`, `psi`, `rocker_angle`, `coilover_length`,
+`toggle_margin`, `max_residual`, `spin_*`.
+
+## 17. Where it is tested
 
 `tests/unit/test_alignment.py`, `test_centres.py`, `test_actuation.py`, `test_arb.py`,
 `test_joints.py`, `test_metrics_table.py`, `test_metrics_batch.py` (array vs scalar oracle
-parity), `test_kinematics_batch.py` (batched twin), `test_reference_vehicle.py` (the
+parity), `test_kinematics_batch.py` (shape and finiteness only),
+`test_surrogate_problem.py::test_columns_match_fom_tables` (batched columns vs the
+per-state tables for FL/RL/FR, every float column except `max_residual`, tolerance 1e-8, plus
+`_check_rebuild` for lower-arm/upright pushrod mounts), `test_reference_vehicle.py` (the
 reference vehicle summary), `tests/unit/_scalar_oracles.py` (scalar reference
 implementations) and the property tests under `tests/property/`.
 
