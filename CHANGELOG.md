@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   import paths changed (e.g. `suspkin.geom_math` → `suspkin.geometry.vectors`, `suspkin.sweeps.*` →
   `suspkin.sweeps`, `suspkin.cli` is now a package). CLI, YAML formats, web-app API and numerical
   results are unchanged (locked by `tests/regression/behaviour`).
+- Documentation rewritten: Diátaxis structure with long concept pages (conventions, vehicle model,
+  corner and vehicle kinematics, metrics, sweeps and reports, optimisation, surrogate, web app,
+  architecture) that explain the theory and the exact code, rewritten guides and tutorial, a
+  per-package API reference, ADRs 0002-0008, and Google-style docstrings across `src/`.
+  `docs/DESIGN_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/performance.md` and `docs/webapp/PLAN.md`
+  are removed; their still-true content moved into the new pages.
 - The kinematics solver is about 2 times faster end to end (`run_standard_studies` at 61 points:
   336 ms to 162 ms; vehicle sweeps 2.0 to 2.6 times faster). The ground-contact secant builds the
   corner point table only for the converged pose and is warm-started from the neighbouring pose.
