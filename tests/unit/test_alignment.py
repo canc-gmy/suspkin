@@ -13,7 +13,7 @@ import pytest
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_rack
-from suspkin.metrics import corner as al
+from tests.unit import _scalar_oracles as al
 from tests.unit.helpers import fixture_corners
 
 IDS = ("FL", "FR", "RL", "RR")

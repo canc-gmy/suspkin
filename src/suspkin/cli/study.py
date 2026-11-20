@@ -6,7 +6,7 @@ from typing import Annotated, Any
 
 import typer
 
-from suspkin.cli._format import _cell, _echo_table
+from suspkin.cli._common import _cell, _echo_table, fail
 
 
 def check(
@@ -35,8 +35,7 @@ def check(
         study, vehicle = load_study(study_yaml)
         space = DesignSpace(study, vehicle)
     except (StudyConfigError, ValueError) as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=2) from exc
+        fail(str(exc), 2)
     baseline_ok = True
     try:
         space.from_vehicle()
@@ -106,8 +105,7 @@ def check(
             plot_study_3d(space).savefig(plot, dpi=200)
             typer.echo(str(plot))
     except Exception as exc:
-        typer.echo(f"error: cannot write output: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: cannot write output: {exc}", 2)
     if strict and not (ev.feasible and baseline_ok):
         raise typer.Exit(code=1)
 
@@ -171,11 +169,9 @@ def optimize(
     from suspkin.units import parse_quantity
 
     if surrogate is None and device is not None:
-        typer.echo("error: --device needs --surrogate", err=True)
-        raise typer.Exit(code=2)
+        fail("error: --device needs --surrogate", 2)
     if device is not None and device not in ("auto", "cpu", "cuda"):
-        typer.echo(f"error: --device must be auto, cpu or cuda, got {device!r}", err=True)
-        raise typer.Exit(code=2)
+        fail(f"error: --device must be auto, cpu or cuda, got {device!r}", 2)
     try:
         seconds = None if time is None else parse_quantity(time, "time")
         n_workers: int | str | None = None
@@ -216,13 +212,11 @@ def optimize(
             )
             res = active.run
     except (StudyConfigError, RunError, HistoryError, ValueError, OSError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: {exc}", 2)
     except (RuntimeError, ImportError) as exc:
         if surrogate is None:
             raise
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: {exc}", 2)
 
     base, best = res.baseline, res.best
     typer.echo(
@@ -283,5 +277,4 @@ def optimize(
     )
     typer.echo(str(res.out_dir))
     if not res.feasible:
-        typer.echo("error: no feasible design found", err=True)
-        raise typer.Exit(code=1)
+        fail("error: no feasible design found")

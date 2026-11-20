@@ -8,7 +8,15 @@ from __future__ import annotations
 import math
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 Vec3 = tuple[float, float, float]
 
@@ -47,6 +55,14 @@ def _normalized(v: Vec3, what: str) -> Vec3:
     return (v[0] / n, v[1] / n, v[2] / n)
 
 
+def _normalize_axis(v: Vec3, info: ValidationInfo) -> Vec3:
+    return _normalized(v, str(info.field_name))
+
+
+# a direction vector, normalised to unit length on validation (zero vector is rejected)
+Axis = Annotated[Vec3, AfterValidator(_normalize_axis)]
+
+
 def _dist(a: Vec3, b: Vec3) -> float:
     return _norm((a[0] - b[0], a[1] - b[1], a[2] - b[2]))
 
@@ -73,12 +89,7 @@ class CornerHardpoints(_Frozen):
     spring_chassis: Vec3
     wheel_center: Vec3
     rocker_arb: Vec3 | None = None
-    rocker_axis: Vec3
-
-    @field_validator("rocker_axis")
-    @classmethod
-    def _normalize_axis(cls, v: Vec3) -> Vec3:
-        return _normalized(v, "rocker_axis")
+    rocker_axis: Axis
 
     @model_validator(mode="after")
     def _check(self) -> CornerHardpoints:
@@ -169,16 +180,11 @@ class _TubeARB(_Frozen):
 
     arm_end: Vec3
     bar_pivot: Vec3
-    bar_axis: Vec3 = (0.0, 1.0, 0.0)
+    bar_axis: Axis = (0.0, 1.0, 0.0)
     bar_length: float = Field(gt=0)
     outer_diameter: float = Field(gt=0)
     inner_diameter: float = Field(ge=0)
     shear_modulus: float = Field(gt=0)
-
-    @field_validator("bar_axis")
-    @classmethod
-    def _normalize_axis(cls, v: Vec3) -> Vec3:
-        return _normalized(v, "bar_axis")
 
     @model_validator(mode="after")
     def _check_tube(self) -> Self:
@@ -226,17 +232,12 @@ class BeamARB(_Frozen):
 
     type: Literal["beam"]
     beam_center: Vec3
-    beam_axis: Vec3 = (0.0, 1.0, 0.0)
+    beam_axis: Axis = (0.0, 1.0, 0.0)
     arm_end: Vec3
     beam_width: float = Field(gt=0)
     beam_thickness: float = Field(gt=0)
     beam_youngs_modulus: float = Field(gt=0)
     beam_angle: float = 0.0
-
-    @field_validator("beam_axis")
-    @classmethod
-    def _normalize_axis(cls, v: Vec3) -> Vec3:
-        return _normalized(v, "beam_axis")
 
     @model_validator(mode="after")
     def _check(self) -> Self:
@@ -269,12 +270,7 @@ class Steering(_Frozen):
 
     c_factor: float = Field(gt=0)
     rack_travel: tuple[float, float]
-    rack_axis: Vec3 = (0.0, 1.0, 0.0)
-
-    @field_validator("rack_axis")
-    @classmethod
-    def _normalize_axis(cls, v: Vec3) -> Vec3:
-        return _normalized(v, "rack_axis")
+    rack_axis: Axis = (0.0, 1.0, 0.0)
 
     @model_validator(mode="after")
     def _check(self) -> Steering:

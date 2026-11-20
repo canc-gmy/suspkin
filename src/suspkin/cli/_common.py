@@ -1,8 +1,26 @@
-"""Shared text-table helpers for CLI output."""
+"""Shared helpers for the CLI: error exits and text tables."""
 
 from collections.abc import Sequence
+from pathlib import Path
+from typing import NoReturn
 
 import typer
+
+from suspkin.geometry import Vehicle, VehicleConfigError, load_vehicle
+
+
+def fail(msg: str, code: int = 1) -> NoReturn:
+    """Print ``msg`` to stderr and exit with ``code``."""
+    typer.echo(msg, err=True)
+    raise typer.Exit(code=code)
+
+
+def load_vehicle_or_exit(path: Path) -> Vehicle:
+    """Load a vehicle YAML; on a config error print it to stderr and exit with code 1."""
+    try:
+        return load_vehicle(path)
+    except VehicleConfigError as exc:
+        fail(str(exc))
 
 
 def _cell(v: float, fmt: str = "{:.3f}") -> str:

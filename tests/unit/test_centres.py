@@ -13,15 +13,17 @@ from suspkin.geometry.corners import Corner
 from suspkin.kinematics import solve_corner
 from suspkin.kinematics.corner import CornerState
 from suspkin.metrics.corner import (
-    centre_metrics,
     front_view_ic,
-    fv_swing_angle,
-    fvsa_length,
     roll_centre_pair,
-    roll_centre_symmetric,
     side_view_ic,
     sv_swing_angle,
     sv_wc_angle,
+)
+from tests.unit._scalar_oracles import (
+    centre_metrics,
+    fv_swing_angle,
+    fvsa_length,
+    roll_centre_symmetric,
     svsa_length,
 )
 from tests.unit.helpers import fixture_corners

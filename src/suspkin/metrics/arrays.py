@@ -2,10 +2,10 @@
 
 ``corner_metric_arrays`` returns exactly the columns of
 :func:`suspkin.metrics.table.metrics_frame` and ``joint_angle_arrays`` the ``joint_*``
-columns of :func:`suspkin.metrics.corner.joint_angles_frame`. The per-state functions in
-``metrics.corner`` remain the reference
-implementation; every value here follows the same formula (differences are round-off) and
-degenerate cases give the same nan / inf values (instant centre at infinity, ...).
+columns of :func:`suspkin.metrics.corner.joint_angles_frame`. The scalar per-state reference
+implementations live in ``tests/unit/_scalar_oracles.py``; every value here follows the same
+formula (differences are round-off) and degenerate cases give the same nan / inf values
+(instant centre at infinity, ...).
 """
 
 from __future__ import annotations

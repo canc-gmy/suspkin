@@ -5,6 +5,8 @@ from typing import Annotated
 
 import typer
 
+from suspkin.cli._common import fail
+
 
 def app_cmd(
     paths: Annotated[
@@ -34,14 +36,12 @@ def app_cmd(
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
     except ImportError:
-        typer.echo("the web app needs the 'app' extra: uv sync --extra app", err=True)
-        raise typer.Exit(code=2) from None
+        fail("the web app needs the 'app' extra: uv sync --extra app", 2)
     from suspkin.app.server import run
 
     root = (workspace or Path.cwd()).resolve()
     if not root.is_dir():
-        typer.echo(f"error: workspace is not a directory: {root}", err=True)
-        raise typer.Exit(code=2)
+        fail(f"error: workspace is not a directory: {root}", 2)
     run(
         root,
         host=host,
@@ -70,14 +70,12 @@ def app_export_cmd(
     try:
         import fastapi  # noqa: F401
     except ImportError:
-        typer.echo("the web app needs the 'app' extra: uv sync --extra app", err=True)
-        raise typer.Exit(code=2) from None
+        fail("the web app needs the 'app' extra: uv sync --extra app", 2)
     from suspkin.app.snapshot import export_snapshot
 
     root = (workspace or Path.cwd()).resolve()
     try:
         size = export_snapshot([p.resolve() for p in paths], out, root, include_scene=not no_scene)
     except Exception as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from None
+        fail(f"error: {exc}")
     typer.echo(f"Snapshot exported to {out} ({size / 1e6:.1f} MB)")

@@ -13,7 +13,7 @@ import pytest
 from suspkin.geometry import Vehicle, build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState
-from suspkin.metrics.corner import (
+from tests.unit._scalar_oracles import (
     caster,
     kpi,
     mechanical_trail,

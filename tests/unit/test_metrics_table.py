@@ -8,8 +8,8 @@ import pytest
 
 from suspkin.kinematics import sweep_corner
 from suspkin.metrics import add_gradients, metrics_frame, static_summary
-from suspkin.metrics.corner import actuation_metrics, alignment_metrics, centre_metrics
 from suspkin.sweeps import states_to_frame
+from tests.unit._scalar_oracles import actuation_metrics, alignment_metrics, centre_metrics
 from tests.unit.helpers import fixture_corners
 
 CORNERS = fixture_corners()

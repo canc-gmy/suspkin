@@ -5,6 +5,7 @@ from typing import Annotated
 
 import typer
 
+from suspkin.cli._common import fail, load_vehicle_or_exit
 from suspkin.geometry import VehicleConfigError, load_vehicle
 
 
@@ -45,11 +46,7 @@ def show(
     geometry is drawn. --html writes an interactive file (to --out, default
     <vehicle>.html in the current directory) instead of a matplotlib figure.
     """
-    try:
-        vehicle = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    vehicle = load_vehicle_or_exit(vehicle_yaml)
 
     state = None
     pose = _pose_kwargs(heave, roll, pitch, rack)
@@ -59,8 +56,7 @@ def show(
         try:
             state = solve_vehicle(vehicle, **pose)  # type: ignore[arg-type]
         except (KinematicsError, ValueError) as exc:
-            typer.echo(f"error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
+            fail(f"error: {exc}")
 
     if html:
         from suspkin.plotting.interactive import interactive_view
@@ -69,8 +65,7 @@ def show(
         try:
             interactive_view(vehicle, state, target)
         except ImportError as exc:
-            typer.echo(f"error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
+            fail(f"error: {exc}")
         typer.echo(str(target))
         return
 
@@ -119,13 +114,8 @@ def animate(
     given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
     chosen = [k for k, v in given.items() if v is not None]
     if len(chosen) != 1:
-        typer.echo("error: give exactly one of --heave, --roll, --pitch, --rack", err=True)
-        raise typer.Exit(code=2)
-    try:
-        veh = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        fail("error: give exactly one of --heave, --roll, --pitch, --rack", 2)
+    veh = load_vehicle_or_exit(vehicle_yaml)
     name = chosen[0]
     lo, hi = given[name]  # type: ignore[misc]
     scale = _pose_kwargs(1.0, 1.0, 1.0, 1.0)[name]
@@ -136,8 +126,7 @@ def animate(
         states = sweep_vehicle(veh, **{name: values})  # type: ignore[arg-type]
         animate_sweep(veh, states, out, fps=fps)
     except (KinematicsError, ValueError, RuntimeError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     typer.echo(str(out))
 
 
@@ -163,16 +152,10 @@ def sweep(
 ) -> None:
     """Sweep one corner over wheel travel or rack (inputs in mm); the CSV is in SI units."""
     if (travel is None) == (rack_sweep is None):
-        typer.echo("error: give exactly one of --travel or --rack-sweep", err=True)
-        raise typer.Exit(code=2)
+        fail("error: give exactly one of --travel or --rack-sweep", 2)
     if corner not in ("FL", "FR", "RL", "RR"):
-        typer.echo(f"error: unknown corner {corner!r}", err=True)
-        raise typer.Exit(code=2)
-    try:
-        vehicle = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: unknown corner {corner!r}", 2)
+    vehicle = load_vehicle_or_exit(vehicle_yaml)
 
     import numpy as np
 
@@ -190,8 +173,7 @@ def sweep(
             rk = np.linspace(rack_sweep[0], rack_sweep[1], steps) / 1000.0
             states = sweep_rack(c, rk)
     except (KinematicsError, ValueError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     df = states_to_frame(states, c, metrics=metrics)
     if metrics:
         from suspkin.metrics import add_gradients
@@ -199,8 +181,7 @@ def sweep(
         try:
             df = add_gradients(df, "travel" if travel is not None else "rack")
         except ValueError as exc:
-            typer.echo(f"error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
+            fail(f"error: {exc}")
     df.to_csv(out, index=False)
     typer.echo(str(out))
 
@@ -253,11 +234,7 @@ def summary(
     from suspkin.metrics import add_gradients, metrics_frame, static_summary
     from suspkin.plotting.units import format_value
 
-    try:
-        vehicle = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    vehicle = load_vehicle_or_exit(vehicle_yaml)
     corners = build_corners(vehicle)
     result: dict[str, dict[str, float]] = {}
     try:
@@ -266,8 +243,7 @@ def summary(
             states = sweep_corner(c, np.linspace(-0.01, 0.01, 21))
             result[cid] = static_summary(add_gradients(metrics_frame(states, c)))
     except (KinematicsError, ValueError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     names = list(result["FL"])
     width = max(len(n) for n in names)
     typer.echo(f"{'metric':<{width}}  {'FL':>12}  {'RL':>12}  unit")
@@ -296,16 +272,11 @@ def vehicle(
     from suspkin.metrics import vehicle_summary
     from suspkin.plotting.units import VEHICLE_CLI_UNITS, format_value
 
-    try:
-        veh = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+    veh = load_vehicle_or_exit(vehicle_yaml)
     try:
         data = vehicle_summary(veh).to_dict()
     except (KinematicsError, ValueError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     rows: list[tuple[str, object]] = []
     for k, v in data.items():
         if isinstance(v, dict):
@@ -364,13 +335,8 @@ def vsweep(
     given = {"heave": heave, "roll": roll, "pitch": pitch, "rack": rack}
     chosen = [k for k, v in given.items() if v is not None]
     if len(chosen) != 1:
-        typer.echo("error: give exactly one of --heave, --roll, --pitch, --rack", err=True)
-        raise typer.Exit(code=2)
-    try:
-        veh = load_vehicle(vehicle_yaml)
-    except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        fail("error: give exactly one of --heave, --roll, --pitch, --rack", 2)
+    veh = load_vehicle_or_exit(vehicle_yaml)
     name = chosen[0]
     lo, hi = given[name]  # type: ignore[misc]
     if name in ("roll", "pitch"):
@@ -389,8 +355,7 @@ def vsweep(
         states = sweep_vehicle(veh, **{name: np.linspace(lo, hi, steps)}, base=base, pivot=pivot_m)
         df = vehicle_frame(states, veh)
     except (KinematicsError, ValueError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     df.to_csv(out, index=False)
     typer.echo(str(out))
 
@@ -419,8 +384,7 @@ def report(
     paths = [vehicle_yaml, *(compare or [])]
     fmts = tuple(f.strip() for f in formats.split(",") if f.strip())
     if not fmts:
-        typer.echo("error: --formats is empty", err=True)
-        raise typer.Exit(code=2)
+        fail("error: --formats is empty", 2)
     try:
         designs = []
         seen: set[str] = set()
@@ -433,9 +397,7 @@ def report(
             designs.append((label, run_standard_studies(load_vehicle(p), steps=steps)))
         html_path = build_report(designs, out, formats=fmts, include_3d=not no_3d)
     except VehicleConfigError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(code=1) from exc
+        fail(str(exc))
     except (KinematicsError, ValueError, RuntimeError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1) from exc
+        fail(f"error: {exc}")
     typer.echo(str(html_path))

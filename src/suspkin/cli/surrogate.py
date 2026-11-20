@@ -5,6 +5,8 @@ from typing import Annotated, Any
 
 import typer
 
+from suspkin.cli._common import fail
+
 
 def surrogate_sample(
     study_yaml: Annotated[Path, typer.Argument(help="Study YAML with a surrogate block.")],
@@ -37,11 +39,9 @@ def surrogate_sample(
     if root is None:
         root = out
     elif out is not None and out != root:
-        typer.echo("error: give --root only (--out is a deprecated alias)", err=True)
-        raise typer.Exit(code=2)
+        fail("error: give --root only (--out is a deprecated alias)", 2)
     if root is None:
-        typer.echo("error: missing option --root", err=True)
-        raise typer.Exit(code=2)
+        fail("error: missing option --root", 2)
     axles: list[Axle]
     if axle == "both":
         axles = ["front", "rear"]
@@ -50,8 +50,7 @@ def surrogate_sample(
     elif axle == "rear":
         axles = ["rear"]
     else:
-        typer.echo(f"error: --axle must be front, rear or both, got {axle!r}", err=True)
-        raise typer.Exit(code=2)
+        fail(f"error: --axle must be front, rear or both, got {axle!r}", 2)
     try:
         n_workers: int | str | None = None
         if workers is not None:
@@ -82,8 +81,7 @@ def surrogate_sample(
         if done == 0:
             raise StudyConfigError("no axle to sample")
     except (StudyConfigError, DatasetError, ValueError, OSError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: {exc}", 2)
 
 
 def _parse_axles(axle: str) -> list[str]:
@@ -91,8 +89,7 @@ def _parse_axles(axle: str) -> list[str]:
         return ["front", "rear"]
     if axle in ("front", "rear"):
         return [axle]
-    typer.echo(f"error: --axle must be front, rear or both, got {axle!r}", err=True)
-    raise typer.Exit(code=2)
+    fail(f"error: --axle must be front, rear or both, got {axle!r}", 2)
 
 
 def _present_axles(root: Path, axles: list[str], axle: str) -> list[Any]:
@@ -101,13 +98,9 @@ def _present_axles(root: Path, axles: list[str], axle: str) -> list[Any]:
     if axle != "both":
         missing = [a for a in axles if a not in have]
         if missing:
-            typer.echo(f"error: no dataset for {missing[0]} in {root / 'dataset'}", err=True)
-            raise typer.Exit(code=2)
+            fail(f"error: no dataset for {missing[0]} in {root / 'dataset'}", 2)
     elif not have:
-        typer.echo(
-            f"error: no dataset in {root / 'dataset'}; run `surrogate sample` first", err=True
-        )
-        raise typer.Exit(code=2)
+        fail(f"error: no dataset in {root / 'dataset'}; run `surrogate sample` first", 2)
     return list(have)
 
 
@@ -138,8 +131,7 @@ def surrogate_train(
 
     axles = _parse_axles(axle)
     if device is not None and device not in ("auto", "cpu", "cuda"):
-        typer.echo(f"error: --device must be auto, cpu or cuda, got {device!r}", err=True)
-        raise typer.Exit(code=2)
+        fail(f"error: --device must be auto, cpu or cuda, got {device!r}", 2)
     try:
         tmo = None if timeout is None else parse_quantity(timeout, "time")
         if tmo is not None and tmo <= 0:
@@ -155,8 +147,7 @@ def surrogate_train(
             echo=typer.echo,
         )
     except (StudyConfigError, DatasetError, ValueError, OSError, RuntimeError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: {exc}", 2)
 
 
 def surrogate_validate(
@@ -178,14 +169,12 @@ def surrogate_validate(
 
     axles = _parse_axles(axle)
     if device is not None and device not in ("auto", "cpu", "cuda"):
-        typer.echo(f"error: --device must be auto, cpu or cuda, got {device!r}", err=True)
-        raise typer.Exit(code=2)
+        fail(f"error: --device must be auto, cpu or cuda, got {device!r}", 2)
     try:
         use = _present_axles(root, axles, axle)
         reports = validate_surrogate(study_yaml, root, axles=use, device=device, echo=typer.echo)
     except (StudyConfigError, DatasetError, ValueError, OSError, RuntimeError) as exc:
-        typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=2) from exc
+        fail(f"error: {exc}", 2)
     n_over = 0
     for ax, rep in reports.items():
         tab = validation_table(rep)
@@ -202,5 +191,4 @@ def surrogate_validate(
             )
         typer.echo(str(root / "validation" / ax))
     if n_over:
-        typer.echo(f"error: {n_over} channel(s) over tolerance", err=True)
-        raise typer.Exit(code=1)
+        fail(f"error: {n_over} channel(s) over tolerance")

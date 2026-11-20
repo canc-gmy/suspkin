@@ -11,8 +11,8 @@ import pytest
 from suspkin.app.centres import scene_centres
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.kinematics import solve_vehicle
-from suspkin.metrics.corner import centre_metrics
 from suspkin.sweeps import vehicle_frame
+from tests.unit._scalar_oracles import centre_metrics
 
 REF = Path(__file__).parents[2] / "configs" / "vehicles" / "fs_reference.yaml"
 IDS = ("FL", "FR", "RL", "RR")

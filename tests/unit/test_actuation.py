@@ -10,18 +10,15 @@ from scipy.integrate import simpson
 
 from suspkin.kinematics import solve_corner, sweep_corner
 from suspkin.metrics import add_gradients, metrics_frame
-from suspkin.metrics.corner import (
+from suspkin.metrics.corner import ride_rate, wheel_load_spring, wheel_rate, wheel_rate_linear
+from tests.unit._scalar_oracles import (
     actuation_metrics,
     bump_stroke_remaining,
     droop_stroke_remaining,
     motion_ratios,
     pushrod_angle,
     pushrod_angle_fv,
-    ride_rate,
     spring_force,
-    wheel_load_spring,
-    wheel_rate,
-    wheel_rate_linear,
 )
 from tests.unit.helpers import fixture_corners
 

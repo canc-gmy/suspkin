@@ -12,7 +12,6 @@ import pytest
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner, sweep_rack
-from suspkin.metrics import corner as actuation
 from suspkin.metrics.arrays import (
     corner_arrays,
     corner_metric_arrays,
@@ -21,14 +20,13 @@ from suspkin.metrics.arrays import (
 )
 from suspkin.metrics.corner import (
     JOINTS,
-    alignment_metrics,
-    centre_metrics,
     joint_angle,
     joint_angles_frame,
     roll_centre_pair,
 )
 from suspkin.metrics.table import metrics_frame
 from suspkin.sweeps import _roll_centre_pair_arrays, states_to_frame
+from tests.unit._scalar_oracles import actuation_metrics, alignment_metrics, centre_metrics
 from tests.unit.helpers import fixture_vehicle
 from tests.unit.test_corner_solver import _with_mount
 
@@ -50,7 +48,7 @@ def reference_metrics(
         row = {"travel": float(s.travel), "rack": float(s.rack)}
         row.update(alignment_metrics(s, corner, static))
         row.update(centre_metrics(s, corner))
-        row.update(actuation.actuation_metrics(s, corner, static))
+        row.update(actuation_metrics(s, corner, static))
         row.update(consts)
         rows.append(row)
     return {k: np.array([r[k] for r in rows], dtype=float) for k in rows[0]}

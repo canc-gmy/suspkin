@@ -16,16 +16,14 @@ from suspkin.geometry.vectors import body_rotation, plane_from_points, plane_sec
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.kinematics.vehicle import VehicleState
-from suspkin.metrics import corner as actuation
 from suspkin.metrics.arrays import corner_metric_arrays, joint_angle_arrays
 from suspkin.metrics.corner import (
     JOINTS,
-    alignment_metrics,
-    centre_metrics,
     joint_angle,
     roll_centre_pair,
 )
 from suspkin.sweeps import sweep_vehicle, vehicle_frame
+from tests.unit._scalar_oracles import actuation_metrics, alignment_metrics, centre_metrics
 
 CONFIG = Path(__file__).resolve().parents[2] / "configs" / "vehicles" / "fs_reference.yaml"
 _IDS = ("FL", "FR", "RL", "RR")
@@ -44,7 +42,7 @@ def reference_metrics(states, corner, static):  # type: ignore[no-untyped-def]
         row = {"travel": float(s.travel), "rack": float(s.rack)}
         row.update(alignment_metrics(s, corner, static))
         row.update(centre_metrics(s, corner))
-        row.update(actuation.actuation_metrics(s, corner, static))
+        row.update(actuation_metrics(s, corner, static))
         row.update(consts)
         rows.append(row)
     return {k: np.array([r[k] for r in rows], dtype=float) for k in rows[0]}
