@@ -201,7 +201,7 @@ def _ic_behind_designs(n: int) -> list[Vehicle]:
     from suspkin.geometry.corners import build_corners
     from suspkin.kinematics.corner import solve_corner
     from suspkin.kinematics.rocker import KinematicsError
-    from suspkin.metrics.batch import corner_metric_arrays
+    from suspkin.metrics.arrays import corner_metric_arrays
 
     study, baseline = load_study(Path("configs/studies/fs_reference_surrogate.yaml"))
     space = DesignSpace(study, baseline)

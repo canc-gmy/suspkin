@@ -11,7 +11,7 @@ from matplotlib.figure import Figure
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics.table import add_gradients, metrics_frame
-from suspkin.metrics.vehicle_summary import vehicle_summary
+from suspkin.metrics.vehicle import vehicle_summary
 from suspkin.plotting.figures import (
     FIGURE_SET,
     fig_actuation,

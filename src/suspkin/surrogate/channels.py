@@ -35,7 +35,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.metrics.joints import JOINTS
+from suspkin.metrics.corner import JOINTS
 
 _DEG = math.pi / 180.0
 _MM = 1e-3

@@ -13,7 +13,7 @@ Experimental (see ``docs/guides/stability.md``).
    :mod:`suspkin.kinematics.corner` (vectorised over designs and sweep states; the
    rocker uses its closed form with the predicted angle as branch guess). Every corner
    column (metrics, gradients, joint angles, point coordinates) then follows from the
-   rebuilt points with the formulas of :mod:`suspkin.metrics.batch`;
+   rebuilt points with the formulas of :mod:`suspkin.metrics.arrays`;
 3. **vehicle level:** sweeps and ``summary`` come from :mod:`suspkin.surrogate.vehicle_layer`;
 4. the unchanged evaluator runs per design on a context that serves these tables.
 
@@ -50,7 +50,7 @@ from suspkin.kinematics.batch import (
     make_static,
     rebuild,
 )
-from suspkin.metrics.joints import _BODY_POINTS, _LINKS, _housing
+from suspkin.metrics.corner import _BODY_POINTS, _LINKS, _housing
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.evaluate import (
     Evaluation,
@@ -260,7 +260,7 @@ def _rack0_curves(batch: AxleBatch, names: Sequence[str]) -> Arr:
 
 
 # --------------------------------------------------------------------------------------
-# joint angles (vectorised ``metrics.batch.joint_angle_arrays`` with per-design statics)
+# joint angles (vectorised ``metrics.arrays.joint_angle_arrays`` with per-design statics)
 # --------------------------------------------------------------------------------------
 
 

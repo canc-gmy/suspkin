@@ -10,8 +10,8 @@ from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState
-from suspkin.metrics import actuation
-from suspkin.metrics.batch import corner_metric_arrays
+from suspkin.metrics.arrays import corner_metric_arrays
+from suspkin.metrics.corner import ride_rate, wheel_load_spring, wheel_rate, wheel_rate_linear
 
 # metric column -> gradient column, per sweep variable
 GRADIENTS: dict[str, dict[str, str]] = {
@@ -72,13 +72,13 @@ def add_gradients(df: pd.DataFrame, x: str = "travel") -> pd.DataFrame:
         force = df["spring_force"].to_numpy(dtype=float)
         k = df["spring_rate"].to_numpy(dtype=float)
         k_t = df["tyre_stiffness"].to_numpy(dtype=float)
-        wr = actuation.wheel_rate(k, mr, force, prog)  # type: ignore[arg-type]
+        wr = wheel_rate(k, mr, force, prog)  # type: ignore[arg-type]
         out["mr_spring"] = mr
         out["mr_progression"] = prog
-        out["wheel_load_spring"] = actuation.wheel_load_spring(force, mr)  # type: ignore[arg-type]
-        out["wheel_rate_linear"] = actuation.wheel_rate_linear(k, mr)  # type: ignore[arg-type]
+        out["wheel_load_spring"] = wheel_load_spring(force, mr)  # type: ignore[arg-type]
+        out["wheel_rate_linear"] = wheel_rate_linear(k, mr)  # type: ignore[arg-type]
         out["wheel_rate"] = wr
-        out["ride_rate"] = actuation.ride_rate(wr, k_t)  # type: ignore[arg-type]
+        out["ride_rate"] = ride_rate(wr, k_t)  # type: ignore[arg-type]
     return out
 
 

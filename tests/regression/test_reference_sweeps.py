@@ -87,7 +87,8 @@ def test_reference_alignment_gradients(corners, cid) -> None:  # type: ignore[no
 
 @pytest.mark.parametrize("cid", ["FL", "RL"])
 def test_reference_actuation_and_rates(corners, cid) -> None:  # type: ignore[no-untyped-def]
-    from suspkin.metrics import add_gradients, metrics_frame, motion_ratios, static_summary
+    from suspkin.metrics import add_gradients, metrics_frame, static_summary
+    from suspkin.metrics.corner import motion_ratios
 
     corner = corners[cid]
     states = sweep_corner(corner, TRAVELS)

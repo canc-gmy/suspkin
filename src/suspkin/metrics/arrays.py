@@ -2,8 +2,8 @@
 
 ``corner_metric_arrays`` returns exactly the columns of
 :func:`suspkin.metrics.table.metrics_frame` and ``joint_angle_arrays`` the ``joint_*``
-columns of :func:`suspkin.metrics.joints.joint_angles_frame`. The per-state functions in
-``alignment``, ``centres``, ``actuation`` and ``joints`` remain the reference
+columns of :func:`suspkin.metrics.corner.joint_angles_frame`. The per-state functions in
+``metrics.corner`` remain the reference
 implementation; every value here follows the same formula (differences are round-off) and
 degenerate cases give the same nan / inf values (instant centre at infinity, ...).
 """
@@ -18,7 +18,14 @@ from numpy.typing import NDArray
 
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState, solve_corner
-from suspkin.metrics.joints import _BODY_POINTS, _LINKS, JOINTS, _housing
+from suspkin.metrics.corner import (
+    _BODY_POINTS,
+    _LINKS,
+    JOINTS,
+    _housing,
+    angle_between,
+    kabsch_batch,
+)
 
 Arr = NDArray[np.float64]
 _NAN = float("nan")
@@ -41,12 +48,13 @@ def _norm(a: Arr) -> Arr:
 
 
 class _Ic:
-    """Instant centres of N states in one view (see ``centres._ic``)."""
+    """Instant centres of N states in one view (see ``corner._ic``)."""
 
     def __init__(self, h: Arr, z: Arr, finite: NDArray[np.bool_], d0: Arr, d1: Arr) -> None:
         self.h, self.z, self.finite, self.d0, self.d1 = h, z, finite, d0, d1
 
 
+# kept separate: float ordering (scalar twin: ``corner._ic``)
 def _ic_arrays(pts: Callable[[str], Arr], axis: int, cut: Arr) -> _Ic:
     """Plane-method instant centre for every state; ``axis`` 0 = front view, 1 = side view."""
     keep = [i for i in range(3) if i != axis]
@@ -86,7 +94,7 @@ def _ic_arrays(pts: Callable[[str], Arr], axis: int, cut: Arr) -> _Ic:
 
 
 def _swing(ic: _Ic, ref_h: Arr, ref_z: Arr, sign: float) -> Arr:
-    """Vectorised ``centres._angle``."""
+    """Vectorised ``corner._angle``."""
     fin = np.arctan2(ic.z - ref_z, sign * (ic.h - ref_h))
     dh = ic.d0 * sign
     dz = ic.d1
@@ -216,29 +224,6 @@ def corner_metric_arrays(
 
 
 # --------------------------------------------------------------------------- joint angles
-def _kabsch_batch(p0: Arr, p1: Arr) -> Arr:
-    """Batched Kabsch fit: ``p0`` ``(k, 3)`` static points, ``p1`` ``(N, k, 3)``."""
-    a = p0 - p0.mean(axis=0)
-    b = p1 - p1.mean(axis=1, keepdims=True)
-    h = np.einsum("pi,npj->nij", a, b)
-    u, sv, vt = np.linalg.svd(h)
-    if np.any((sv[:, 1] < 1e-9 * sv[:, 0]) | (sv[:, 0] <= 0.0)):
-        raise ValueError("degenerate point set for rotation fit (collinear or coincident points)")
-    ut = u.swapaxes(-1, -2)
-    v = vt.swapaxes(-1, -2)
-    d = np.sign(np.linalg.det(v @ ut))
-    d = np.where(d != 0.0, d, 1.0)
-    fix = np.ones((h.shape[0], 3))
-    fix[:, 2] = d
-    out: Arr = (v * fix[:, None, :]) @ ut
-    return out
-
-
-def _angle_arr(u: Arr, v: Arr) -> Arr:
-    out: Arr = np.arctan2(_norm(np.cross(u, v)), _dot(u, v))
-    return out
-
-
 def _unit_rows(v: Arr) -> Arr:
     nrm = _norm(v)
     if np.any(nrm < 1e-12):
@@ -269,7 +254,7 @@ def joint_angle_arrays(
     for body, pn in names.items():
         p0 = np.array([static.points[k] for k in pn], dtype=np.float64)
         p1 = np.stack([stack_points(states, k) for k in pn], axis=1)
-        rots[body] = _kabsch_batch(p0, p1)
+        rots[body] = kabsch_batch(p0, p1)
     rots["chassis"] = np.broadcast_to(np.eye(3), (n, 3, 3))
 
     def sp(name: str) -> Arr:
@@ -281,7 +266,7 @@ def joint_angle_arrays(
         if joint in ("uca_outer", "lca_outer"):
             a0 = sp("uca_outer") - sp("lca_outer")
             a0 = a0 / np.linalg.norm(a0)
-            val = _angle_arr(
+            val = angle_between(
                 np.einsum("nij,j->ni", rots["upright"], a0), np.einsum("nij,j->ni", rh, a0)
             )
         else:
@@ -289,6 +274,6 @@ def joint_angle_arrays(
             d0 = sp(b_name) - sp(a_name)
             d0 = d0 / np.linalg.norm(d0)
             d1 = _unit_rows(stack_points(states, b_name) - stack_points(states, a_name))
-            val = _angle_arr(d1, np.einsum("nij,j->ni", rh, d0))
+            val = angle_between(d1, np.einsum("nij,j->ni", rh, d0))
         out[f"joint_{joint}"] = val
     return out

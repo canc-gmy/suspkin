@@ -14,7 +14,7 @@ from suspkin.geometry import Vehicle, build_corners, load_vehicle
 from suspkin.kinematics.corner import solve_corner
 from suspkin.kinematics.vehicle import cg_pivot
 from suspkin.metrics.arb import arb_rates
-from suspkin.metrics.vehicle_summary import AxleSummary, VehicleSummary, vehicle_summary
+from suspkin.metrics.vehicle import AxleSummary, VehicleSummary, vehicle_summary
 from suspkin.surrogate import (
     AxleBatch,
     AxleGrid,
@@ -27,7 +27,7 @@ from suspkin.surrogate import (
     vehicle_statics,
 )
 from suspkin.surrogate.vehicle_layer import _Hermite
-from suspkin.sweeps.vehicle_sweeps import sweep_vehicle, vehicle_frame
+from suspkin.sweeps import sweep_vehicle, vehicle_frame
 
 REF = "configs/vehicles/fs_reference.yaml"
 GRIDS = {

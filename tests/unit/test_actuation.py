@@ -10,7 +10,7 @@ from scipy.integrate import simpson
 
 from suspkin.kinematics import solve_corner, sweep_corner
 from suspkin.metrics import add_gradients, metrics_frame
-from suspkin.metrics.actuation import (
+from suspkin.metrics.corner import (
     actuation_metrics,
     bump_stroke_remaining,
     droop_stroke_remaining,

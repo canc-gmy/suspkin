@@ -25,7 +25,7 @@ Semantics per constraint type:
   ``value``/``dim`` belong to the term with the largest ``g`` (named in ``detail``: the
   minimum toggle margin [rad] or the minimum remaining stroke [m]); with no active
   term the constraint only requires the solve (``g = -1``, value = minimum toggle margin).
-* ``summary``: dotted field of :func:`suspkin.metrics.vehicle_summary`; ``None`` is
+* ``summary``: dotted field of :func:`suspkin.metrics.vehicle`; ``None`` is
   ``unsolved``.
 * ``inside`` / ``outside``: signed distance ``sd`` of the point to the region (``sd <= 0`` is
   inside): ``g = sd / s`` (inside) or ``-sd / s`` (outside); value is the worst ``sd`` [m].
@@ -78,7 +78,7 @@ from suspkin.geometry.model import Vehicle
 from suspkin.kinematics import KinematicsError
 from suspkin.kinematics.corner import solve_corner, sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
-from suspkin.metrics.joints import body_rotations, joint_angle
+from suspkin.metrics.corner import body_rotations, joint_angle
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.metric_registry import summary_metric_dim
 from suspkin.optimize.regions import sd_box, sd_cylinder, sd_hexahedron, sd_sphere

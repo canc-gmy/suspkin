@@ -14,7 +14,7 @@ import pandas as pd
 from suspkin.geometry import Vehicle, build_corners
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
-from suspkin.metrics.vehicle_summary import VehicleSummary
+from suspkin.metrics.vehicle import VehicleSummary
 from suspkin.sweeps import states_to_frame, sweep_vehicle, vehicle_frame
 
 

@@ -5,7 +5,7 @@ import pytest
 
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.kinematics.corner import sweep_corner
-from suspkin.metrics.joints import joint_angles_frame
+from suspkin.metrics.corner import joint_angles_frame
 from suspkin.metrics.table import metrics_frame
 from suspkin.surrogate import CHANNELS, channels_for
 from suspkin.surrogate.channels import wrap_line_angle

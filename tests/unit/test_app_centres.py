@@ -11,8 +11,8 @@ import pytest
 from suspkin.app.centres import scene_centres
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.kinematics import solve_vehicle
-from suspkin.metrics.centres import centre_metrics
-from suspkin.sweeps.vehicle_sweeps import vehicle_frame
+from suspkin.metrics.corner import centre_metrics
+from suspkin.sweeps import vehicle_frame
 
 REF = Path(__file__).parents[2] / "configs" / "vehicles" / "fs_reference.yaml"
 IDS = ("FL", "FR", "RL", "RR")
@@ -73,7 +73,7 @@ def test_pitch_centre_on_centreline(vehicle) -> None:  # type: ignore[no-untyped
 
 def test_infinite_centres_are_null(vehicle, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     import suspkin.app.centres as mod
-    from suspkin.metrics.centres import InstantCentre
+    from suspkin.metrics.corner import InstantCentre
 
     nan = float("nan")
     inf_ic = InstantCentre(nan, nan, False, np.array([1.0, 0.0]))

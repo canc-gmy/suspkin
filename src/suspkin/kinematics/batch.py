@@ -3,7 +3,7 @@
 Vectorised ``corner._pose`` + ``_finish`` at rack 0 for ``B`` designs (per-design side-resolved
 hardpoints) and ``K`` states each, given the joint angles. Every corner column (metrics,
 gradients, joint angles, point coordinates) follows from the rebuilt points with the formulas
-of :mod:`suspkin.metrics.batch`. Numpy only; the surrogate evaluator is the main user.
+of :mod:`suspkin.metrics.arrays`. Numpy only; the surrogate evaluator is the main user.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from numpy.typing import NDArray
 from suspkin.geometry.corners import Corner
 from suspkin.geometry.model import Axle
 from suspkin.geometry.vectors import wheel_spin_axis
-from suspkin.metrics.batch import _ic_arrays, _swing, roll_line_arrays
+from suspkin.metrics.arrays import _ic_arrays, _swing, roll_line_arrays
 from suspkin.metrics.table import GRADIENTS
 
 Arr = NDArray[np.float64]
@@ -254,7 +254,7 @@ def rebuild(st: CStatic, th_u: Arr, th_l: Arr, psi: Arr, guess: Arr) -> Rebuilt:
 
 
 # --------------------------------------------------------------------------------------
-# corner columns (vectorised ``metrics.batch.corner_arrays`` with per-design statics)
+# corner columns (vectorised ``metrics.arrays.corner_arrays`` with per-design statics)
 # --------------------------------------------------------------------------------------
 
 

@@ -24,12 +24,12 @@ from suspkin.geometry import CornerId, Vehicle, build_corners
 from suspkin.geometry.vectors import body_rotation
 from suspkin.kinematics import VehicleState, solve_vehicle
 from suspkin.metrics import pitch_centre
-from suspkin.metrics.centres import (
+from suspkin.metrics.corner import (
     front_view_ic,
     roll_centre_pair,
     side_view_ic,
 )
-from suspkin.metrics.vehicle_summary import _sv_line
+from suspkin.metrics.vehicle import _sv_line
 
 __all__ = ["scene_centres"]
 

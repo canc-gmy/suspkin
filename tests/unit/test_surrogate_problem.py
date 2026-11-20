@@ -13,7 +13,7 @@ from suspkin.geometry import build_corners
 from suspkin.kinematics.batch import corner_columns, make_static, rebuild
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients
-from suspkin.metrics.joints import JOINTS, joint_angle, joint_angles_frame
+from suspkin.metrics.corner import JOINTS, joint_angle, joint_angles_frame
 from suspkin.optimize.design import DesignSpace
 from suspkin.optimize.evaluate import G_FAIL, evaluate
 from suspkin.optimize.history import read_history

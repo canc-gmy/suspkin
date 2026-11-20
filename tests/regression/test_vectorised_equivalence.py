@@ -16,11 +16,15 @@ from suspkin.geometry.vectors import body_rotation, plane_from_points, plane_sec
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.kinematics.vehicle import VehicleState
-from suspkin.metrics import actuation
-from suspkin.metrics.alignment import alignment_metrics
-from suspkin.metrics.batch import corner_metric_arrays, joint_angle_arrays
-from suspkin.metrics.centres import centre_metrics, roll_centre_pair
-from suspkin.metrics.joints import JOINTS, joint_angle
+from suspkin.metrics import corner as actuation
+from suspkin.metrics.arrays import corner_metric_arrays, joint_angle_arrays
+from suspkin.metrics.corner import (
+    JOINTS,
+    alignment_metrics,
+    centre_metrics,
+    joint_angle,
+    roll_centre_pair,
+)
 from suspkin.sweeps import sweep_vehicle, vehicle_frame
 
 CONFIG = Path(__file__).resolve().parents[2] / "configs" / "vehicles" / "fs_reference.yaml"

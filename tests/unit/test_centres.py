@@ -12,7 +12,7 @@ from suspkin.geometry import Axle, build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics import solve_corner
 from suspkin.kinematics.corner import CornerState
-from suspkin.metrics.centres import (
+from suspkin.metrics.corner import (
     centre_metrics,
     front_view_ic,
     fv_swing_angle,

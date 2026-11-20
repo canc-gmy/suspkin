@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 from suspkin.geometry import load_vehicle
-from suspkin.metrics import roll_gradient, sprung_mass, vehicle_summary
+from suspkin.metrics import vehicle_summary
+from suspkin.metrics.vehicle import roll_gradient, sprung_mass
 from suspkin.sweeps import sweep_vehicle, vehicle_frame
 from tests.unit.helpers import FIXTURE
 
@@ -132,7 +133,7 @@ def _tilted_vehicle():  # type: ignore[no-untyped-def]
 def test_anti_geometry_hand_calculation() -> None:
     from suspkin.geometry import build_corners
     from suspkin.kinematics import solve_corner
-    from suspkin.metrics import side_view_ic
+    from suspkin.metrics.corner import side_view_ic
 
     veh = _tilted_vehicle()
     s = vehicle_summary(veh)

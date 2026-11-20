@@ -17,7 +17,7 @@ from suspkin.geometry.corners import Corner, build_corners
 from suspkin.geometry.model import Vehicle
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner
 from suspkin.kinematics.rocker import KinematicsError
-from suspkin.metrics.batch import corner_metric_arrays, joint_angle_arrays
+from suspkin.metrics.arrays import corner_metric_arrays, joint_angle_arrays
 from suspkin.surrogate.channels import channels_for, wrap_line_angle
 from suspkin.surrogate.grid import AxleGrid
 

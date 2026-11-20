@@ -12,19 +12,23 @@ import pytest
 from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import Corner
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner, sweep_rack
-from suspkin.metrics import actuation
-from suspkin.metrics.alignment import alignment_metrics
-from suspkin.metrics.batch import (
+from suspkin.metrics import corner as actuation
+from suspkin.metrics.arrays import (
     corner_arrays,
     corner_metric_arrays,
     joint_angle_arrays,
     roll_line_arrays,
 )
-from suspkin.metrics.centres import centre_metrics, roll_centre_pair
-from suspkin.metrics.joints import JOINTS, joint_angle, joint_angles_frame
+from suspkin.metrics.corner import (
+    JOINTS,
+    alignment_metrics,
+    centre_metrics,
+    joint_angle,
+    joint_angles_frame,
+    roll_centre_pair,
+)
 from suspkin.metrics.table import metrics_frame
-from suspkin.sweeps.corner_sweeps import states_to_frame
-from suspkin.sweeps.vehicle_sweeps import _roll_centre_pair_arrays
+from suspkin.sweeps import _roll_centre_pair_arrays, states_to_frame
 from tests.unit.helpers import fixture_vehicle
 from tests.unit.test_corner_solver import _with_mount
 

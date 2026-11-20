@@ -41,13 +41,13 @@ The reference below documents each name at its defining module.
 
 ## Sweeps and tables
 
-::: suspkin.sweeps.vehicle_sweeps
+::: suspkin.sweeps
     options:
       members:
         - sweep_vehicle
         - vehicle_frame
 
-::: suspkin.sweeps.corner_sweeps.states_to_frame
+::: suspkin.sweeps.states_to_frame
 
 ## Metrics
 
@@ -57,7 +57,7 @@ The reference below documents each name at its defining module.
         - metrics_frame
         - add_gradients
 
-::: suspkin.metrics.vehicle_summary.vehicle_summary
+::: suspkin.metrics.vehicle.vehicle_summary
 
 ## Reports and plots
 

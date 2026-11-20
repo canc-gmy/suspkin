@@ -36,7 +36,7 @@ import pandas as pd
 from suspkin import __version__
 from suspkin.geometry import Vehicle
 from suspkin.geometry.io import VehicleConfigError, load_vehicle, save_vehicle
-from suspkin.metrics.vehicle_summary import AxleSummary, VehicleSummary
+from suspkin.metrics.vehicle import AxleSummary, VehicleSummary
 from suspkin.report.studies import StudyResults
 
 __all__ = [

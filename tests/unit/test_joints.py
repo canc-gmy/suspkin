@@ -12,7 +12,7 @@ from suspkin.geometry import build_corners, load_vehicle
 from suspkin.geometry.corners import CornerId
 from suspkin.geometry.vectors import axis_angle_matrix
 from suspkin.kinematics.corner import CornerState, solve_corner, sweep_corner, sweep_rack
-from suspkin.metrics import joints as jt
+from suspkin.metrics import corner as jt
 from tests.unit.helpers import FIXTURE, fixture_corners
 
 CORNERS = fixture_corners()
@@ -24,13 +24,13 @@ def test_kabsch_recovers_known_rotation() -> None:
     p0 = rng.normal(size=(5, 3))
     r = axis_angle_matrix([1.0, 2.0, -0.5], 0.7)
     p1 = p0 @ r.T + np.array([0.3, -1.0, 2.0])
-    np.testing.assert_allclose(jt._kabsch(p0, p1), r, atol=1e-12)
+    np.testing.assert_allclose(jt.kabsch(p0, p1), r, atol=1e-12)
 
 
 def test_kabsch_pure_translation_is_identity() -> None:
     p0 = np.random.default_rng(2).normal(size=(4, 3))
     p1 = p0 + np.array([1.0, 2.0, 3.0])
-    np.testing.assert_allclose(jt._kabsch(p0, p1), np.eye(3), atol=1e-12)
+    np.testing.assert_allclose(jt.kabsch(p0, p1), np.eye(3), atol=1e-12)
 
 
 @pytest.mark.parametrize("cid", IDS)
@@ -172,7 +172,7 @@ def test_pure_rack_tie_inner_small() -> None:
 def test_kabsch_proper_rotation_for_planar_reflection() -> None:
     p0 = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [1.0, 1.5, 0.0]])
     p1 = p0 * np.array([1.0, -1.0, 1.0])
-    r = jt._kabsch(p0, p1)
+    r = jt.kabsch(p0, p1)
     assert np.linalg.det(r) == pytest.approx(1.0, abs=1e-12)
     np.testing.assert_allclose(r @ r.T, np.eye(3), atol=1e-12)
 
@@ -180,4 +180,4 @@ def test_kabsch_proper_rotation_for_planar_reflection() -> None:
 def test_kabsch_degenerate_raises() -> None:
     line = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
     with pytest.raises(ValueError):
-        jt._kabsch(line, line + 1.0)
+        jt.kabsch(line, line + 1.0)

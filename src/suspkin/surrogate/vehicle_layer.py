@@ -2,8 +2,8 @@
 
 The surrogate predicts only left-corner curves on a fixed grid (see
 :mod:`suspkin.surrogate.channels`). This module turns those curves into everything
-:func:`suspkin.metrics.vehicle_summary.vehicle_summary` and (a subset of)
-:func:`suspkin.sweeps.vehicle_sweeps.vehicle_frame` return, vectorised over a batch of
+:func:`suspkin.metrics.vehicle.vehicle_summary` and (a subset of)
+:func:`suspkin.sweeps.vehicle_frame` return, vectorised over a batch of
 designs. SI units and the sign conventions of ``vehicle_summary`` throughout.
 
 Method (DESIGN_PLAN section 13.5):
@@ -49,7 +49,7 @@ from suspkin.geometry.vectors import wheel_spin_axis
 from suspkin.kinematics.arb import arb_stiffness
 from suspkin.kinematics.vehicle import cg_pivot
 from suspkin.metrics import vehicle as vm
-from suspkin.metrics.vehicle_summary import AxleSummary, VehicleSummary, vehicle_summary
+from suspkin.metrics.vehicle import AxleSummary, VehicleSummary, vehicle_summary
 from suspkin.surrogate.extract import CornerSample, extract_axles
 from suspkin.surrogate.grid import AxleGrid
 
@@ -934,7 +934,7 @@ def vehicle_layer(
     statics : VehicleStatics
         Output of :func:`vehicle_statics`.
     roll_range, n, ay_ref
-        As :func:`suspkin.metrics.vehicle_summary.vehicle_summary`.
+        As :func:`suspkin.metrics.vehicle.vehicle_summary`.
     sweeps : mapping, optional
         Sweep kind (``heave``, ``roll``, ``pitch``, ``rack``) -> input values (SI).
     columns : mapping, optional
@@ -1012,7 +1012,7 @@ def layer_error(vehicles: Sequence[Vehicle], grids: Mapping[str, AxleGrid]) -> p
     the error versus ``vehicle_frame`` (heave +-20 mm, roll +-0.035 rad, pitch +-0.02 rad,
     rack +-30 mm). A field that is NaN on only one side gives NaN.
     """
-    from suspkin.sweeps.vehicle_sweeps import sweep_vehicle, vehicle_frame
+    from suspkin.sweeps import sweep_vehicle, vehicle_frame
 
     per = [extract_axles(v, dict(grids)) for v in vehicles]
     batches = {a: stack_samples([p[a] for p in per], grids[a]) for a in ("front", "rear")}

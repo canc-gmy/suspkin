@@ -22,12 +22,12 @@ _LAZY: dict[str, str] = {
     "sweep_rack": "suspkin.kinematics.corner",
     "solve_vehicle": "suspkin.kinematics.vehicle",
     "KinematicsError": "suspkin.kinematics.rocker",
-    "sweep_vehicle": "suspkin.sweeps.vehicle_sweeps",
-    "vehicle_frame": "suspkin.sweeps.vehicle_sweeps",
-    "states_to_frame": "suspkin.sweeps.corner_sweeps",
+    "sweep_vehicle": "suspkin.sweeps",
+    "vehicle_frame": "suspkin.sweeps",
+    "states_to_frame": "suspkin.sweeps",
     "metrics_frame": "suspkin.metrics.table",
     "add_gradients": "suspkin.metrics.table",
-    "vehicle_summary": "suspkin.metrics.vehicle_summary",
+    "vehicle_summary": "suspkin.metrics.vehicle",
     "build_report": "suspkin.report.builder",
     "run_standard_studies": "suspkin.report.studies",
     "plot_vehicle_3d": "suspkin.plotting.geometry3d",
@@ -48,13 +48,13 @@ if TYPE_CHECKING:
     from suspkin.kinematics.vehicle import solve_vehicle as solve_vehicle
     from suspkin.metrics.table import add_gradients as add_gradients
     from suspkin.metrics.table import metrics_frame as metrics_frame
-    from suspkin.metrics.vehicle_summary import vehicle_summary as vehicle_summary
+    from suspkin.metrics.vehicle import vehicle_summary as vehicle_summary
     from suspkin.plotting.geometry3d import plot_vehicle_3d as plot_vehicle_3d
     from suspkin.report.builder import build_report as build_report
     from suspkin.report.studies import run_standard_studies as run_standard_studies
-    from suspkin.sweeps.corner_sweeps import states_to_frame as states_to_frame
-    from suspkin.sweeps.vehicle_sweeps import sweep_vehicle as sweep_vehicle
-    from suspkin.sweeps.vehicle_sweeps import vehicle_frame as vehicle_frame
+    from suspkin.sweeps import states_to_frame as states_to_frame
+    from suspkin.sweeps import sweep_vehicle as sweep_vehicle
+    from suspkin.sweeps import vehicle_frame as vehicle_frame
 
 
 def __getattr__(name: str) -> Any:
