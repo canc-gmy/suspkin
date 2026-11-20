@@ -9,11 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import multiprocessing as mp
 import os
 import time
 from collections.abc import Callable, Sequence
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,7 +25,7 @@ from suspkin import __version__
 from suspkin.kinematics.rocker import KinematicsError
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
 from suspkin.optimize.outputs import git_hash
-from suspkin.optimize.problem import resolve_workers
+from suspkin.optimize.pool import make_pool, resolve_workers
 from suspkin.optimize.spec import StudyConfigError, load_study
 from suspkin.surrogate.channels import channels_for
 from suspkin.surrogate.data_types import (
@@ -416,15 +415,10 @@ def sample_axle(
     n_shards = math.ceil(n_total / size)
     todo = [k for k in range(n_shards) if not (adir / f"shard_{k:05d}.npz").exists()]
     n_new = 0
-    pool: ProcessPoolExecutor | None = None
+    pool: Executor | None = None
     try:
         if n_workers > 1 and todo:
-            pool = ProcessPoolExecutor(
-                max_workers=n_workers,
-                mp_context=mp.get_context("spawn"),
-                initializer=_init_worker,
-                initargs=(sp, axle),
-            )
+            pool = make_pool(n_workers, _init_worker, (sp, axle))
         for k in todo:
             lo, hi = k * size, min((k + 1) * size, n_total)
             xs = [x_all[i] for i in range(lo, hi)]

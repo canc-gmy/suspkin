@@ -12,16 +12,7 @@ import numpy as np
 from matplotlib.lines import Line2D
 from numpy.typing import ArrayLike, NDArray
 
-from suspkin.optimize.spec import (
-    BoxRegion,
-    CylinderRegion,
-    HexahedronRegion,
-    InsideConstraint,
-    OffsetRegion,
-    OutsideConstraint,
-    SphereRegion,
-    parse_point_ref,
-)
+# optimize.spec is imported inside the functions: optimize -> plotting -> optimize otherwise
 from suspkin.plotting.geometry3d import plot_vehicle_3d
 
 if TYPE_CHECKING:
@@ -88,6 +79,8 @@ def _cylinder_lines(p0: ArrayLike, p1: ArrayLike, radius: float) -> list[F64]:
 
 
 def _region_lines(region: Any) -> list[F64]:
+    from suspkin.optimize.spec import BoxRegion, CylinderRegion, HexahedronRegion, SphereRegion
+
     if isinstance(region, BoxRegion):
         return _hex_lines(_box_vertices(region.lo, region.hi))
     if isinstance(region, HexahedronRegion):
@@ -113,6 +106,8 @@ def _is_right(var: Any) -> bool:
 
 def _domain_vertices(space: DesignSpace, var: Any) -> F64:
     """The 8 vertices of a variable's domain (right-side coordinates for ``side: right``)."""
+    from suspkin.optimize.spec import BoxRegion, HexahedronRegion, OffsetRegion, parse_point_ref
+
     d = var.domain
     if isinstance(d, HexahedronRegion):
         return np.array(d.vertices, dtype=np.float64)
@@ -151,6 +146,8 @@ def plot_study_3d(
     -------
     matplotlib.figure.Figure
     """
+    from suspkin.optimize.spec import InsideConstraint, OutsideConstraint, parse_point_ref
+
     variables = space.study.variables
     if x is None:
         vehicle = space.baseline

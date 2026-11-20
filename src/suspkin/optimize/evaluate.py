@@ -80,8 +80,8 @@ from suspkin.kinematics.corner import solve_corner, sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
 from suspkin.metrics.corner import body_rotations, joint_angle
 from suspkin.optimize.design import DesignSpace, InfeasibleDesign
-from suspkin.optimize.metric_registry import summary_metric_dim
 from suspkin.optimize.regions import sd_box, sd_cylinder, sd_hexahedron, sd_sphere
+from suspkin.optimize.registry import summary_metric_dim
 from suspkin.optimize.spec import (
     BandConstraint,
     BoxRegion,

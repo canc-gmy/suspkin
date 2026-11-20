@@ -14,7 +14,7 @@ Structure decisions
   and ``heave_pitch_pitch`` (study ``pitch``). Each figure then reads exactly one table
   per dataset, so overlaying N datasets is a plain loop.
 * Tables and the spec's columns are SI. Display factor and unit are resolved per series
-  and axis from the dimension (``optimize.metric_registry`` + ``units.display_*``); the
+  and axis from the dimension (``optimize.registry`` + ``units.display_*``); the
   few series that figures.py shows in another unit (e.g. FVIC in m) carry a ``display``
   override naming the figures.py unit kind.
 * A panel may override the x axis (``Panel.x``): the Ackermann panel plots against the
@@ -61,7 +61,7 @@ from typing import Any, Literal
 
 import pandas as pd
 
-from suspkin.optimize.metric_registry import (
+from suspkin.optimize.registry import (
     corner_metric_dim,
     summary_metric_dim,
     vehicle_metric_dim,

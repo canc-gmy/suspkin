@@ -148,6 +148,45 @@ def _lookup(problem: Problem, X: F64, source: str) -> list[CacheEntry]:
     return [problem.cache[k] for k in keys]
 
 
+@dataclass(frozen=True)
+class _RunState:
+    """Resume state shared by every method: study hash and first valid history id."""
+
+    study_hash: str
+    valid_from: int
+
+
+def _prepare(
+    problem: Problem, resume: bool, old_meta: dict[str, Any], echo: Echo | None
+) -> _RunState:
+    """Hash the study; on resume drop cached results of a changed study (no RNG draws)."""
+    shash = study_hash(problem.study)
+    valid_from = 0
+    if resume:
+        valid_from = int(old_meta.get("valid_from_eval_id", 0) or 0)
+        if old_meta.get("study_hash") not in (None, shash):
+            valid_from = problem.next_id
+            if echo is not None:
+                echo(
+                    "warning: constraints/objectives changed since the last run; "
+                    "cached results are dropped and old points are re-evaluated on demand"
+                )
+        if valid_from > 0:
+            problem.valid_from = valid_from
+            hist = read_history(problem.history_path)
+            problem.cache = EvalCache.from_history(
+                hist[hist["eval_id"] >= valid_from].reset_index(drop=True),
+                problem.space,
+                problem.study,
+            )
+    return _RunState(shash, valid_from)
+
+
+def _n_active(problem: Problem) -> int:
+    """Number of enabled constraints."""
+    return sum(1 for c in problem.study.constraints if c.enabled)
+
+
 # --------------------------------------------------------------------------- NSGA-II
 
 
@@ -159,7 +198,7 @@ def _run_nsga2(problem: Problem, opt: Optimizer, resume: bool) -> None:
 
     n = problem.n
     nf = len(problem.study.objectives)
-    ng = sum(1 for c in problem.study.constraints if c.enabled)
+    ng = _n_active(problem)
     pareto = opt.mode == "pareto"
     pop_size = int(opt.options.get("pop_size", max(20, 4 * n)))
 
@@ -234,7 +273,7 @@ def _run_de(
         g = np.array([e.g_vector for e in ents], dtype=np.float64).T
         return g[:, 0] if single else g
 
-    ng = sum(1 for c in problem.study.constraints if c.enabled)
+    ng = _n_active(problem)
     kw: dict[str, Any] = {
         k: o[k] for k in ("mutation", "recombination", "strategy", "tol", "atol") if k in o
     }
@@ -286,7 +325,7 @@ def _run_local(
     n = problem.n
     src = source or method
     fd = _FdCache(problem, src, float(o["fd_step"]) if "fd_step" in o else None)
-    ng = sum(1 for c in problem.study.constraints if c.enabled)
+    ng = _n_active(problem)
     maxiter = int(o.get("maxiter", 100))
     x0 = _clip(x0)
 
@@ -470,25 +509,10 @@ def run_optimization(
         study_path, run_dir, resume=resume, workers=workers, evaluations=evaluations, time=time
     ) as problem:
         space = problem.space
-        shash = study_hash(study)
-        valid_from = 0
-        if resume:
-            valid_from = int(old_meta.get("valid_from_eval_id", 0) or 0)
-            if old_meta.get("study_hash") not in (None, shash):
-                valid_from = problem.next_id
-                if echo is not None:
-                    echo(
-                        "warning: constraints/objectives changed since the last run; "
-                        "cached results are dropped and old points are re-evaluated on demand"
-                    )
-            if valid_from > 0:
-                problem.valid_from = valid_from
-                hist = read_history(problem.history_path)
-                problem.cache = EvalCache.from_history(
-                    hist[hist["eval_id"] >= valid_from].reset_index(drop=True), space, study
-                )
+        state = _prepare(problem, resume, old_meta, echo)
+        shash, valid_from = state.study_hash, state.valid_from
         if echo is not None:
-            ng = sum(1 for c in study.constraints if c.enabled)
+            ng = _n_active(problem)
             bud = []
             if problem.max_evals is not None:
                 bud.append(f"{problem.max_evals} evaluations")

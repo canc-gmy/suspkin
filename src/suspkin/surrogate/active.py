@@ -57,7 +57,8 @@ from suspkin.optimize.outputs import (
     read_meta,
     study_hash,
 )
-from suspkin.optimize.problem import BudgetExhausted, Problem, resolve_workers
+from suspkin.optimize.pool import resolve_workers
+from suspkin.optimize.problem import BudgetExhausted, Problem
 from suspkin.optimize.spec import (
     ActiveLearningSpec,
     FinetuneSpec,

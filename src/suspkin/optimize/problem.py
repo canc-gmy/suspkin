@@ -3,10 +3,8 @@
 
 from __future__ import annotations
 
-import multiprocessing as mp
-import os
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Executor
 from pathlib import Path
 from types import TracebackType
 
@@ -22,12 +20,13 @@ from suspkin.optimize.history import (
     cache_keys,
     read_history,
 )
+from suspkin.optimize.pool import make_pool, resolve_workers
 from suspkin.optimize.spec import Optimizer, load_study
 
 F64 = NDArray[np.float64]
 FD_STEP = 1e-3
 
-__all__ = ["BudgetExhausted", "Problem", "resolve_workers"]
+__all__ = ["BudgetExhausted", "Problem"]
 
 
 class BudgetExhausted(RuntimeError):  # noqa: N818
@@ -36,13 +35,6 @@ class BudgetExhausted(RuntimeError):  # noqa: N818
 
 def _now() -> float:
     return time.perf_counter()
-
-
-def resolve_workers(workers: int | str) -> int:
-    """``auto`` -> ``max(1, cpu_count - 1)``; an int is used as given."""
-    if workers == "auto":
-        return max(1, (os.cpu_count() or 2) - 1)
-    return int(workers)
 
 
 # --------------------------------------------------------------------------------------
@@ -125,7 +117,7 @@ class Problem:
         self._writer = HistoryWriter(self.history_path, self.space, study, resume=resume)
         self.n_evals = 0
         self._t0 = _now()
-        self._pool: ProcessPoolExecutor | None = None
+        self._pool: Executor | None = None
 
     # ---- bookkeeping --------------------------------------------------------------
 
@@ -174,12 +166,7 @@ class Problem:
         if self.workers == 1 or not xs:
             return [_eval_with(self.space, x) for x in xs]
         if self._pool is None:
-            self._pool = ProcessPoolExecutor(
-                max_workers=self.workers,
-                mp_context=mp.get_context("spawn"),
-                initializer=_init_worker,
-                initargs=(self.study_path,),
-            )
+            self._pool = make_pool(self.workers, _init_worker, (self.study_path,))
         return list(self._pool.map(_eval_worker, xs, chunksize=1))
 
     def evaluate_batch(

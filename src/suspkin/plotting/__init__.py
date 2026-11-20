@@ -1,4 +1,12 @@
-"""Plotting helpers (read-only consumers of geometry and result tables)."""
+"""Plotting helpers (read-only consumers of geometry and result tables).
+
+``plot_study_3d`` is imported lazily: ``suspkin.optimize`` imports this package, and
+:mod:`suspkin.plotting.regions` needs ``suspkin.optimize.spec``.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from suspkin.plotting.animation import animate_sweep
 from suspkin.plotting.figures import (
@@ -30,7 +38,6 @@ from suspkin.plotting.optimization import (
     plot_parallel_coordinates,
     plot_pareto,
 )
-from suspkin.plotting.regions import plot_study_3d
 from suspkin.plotting.style import (
     PALETTE,
     design_color,
@@ -38,6 +45,9 @@ from suspkin.plotting.style import (
     side_linestyle,
     use_style,
 )
+
+if TYPE_CHECKING:
+    from suspkin.plotting.regions import plot_study_3d
 
 __all__ = [
     "FIGURE_INPUTS",
@@ -71,3 +81,11 @@ __all__ = [
     "vehicle_segments",
     "wheel_spin_axis",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "plot_study_3d":
+        from suspkin.plotting.regions import plot_study_3d
+
+        return plot_study_3d
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

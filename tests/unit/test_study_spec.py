@@ -12,7 +12,7 @@ from suspkin.geometry import build_corners
 from suspkin.kinematics.corner import sweep_corner
 from suspkin.metrics import add_gradients, vehicle_summary
 from suspkin.metrics.table import metrics_frame
-from suspkin.optimize import metric_registry as reg
+from suspkin.optimize import registry as reg
 from suspkin.optimize.spec import (
     BandConstraint,
     Study,

@@ -9,7 +9,7 @@ from typing import Literal
 import numpy as np
 from numpy.typing import NDArray
 
-from suspkin.optimize.spec import GridSpec
+from suspkin.surrogate.spec import GridSpec
 
 
 @dataclass(frozen=True)
