@@ -205,7 +205,7 @@ The CSV has 7 rows and 107 columns, all SI. The first columns are `corner`, `tra
 (inputs), then the three solved unknowns `theta_uca`, `theta_lca`, `psi` (the two wishbone angles and the
 spin of the upright about its ball-joint axis, see
 [Corner kinematics](../concepts/corner-kinematics.md)), the rocker angle, `coilover_length`,
-`toggle_margin`, `max_residual` (the solver's final error), `spin_x`, `spin_y`, `spin_z` (the upright's rotation vector), then the 3D position of every
+`toggle_margin`, `max_residual` (the solver's final error), `spin_x`, `spin_y`, `spin_z` (components of the unit wheel spin axis, pointing outboard), then the 3D position of every
 hardpoint (`uca_outer_x`, `uca_outer_y`, ...), then the metrics. Read it in Python and convert to display
 units:
 
