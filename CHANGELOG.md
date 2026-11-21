@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `units.format_quantity`, `intersect_line_plane`, `rotate_about_line`, `rotate_rocker_points`,
   `bundle_to_results`, and `metric_registry.{corner,vehicle,summary}_metric_names`.
 
+### Fixed
+
+- Release wheels and sdists now contain the built web app, so `suspkin app` and
+  `suspkin app-export` work from an installed release without Node (they were missing in
+  1.1.0). The sdist no longer packs `frontend/node_modules` or local cache folders, and CI and
+  the release workflow check both files with `scripts/check_dist_frontend.py`.
+
 ## [1.1.0] - 2026-11-19
 
 ### Changed
