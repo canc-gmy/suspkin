@@ -76,7 +76,7 @@ invalid_links = true
 invalid_link_anchors = true
 
 [project.theme]
-variant = "classic"
+variant = "modern"
 features = [
   "navigation.sections",
   "navigation.top",
