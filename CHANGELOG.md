@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Documentation is built with Zensical instead of MkDocs (`zensical.toml` replaces `mkdocs.yml`;
+  the link-rewriting hook is gone, see ADR 0009).
 - Internal restructure: fewer, clearer modules and one implementation per piece of math. Python
   import paths changed (e.g. `suspkin.geom_math` → `suspkin.geometry.vectors`, `suspkin.sweeps.*` →
   `suspkin.sweeps`, `suspkin.cli` is now a package). CLI, YAML formats, web-app API and numerical

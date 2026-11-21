@@ -1,0 +1,124 @@
+[project]
+site_name = "suspkin"
+site_description = "Formula Student double-wishbone + pushrod suspension kinematics"
+site_url = "https://canc-gmy.github.io/suspkin/"
+repo_url = "https://github.com/canc-gmy/suspkin"
+repo_name = "canc-gmy/suspkin"
+docs_dir = "docs"
+exclude_docs = "superpowers/\n"
+extra_javascript = [
+  "javascripts/mathjax.js",
+  "https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js",
+]
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = [
+    { "Install" = "getting-started/install.md" },
+    { "Tutorial" = "getting-started/tutorial.md" },
+  ] },
+  { "Guides" = [
+    { "Vehicle YAML" = "guides/vehicle-yaml.md" },
+    { "Study YAML" = "guides/study-yaml.md" },
+    { "Command line" = "guides/cli.md" },
+    { "Examples" = "guides/examples.md" },
+    { "Surrogate optimisation" = "guides/surrogate.md" },
+    { "Web app" = "guides/app.md" },
+    { "Development" = "guides/development.md" },
+    { "Stability and versioning" = "guides/stability.md" },
+  ] },
+  { "Concepts" = [
+    { "Conventions and signs" = "concepts/conventions.md" },
+    { "Glossary" = "concepts/glossary.md" },
+    { "Vehicle model" = "concepts/vehicle-model.md" },
+    { "Corner kinematics" = "concepts/corner-kinematics.md" },
+    { "Vehicle kinematics" = "concepts/vehicle-kinematics.md" },
+    { "Metrics" = "concepts/metrics.md" },
+    { "Sweeps and reports" = "concepts/sweeps-and-reports.md" },
+    { "Optimisation" = "concepts/optimization.md" },
+    { "Surrogate model" = "concepts/surrogate.md" },
+    { "Web app" = "concepts/web-app.md" },
+    { "Architecture" = "concepts/architecture.md" },
+  ] },
+  { "API reference" = [
+    { "Overview" = "reference/index.md" },
+    { "suspkin" = "reference/suspkin.md" },
+    { "units" = "reference/units.md" },
+    { "geometry" = "reference/geometry.md" },
+    { "kinematics" = "reference/kinematics.md" },
+    { "metrics" = "reference/metrics.md" },
+    { "sweeps" = "reference/sweeps.md" },
+    { "report" = "reference/report.md" },
+    { "plotting" = "reference/plotting.md" },
+    { "optimize" = "reference/optimize.md" },
+    { "surrogate" = "reference/surrogate.md" },
+    { "app" = "reference/app.md" },
+    { "cli" = "reference/cli.md" },
+  ] },
+  { "Architecture decisions" = [
+    { "0001 Web app architecture" = "adr/0001-webapp-architecture.md" },
+    { "0002 Scope and modelling level" = "adr/0002-scope-and-modelling-level.md" },
+    { "0003 Frame, units, conventions" = "adr/0003-frame-units-conventions.md" },
+    { "0004 Corner solver" = "adr/0004-corner-solver.md" },
+    { "0005 Optimisation framework" = "adr/0005-optimisation-framework.md" },
+    { "0006 Stability, testing, release" = "adr/0006-stability-testing-and-release.md" },
+    { "0007 Surrogate model" = "adr/0007-surrogate-model.md" },
+    { "0008 2026 restructure" = "adr/0008-2026-restructure.md" },
+    { "0009 Zensical docs" = "adr/0009-zensical-docs.md" },
+  ] },
+  { "Reports" = [
+    { "Surrogate training (Nov 2026)" = "reports/surrogate-training.md" },
+  ] },
+  { "Changelog" = "changelog.md" },
+]
+
+[project.validation]
+invalid_links = true
+invalid_link_anchors = true
+
+[project.theme]
+variant = "classic"
+features = [
+  "navigation.sections",
+  "navigation.top",
+  "content.code.copy",
+  "search.suggest",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle = { icon = "material/weather-night", name = "Switch to dark mode" }
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle = { icon = "material/weather-sunny", name = "Switch to light mode" }
+
+[project.markdown_extensions.admonition]
+
+[project.markdown_extensions.tables]
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions."pymdownx.arithmatex"]
+generic = true
+
+[project.markdown_extensions."pymdownx.superfences"]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.markdown_extensions."pymdownx.snippets"]
+base_path = ["."]
+check_paths = true
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+show_root_heading = true
+show_source = false
+docstring_style = "google"
+members_order = "source"

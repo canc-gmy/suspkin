@@ -49,7 +49,7 @@ dependencies only); `pre-commit install` when `.git` exists; build the frontend
 
 ```bash
 uv sync --all-extras               # core + dev group + every optional extra
-uv sync --all-extras --group docs  # additionally the documentation toolchain (mkdocs)
+uv sync --all-extras --group docs  # additionally the documentation toolchain (Zensical)
 uv run suspkin version
 uv run pre-commit install          # git hooks, see section 3
 ```
@@ -146,7 +146,7 @@ runs it once, on Ubuntu with Python 3.12.
 
 ```bash
 uv sync --all-extras --group docs
-uv run mkdocs build --strict
+uv run zensical build --strict --clean
 ```
 
 `--strict` turns every warning (broken link, unresolved `:::` cross-reference, missing nav
@@ -190,7 +190,7 @@ based tests skip themselves (`pytest.importorskip("torch")`) when the extra is a
 | `ruff-format` | `uv run ruff format` | local hook |
 | `mypy` | `uv run mypy src` | runs on the whole of `src`, not per file |
 | `trailing-whitespace`, `end-of-file-fixer` | strip whitespace, final newline | **excluded** for `tests/regression/behaviour/snapshots/` |
-| `check-yaml` | YAML syntax | `--unsafe`, because `mkdocs.yml` uses `!!python/name` tags |
+| `check-yaml` | YAML syntax | |
 | `check-toml` | TOML syntax | |
 | `mixed-line-ending` | `--fix=lf` | rewrites CRLF to LF |
 
@@ -353,7 +353,7 @@ oracle in tests. Cross-check, do not copy: write the formula once, then mirror i
 9. **Docs.** Add the metric to [Metrics](../concepts/metrics.md): definition, physical
    meaning, sign, formula, code location, unit and display unit. Add a line to
    `CHANGELOG.md` under `Added`.
-10. Gate: section 2.1 and `uv run mkdocs build --strict`.
+10. Gate: section 2.1 and `uv run zensical build --strict --clean`.
 
 ### 5.2 Add a CLI command
 
@@ -509,16 +509,16 @@ on disk), so use enough repeats or discard the first run when you compare.
 
 ```bash
 uv sync --all-extras --group docs
-uv run mkdocs serve           # live preview at http://127.0.0.1:8000, reloads on save
-uv run mkdocs build --strict  # what CI runs; output in site/
+uv run zensical serve                  # live preview at http://127.0.0.1:8000, reloads on save
+uv run zensical build --strict --clean # what CI runs; output in site/
 ```
 
-The site (`mkdocs.yml`, Material theme) renders math with MathJax (`$...$` inline, `$$...$$`
+The site (`zensical.toml`, Zensical with the classic Material look) renders math with MathJax (`$...$` inline, `$$...$$`
 display) and diagrams from ` ```mermaid ` fences. API reference pages use mkdocstrings
 `:::` entries, so a good docstring is the reference documentation; keep docstrings precise
 (units and shapes of arguments, what is returned, what is raised). The `Docs` workflow
 (`.github/workflows/docs.yml`) rebuilds and deploys to GitHub Pages on pushes to `main` that
-touch `docs/`, `mkdocs.yml`, `src/`, `examples/`, `CHANGELOG.md` or `README.md`.
+touch `docs/`, `zensical.toml`, `src/`, `examples/`, `CHANGELOG.md` or `README.md`.
 
 Page conventions:
 
@@ -534,4 +534,4 @@ Page conventions:
 - Worked numbers come from running the code on `configs/vehicles/fs_reference.yaml` (or a
   study config), and the command is shown next to them.
 - Every statement about the code is checked against the current code, not copied from an
-  older page. New pages must be added to `nav` in `mkdocs.yml`.
+  older page. New pages must be added to `nav` in `zensical.toml`.

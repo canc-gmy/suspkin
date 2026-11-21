@@ -1,7 +1,7 @@
 # suspkin
 
 [![CI](https://github.com/canc-gmy/suspkin/actions/workflows/ci.yml/badge.svg)](https://github.com/canc-gmy/suspkin/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://canc-gmy.github.io/suspkin/)
+[![Docs](https://img.shields.io/badge/docs-zensical-blue)](https://canc-gmy.github.io/suspkin/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 `suspkin` is a Python toolkit for the kinematics of Formula Student double-wishbone pushrod
