@@ -15,7 +15,9 @@ Build the site with Zensical (`zensical>=0.1.3,<0.2`, plus `mkdocstrings-python`
 configuration moved 1:1 from `mkdocs.yml` to `zensical.toml`: nav, classic theme variant,
 palette, features, MathJax, mermaid fences, snippets and the mkdocstrings Python options.
 The build command is `uv run zensical build --strict --clean`, with link and anchor
-validation (`invalid_links`, `invalid_link_anchors`) turned on so warnings fail the build.
+validation (`invalid_links`, `invalid_link_anchors`) turned on so warnings fail the build. `--clean` clears the Zensical build cache; the MkDocs
+warn levels (`not_found`/`anchors`/`unrecognized`) became the two booleans `invalid_links` and
+`invalid_link_anchors`, both failing under `--strict`.
 
 ## Consequences
 

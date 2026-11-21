@@ -150,7 +150,8 @@ uv run zensical build --strict --clean
 ```
 
 `--strict` turns every warning (broken link, unresolved `:::` cross-reference, missing nav
-target) into an error. Pages that exist but are not yet in `nav` are only INFO.
+target) into an error. Pages that exist but are not yet in `nav` (orphans) build without any
+message, so the `nav` in `zensical.toml` is the only check for them.
 
 ### 2.4 Frontend and app (job `frontend`)
 

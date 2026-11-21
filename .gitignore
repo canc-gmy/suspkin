@@ -41,7 +41,7 @@ results/benchmark_surrogate/surrogate/models/*/model_al_smoke/
 .DS_Store
 Thumbs.db
 
-# MkDocs build output
+# Docs build output (Zensical)
 site/
 
 # Web app frontend build output

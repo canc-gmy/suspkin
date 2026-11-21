@@ -27,7 +27,8 @@ repeatable way to release, and examples that cannot rot.
 * **No external validation data** for now: validation rests on analytic tests and the golden
   snapshots. A real car can be added as another regression case.
 * **Documentation site:** MkDocs Material with mkdocstrings, built with `--strict` in CI and
-  deployed to GitHub Pages.
+  deployed to GitHub Pages. The docs toolchain part is superseded by
+  [ADR 0009](0009-zensical-docs.md).
 * **CI:** GitHub Actions on Ubuntu, Windows and macOS with Python 3.11, 3.12 and 3.13; a
   coverage floor (94 %); a docs build; and the examples run as a separate job.
 * **Release:** on a `v*` tag a workflow checks that the tag equals the `pyproject.toml`

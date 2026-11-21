@@ -1,6 +1,9 @@
 """Guard: documentation pages must not link to files outside ``docs/``.
 
 The site builder cannot resolve such links, so they would break on the published site.
+
+Limits: only inline links in the raw ``.md`` files are checked; reference-style links, ``<path>``
+targets and files pulled in via snippets (CHANGELOG.md, examples/*.py) are not.
 """
 
 from __future__ import annotations
