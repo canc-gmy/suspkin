@@ -488,8 +488,9 @@ on disk), so use enough repeats or discard the first run when you compare.
   incompatible changes to the Python API, CLI, YAML formats or app API are MAJOR. The version
   is `version` in `pyproject.toml`; `suspkin.__version__` reports the installed one.
 - **Cut a release.** On `main`, green: rename `[Unreleased]` to the new version and date
-  (and open a new empty `[Unreleased]`), bump `version` in `pyproject.toml`, commit, then
-  tag and push:
+  (and open a new empty `[Unreleased]`), bump `version` in `pyproject.toml`, `__version__`
+  in `src/suspkin/__init__.py` and the expected value in `tests/unit/test_smoke.py`, run
+  `uv lock`, commit, then tag and push:
 
     ```bash
     git tag vX.Y.Z

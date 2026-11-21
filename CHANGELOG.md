@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-21
+
 ### Changed
 
 - Documentation is built with Zensical instead of MkDocs (`zensical.toml` replaces `mkdocs.yml`;
