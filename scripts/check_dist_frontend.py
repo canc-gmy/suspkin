@@ -6,7 +6,11 @@ serves only the API. Run after ``uv build``::
 
     python scripts/check_dist_frontend.py dist/*.whl dist/*.tar.gz
 
-Exit codes: 0 all files complete, 1 a file lacks the frontend, 2 usage error.
+It also fails when a file contains ``node_modules/`` (hatch reads only the root
+``.gitignore``, not ``frontend/.gitignore``).
+
+Exit codes: 0 all files complete, 1 a file lacks the frontend or has forbidden content,
+2 usage error.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ REQUIRED: tuple[str, ...] = (
     "suspkin/app/static_single/index.html",
 )
 ASSETS_PREFIX = "suspkin/app/static/assets/"
+FORBIDDEN: tuple[str, ...] = ("node_modules/",)
 
 
 def archive_members(path: Path) -> list[str]:
@@ -71,6 +76,22 @@ def missing_frontend(path: Path) -> list[str]:
     return missing
 
 
+def unexpected_members(path: Path) -> list[str]:
+    """Return the ``FORBIDDEN`` folders a distribution contains (e.g. ``node_modules/``).
+
+    Args:
+        path: A ``.whl`` or ``.tar.gz`` file.
+
+    Returns:
+        The ``FORBIDDEN`` entries found as a path component of any member; empty when clean.
+
+    Raises:
+        ValueError: Unsupported file type.
+    """
+    names = archive_members(path)
+    return [f for f in FORBIDDEN if any(n.startswith(f) or "/" + f in n for n in names)]
+
+
 def main(argv: list[str]) -> int:
     """Check each given distribution file and print what is missing.
 
@@ -78,7 +99,8 @@ def main(argv: list[str]) -> int:
         argv: Paths of distribution files.
 
     Returns:
-        0 when every file is complete, 1 when one lacks the frontend, 2 on usage errors.
+        0 when every file is complete, 1 when one lacks the frontend or has forbidden
+        content, 2 on usage errors.
     """
     if not argv:
         print("usage: check_dist_frontend.py DIST_FILE [DIST_FILE ...]")
@@ -88,13 +110,16 @@ def main(argv: list[str]) -> int:
         path = Path(arg)
         try:
             missing = missing_frontend(path)
+            unexpected = unexpected_members(path)
         except (ValueError, OSError, zipfile.BadZipFile, tarfile.TarError) as exc:
             print(f"error: {exc}")
             return 2
         for entry in missing:
             print(f"{path}: missing {entry}")
-        bad = bad or bool(missing)
-        if not missing:
+        for entry in unexpected:
+            print(f"{path}: unexpected {entry}")
+        bad = bad or bool(missing) or bool(unexpected)
+        if not missing and not unexpected:
             print(f"{path}: ok")
     return 1 if bad else 0
 

@@ -92,3 +92,18 @@ def test_main_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> 
     assert "missing" in capsys.readouterr().out
     assert mod.main([]) == 2
     assert mod.main([str(_wheel(tmp_path / "foo.zip", FULL))]) == 2
+
+
+def test_node_modules_in_sdist_reported(tmp_path: Path) -> None:
+    mod = _load_script()
+    names = ["suspkin-2.0.0/src/" + n for n in FULL]
+    names.append("suspkin-2.0.0/frontend/node_modules/vite/package.json")
+    sdist = _sdist(tmp_path / "suspkin-2.0.0.tar.gz", names)
+    assert mod.unexpected_members(sdist) == ["node_modules/"]
+    assert mod.main([str(sdist)]) == 1
+
+
+def test_clean_sdist_has_no_unexpected(tmp_path: Path) -> None:
+    mod = _load_script()
+    names = ["suspkin-2.0.0/src/" + n for n in FULL]
+    assert mod.unexpected_members(_sdist(tmp_path / "suspkin-2.0.0.tar.gz", names)) == []
