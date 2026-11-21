@@ -90,7 +90,7 @@ The published site is <https://canc-gmy.github.io/suspkin/>.
 - `src/suspkin/`: the Python package (core kinematics, metrics, CLI, plotting, optimisation,
   surrogate, web app backend).
 - `configs/`: reference vehicle YAML and study YAML files (SI units, ISO 8855 frame).
-- `docs/`: the MkDocs source for the documentation site.
+- `docs/`: the Zensical source for the documentation site.
 - `examples/`: runnable Python scripts (load and sweep, compare designs, optimise a study).
 - `frontend/`: the web app browser UI (Node project, built into the package).
 - `tests/`: unit, golden regression and behaviour-lock tests.

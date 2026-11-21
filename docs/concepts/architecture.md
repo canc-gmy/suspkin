@@ -518,7 +518,7 @@ expectations. The tolerances and the update workflow are summarised in
 |---|---|
 | `test` | matrix of ubuntu, windows, macOS (Apple Silicon) x Python 3.11, 3.12, 3.13; `uv sync --all-extras`; `ruff check`; `ruff format --check`; `mypy src` (strict); `pytest -m "not examples"` with coverage. |
 | `examples` | Ubuntu, Python 3.12: `pytest -m examples`. |
-| `docs` | `mkdocs build --strict` (broken links or missing references fail the build). |
+| `docs` | `zensical build --strict --clean` (broken links or missing references fail the build). |
 | `frontend` | Node 22: `npm ci`, lint, typecheck, vitest, both builds (`build`, `build:single`), then the two Python app tests (`test_app_api.py`, `test_app_snapshot.py`). |
 
 `docs.yml` publishes the site on pushes to `main` that touch docs or sources, and `release.yml`

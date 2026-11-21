@@ -155,8 +155,8 @@ uv run python -c "import numba, plotly, pymoo, fastapi, torch, optuna; print('al
 
 ```bash
 uv sync --group docs --all-extras
-uv run mkdocs serve          # live preview
-uv run mkdocs build --strict
+uv run zensical serve        # live preview
+uv run zensical build --strict --clean
 ```
 
 Next: the [tutorial](tutorial.md).

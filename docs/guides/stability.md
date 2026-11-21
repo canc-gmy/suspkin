@@ -116,12 +116,12 @@ to `main`.
 |---|---|---|
 | `test` | matrix: ubuntu, windows, macOS (Apple silicon) x Python 3.11, 3.12, 3.13 (9 jobs, `fail-fast: false`) | `uv sync --all-extras`, `ruff check`, `ruff format --check`, `mypy src` (strict), then `pytest -q -m "not examples"` with coverage (floor 94 %) |
 | `examples` | ubuntu, Python 3.12 | `pytest -m examples`: runs the five scripts in `examples/` as subprocesses |
-| `docs` | ubuntu, Python 3.12 | `uv sync --all-extras --group docs`, `mkdocs build --strict` |
+| `docs` | ubuntu, Python 3.12 | `uv sync --all-extras --group docs`, `zensical build --strict --clean` |
 | `frontend` | ubuntu, Node 22 | in `frontend/`: `npm ci`, lint, typecheck, `npm test`, `npm run build`, `npm run build:single`; then the Python app tests `tests/unit/test_app_api.py` and `tests/unit/test_app_snapshot.py` against the built UI |
 
 `MPLBACKEND=Agg` is set for all jobs. Two more workflows exist:
 
-- `docs.yml` builds the site on every push to `main` that touches `docs/`, `mkdocs.yml`, `src/`,
+- `docs.yml` builds the site on every push to `main` that touches `docs/`, `zensical.toml`, `src/`,
   `examples/`, `CHANGELOG.md` or `README.md`, and deploys it to GitHub Pages.
 - `release.yml` runs on a tag `v*`: it checks that the tag equals the `pyproject.toml` version
   and that the commit is on `main`, runs the tests, builds the sdist and wheel
