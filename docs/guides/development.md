@@ -488,8 +488,9 @@ on disk), so use enough repeats or discard the first run when you compare.
   incompatible changes to the Python API, CLI, YAML formats or app API are MAJOR. The version
   is `version` in `pyproject.toml`; `suspkin.__version__` reports the installed one.
 - **Cut a release.** On `main`, green: rename `[Unreleased]` to the new version and date
-  (and open a new empty `[Unreleased]`), bump `version` in `pyproject.toml`, commit, then
-  tag and push:
+  (and open a new empty `[Unreleased]`), bump `version` in `pyproject.toml`, `__version__`
+  in `src/suspkin/__init__.py` and the expected value in `tests/unit/test_smoke.py`, run
+  `uv lock`, commit, then tag and push:
 
     ```bash
     git tag vX.Y.Z
@@ -498,8 +499,11 @@ on disk), so use enough repeats or discard the first run when you compare.
 
 - **What the release workflow does** (`.github/workflows/release.yml`, triggered by a `v*`
   tag): checks that the tag equals `v` + the `pyproject.toml` version; checks that the tagged
-  commit is contained in `origin/main`; runs `uv sync --all-extras` and
-  `pytest -q -m "not examples"`; builds the wheel and sdist with `uv build`; extracts the
+  commit is contained in `origin/main`; builds the web app frontend with Node 22
+  (`npm ci`, `npm run build`, `npm run build:single`); runs `uv sync --all-extras` and
+  `pytest -q -m "not examples"`; builds the wheel and sdist with `uv build` and checks with
+  `scripts/check_dist_frontend.py` that both contain the frontend and no `node_modules`
+  (the CI `frontend` job runs the same check on every push); extracts the
   matching `## [X.Y.Z]` section of `CHANGELOG.md` as the release notes (it fails if there
   is none); and publishes a GitHub release with `dist/*.whl` and `dist/*.tar.gz` attached.
   A tag containing a hyphen (for example `v1.2.0-rc1`) is marked as a pre-release.
