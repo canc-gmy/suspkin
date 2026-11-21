@@ -121,8 +121,8 @@ to `main`.
 
 `MPLBACKEND=Agg` is set for all jobs. Two more workflows exist:
 
-- `docs.yml` builds the site on every push to `main` that touches `docs/`, `zensical.toml`, `src/`,
-  `examples/`, `CHANGELOG.md` or `README.md`, and deploys it to GitHub Pages.
+- `docs.yml` builds the site on every push to `main` that touches `docs/`, `zensical.toml`, `pyproject.toml`,
+  `uv.lock`, `src/`, `examples/`, `CHANGELOG.md` or `README.md`, and deploys it to GitHub Pages.
 - `release.yml` runs on a tag `v*`: it checks that the tag equals the `pyproject.toml` version
   and that the commit is on `main`, runs the tests, builds the sdist and wheel
   (`uv build`), extracts the notes from `CHANGELOG.md` and attaches the files to a GitHub
