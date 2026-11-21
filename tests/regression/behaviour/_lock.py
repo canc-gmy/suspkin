@@ -49,6 +49,7 @@ _TABLE = {".csv"}
 _TREE = {".json", ".yaml", ".yml"}
 _BINARY = {".png", ".gif", ".mp4", ".svg", ".pdf", ".npz", ".npy", ".pt", ".pth"}
 
+_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 _ISO = re.compile(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
 _STAMP = re.compile(r"\b\d{8}_\d{6}\b")
 _DUR = re.compile(r"\d+(?:\.\d+)? ?s\b")
@@ -119,6 +120,7 @@ def scrub(text: str, *, tmp: Path) -> str:
     text = _SCRIPT.sub(_big_script, text)
     text = _DEC_SECONDS.sub("<DUR>", text)
     text = _ISO.sub("<TS>", text)
+    text = _DATE.sub("<DATE>", text)
     text = _STAMP.sub("<STAMP>", text)
     text = _UUID.sub("<UUID>", text)
     text = _GIT.sub("<GITHASH>", text)

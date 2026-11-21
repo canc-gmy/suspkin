@@ -1,7 +1,7 @@
 # Suspension kinematics report
 
 - suspkin version: <VERSION>
-- Date: 2026-11-20
+- Date: <DATE>
 - Design fs_reference: fs_reference
 - Units: figures and tables in mm, deg, N, N/mm; CSV and JSON files in SI
 
