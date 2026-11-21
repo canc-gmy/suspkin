@@ -16,7 +16,11 @@ uv sync --extra app --extra viz        # fastapi, uvicorn; plotly for the 3D tab
 ```
 
 The `viz` extra is needed for the 3D tab (without it the scene endpoint answers 501).
-The browser UI is a separate Node project (Node 22.12 or newer) that you build once:
+A release wheel or sdist (from the GitHub release page) already contains the built browser
+UI: install it with the `app` extra and `suspkin app` works with no Node installed.
+
+From a source checkout, the browser UI is a separate Node project (Node 22.12 or newer) that
+you build once:
 
 ```bash
 cd frontend

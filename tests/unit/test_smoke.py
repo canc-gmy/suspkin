@@ -10,7 +10,7 @@ from suspkin.cli import app
 
 
 def test_version() -> None:
-    assert suspkin.__version__ == "1.1.0"
+    assert suspkin.__version__ == "2.0.0"
 
 
 def test_version_matches_pyproject() -> None:

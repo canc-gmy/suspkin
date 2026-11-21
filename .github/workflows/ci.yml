@@ -78,3 +78,6 @@ jobs:
           enable-cache: true
       - run: uv sync --all-extras
       - run: uv run pytest -q tests/unit/test_app_api.py tests/unit/test_app_snapshot.py
+      - run: uv build -o dist
+      - name: Verify the web app is packaged
+        run: uv run python scripts/check_dist_frontend.py dist/*.whl dist/*.tar.gz

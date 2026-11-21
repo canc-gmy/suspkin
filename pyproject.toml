@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "suspkin"
-version = "1.1.0"
+version = "2.0.0"
 description = "Suspension kinematics toolkit for Formula Student double-wishbone pushrod cars"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -66,6 +66,12 @@ explicit = true
 packages = ["src/suspkin"]
 # built frontend (git-ignored) must still ship in the wheel
 artifacts = ["src/suspkin/app/static/**", "src/suspkin/app/static_single/**"]
+
+[tool.hatch.build.targets.sdist]
+# uv build makes the wheel from the sdist, so the sdist must carry the built frontend too
+artifacts = ["src/suspkin/app/static/**", "src/suspkin/app/static_single/**"]
+# hatch reads only the root .gitignore: keep nested-ignored and local cache folders out
+exclude = ["frontend/node_modules", "frontend/dist", ".cache", ".hypothesis", ".superpowers"]
 
 [tool.ruff]
 line-length = 100
